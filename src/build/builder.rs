@@ -531,7 +531,7 @@ codegen-units = 1
         let ph = fnv1a(&f.source_path);
         let ident = format!("D_{}", f.storage_name.replace('-', "_").to_uppercase());
         entries_code.push_str(&format!(
-            "    installrs::EmbeddedEntry::File {{ path_hash: {ph}u64, data: {ident}, compression: {:?} }},\n",
+            "    installrs::EmbeddedEntry::File {{ source_path_hash: {ph}u64, data: {ident}, compression: {:?} }},\n",
             f.compression,
         ));
     }
@@ -539,7 +539,7 @@ codegen-units = 1
         let ph = fnv1a(dp);
         let children_code = emit_dir_children(gathered, dp, 2);
         entries_code.push_str(&format!(
-            "    installrs::EmbeddedEntry::Dir {{ path_hash: {ph}u64, children: &[\n{children_code}    ] }},\n"
+            "    installrs::EmbeddedEntry::Dir {{ source_path_hash: {ph}u64, children: &[\n{children_code}    ] }},\n"
         ));
     }
 

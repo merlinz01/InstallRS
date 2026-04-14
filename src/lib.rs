@@ -12,7 +12,7 @@ use anyhow::{anyhow, Context, Result};
 /// Compile-time FNV-1a 64-bit hash of a path string (backslashes normalized to forward slashes).
 ///
 /// Used internally by the [`file!`] and [`dir!`] macros.
-pub const fn path_hash_const(path: &str) -> u64 {
+pub const fn source_path_hash_const(path: &str) -> u64 {
     let bytes = path.as_bytes();
     let mut h: u64 = 14695981039346656037;
     let mut i = 0;
@@ -37,7 +37,7 @@ pub const fn path_hash_const(path: &str) -> u64 {
 #[macro_export]
 macro_rules! file {
     ($installer:expr, $src:literal, $dst:expr) => {{
-        const H: u64 = $crate::path_hash_const($src);
+        const H: u64 = $crate::source_path_hash_const($src);
         $installer.file_hashed(H, $dst)
     }};
 }
@@ -54,7 +54,7 @@ macro_rules! file {
 #[macro_export]
 macro_rules! dir {
     ($installer:expr, $src:literal, $dst:expr) => {{
-        const H: u64 = $crate::path_hash_const($src);
+        const H: u64 = $crate::source_path_hash_const($src);
         $installer.dir_hashed(H, $dst)
     }};
 }
@@ -66,12 +66,12 @@ macro_rules! dir {
 /// for directory traversal.
 pub enum EmbeddedEntry {
     File {
-        path_hash: u64,
+        source_path_hash: u64,
         data: &'static [u8],
         compression: &'static str,
     },
     Dir {
-        path_hash: u64,
+        source_path_hash: u64,
         children: &'static [DirChild],
     },
 }
@@ -167,8 +167,8 @@ impl Installer {
     pub fn file_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
         let dest = self.resolve_out_path(dest_path)?;
         for entry in self.entries {
-            if let EmbeddedEntry::File { path_hash, data, compression } = entry {
-                if *path_hash == source_hash {
+            if let EmbeddedEntry::File { source_path_hash, data, compression } = entry {
+                if *source_path_hash == source_hash {
                     let bytes = Self::decompress(data, compression)?;
                     return write_file(&dest, &bytes);
                 }
@@ -181,8 +181,8 @@ impl Installer {
     pub fn dir_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
         let dest = self.resolve_out_path(dest_path)?;
         for entry in self.entries {
-            if let EmbeddedEntry::Dir { path_hash, children } = entry {
-                if *path_hash == source_hash {
+            if let EmbeddedEntry::Dir { source_path_hash, children } = entry {
+                if *source_path_hash == source_hash {
                     std::fs::create_dir_all(&dest)
                         .with_context(|| format!("failed to create directory: {}", dest.display()))?;
                     return Self::install_children(children, &dest);
@@ -339,7 +339,7 @@ mod tests {
     fn file_entry(path: &str, data: &'static [u8]) -> EmbeddedEntry {
         let norm = path.replace('\\', "/");
         EmbeddedEntry::File {
-            path_hash: path_hash_const(&norm),
+            source_path_hash: source_path_hash_const(&norm),
             data,
             compression: "",
         }
@@ -348,7 +348,7 @@ mod tests {
     fn dir_entry(path: &str, children: Vec<DirChild>) -> EmbeddedEntry {
         let norm = path.replace('\\', "/");
         EmbeddedEntry::Dir {
-            path_hash: path_hash_const(&norm),
+            source_path_hash: source_path_hash_const(&norm),
             children: leak_children(children),
         }
     }
@@ -367,26 +367,26 @@ mod tests {
         }
     }
 
-    // ── path_hash_const ───────────────────────────────────────────────────────
+    // ── source_path_hash_const ───────────────────────────────────────────────────────
 
     #[test]
-    fn path_hash_const_is_stable() {
-        assert_eq!(path_hash_const("foo/bar.txt"), path_hash_const("foo/bar.txt"));
+    fn source_path_hash_const_is_stable() {
+        assert_eq!(source_path_hash_const("foo/bar.txt"), source_path_hash_const("foo/bar.txt"));
     }
 
     #[test]
-    fn path_hash_const_normalizes_backslashes() {
-        assert_eq!(path_hash_const("foo\\bar.txt"), path_hash_const("foo/bar.txt"));
+    fn source_path_hash_const_normalizes_backslashes() {
+        assert_eq!(source_path_hash_const("foo\\bar.txt"), source_path_hash_const("foo/bar.txt"));
     }
 
     #[test]
-    fn path_hash_const_different_inputs_differ() {
-        assert_ne!(path_hash_const("a.txt"), path_hash_const("b.txt"));
-        assert_ne!(path_hash_const(""), path_hash_const("a"));
+    fn source_path_hash_const_different_inputs_differ() {
+        assert_ne!(source_path_hash_const("a.txt"), source_path_hash_const("b.txt"));
+        assert_ne!(source_path_hash_const(""), source_path_hash_const("a"));
     }
 
     #[test]
-    fn path_hash_const_known_value() {
+    fn source_path_hash_const_known_value() {
         let expected: u64 = {
             let mut h: u64 = 14695981039346656037;
             for b in "hello".bytes() {
@@ -395,7 +395,7 @@ mod tests {
             }
             h
         };
-        assert_eq!(path_hash_const("hello"), expected);
+        assert_eq!(source_path_hash_const("hello"), expected);
     }
 
     // ── file! macro ───────────────────────────────────────────────────────────
@@ -430,7 +430,7 @@ mod tests {
         let compressed = compress_gzip(original);
         let data: &'static [u8] = leak_bytes(compressed);
         let entry = EmbeddedEntry::File {
-            path_hash: path_hash_const("comp.gz"),
+            source_path_hash: source_path_hash_const("comp.gz"),
             data,
             compression: "gzip",
         };

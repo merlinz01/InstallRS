@@ -36,7 +36,6 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
         };
 
         let mut visitor = SourceVisitor {
-            in_dir: String::new(),
             included_files: &mut result.included_files,
             included_dirs: &mut result.included_dirs,
             has_install_fn: &mut result.has_install_fn,
@@ -49,7 +48,6 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
 }
 
 struct SourceVisitor<'a> {
-    in_dir: String,
     included_files: &'a mut Vec<String>,
     included_dirs: &'a mut Vec<String>,
     has_install_fn: &'a mut bool,
@@ -67,54 +65,49 @@ impl<'ast, 'a> Visit<'ast> for SourceVisitor<'a> {
         syn::visit::visit_item_fn(self, node);
     }
 
-    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        let method = node.method.to_string();
+    fn visit_expr_macro(&mut self, node: &'ast syn::ExprMacro) {
+        let name = node.mac.path.segments.last()
+            .map(|s| s.ident.to_string())
+            .unwrap_or_default();
 
-        match method.as_str() {
-            "set_in_dir" => {
-                if let Some(s) = first_string_arg(&node.args) {
-                    self.in_dir = s;
-                }
-            }
-            "file" | "include_file" => {
-                if let Some(s) = first_string_arg(&node.args) {
-                    let path = join_in_dir(&self.in_dir, &s);
-                    if !self.included_files.contains(&path) {
-                        self.included_files.push(path);
+        match name.as_str() {
+            "file" => {
+                // file!(installer, "source/path", "dest") — source is the 2nd arg
+                if let Some(s) = macro_second_str_arg(&node.mac) {
+                    if !self.included_files.contains(&s) {
+                        self.included_files.push(s);
                     }
                 }
             }
-            "dir" | "include_dir" => {
-                if let Some(s) = first_string_arg(&node.args) {
-                    let path = join_in_dir(&self.in_dir, &s);
-                    if !self.included_dirs.contains(&path) {
-                        self.included_dirs.push(path);
+            "dir" => {
+                // dir!(installer, "source/dir", "dest") — source is the 2nd arg
+                if let Some(s) = macro_second_str_arg(&node.mac) {
+                    if !self.included_dirs.contains(&s) {
+                        self.included_dirs.push(s);
                     }
                 }
             }
             _ => {}
         }
 
-        syn::visit::visit_expr_method_call(self, node);
+        syn::visit::visit_expr_macro(self, node);
     }
 }
 
-fn first_string_arg(args: &syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>) -> Option<String> {
-    if let Some(syn::Expr::Lit(syn::ExprLit {
-        lit: syn::Lit::Str(s),
-        ..
-    })) = args.first()
-    {
+/// Extract the second string literal from a comma-separated macro argument list.
+/// Used to pull the source path from `file!(installer, "path", dest)`.
+/// Extract the second string literal from a `file!(expr, "path", expr)` or
+/// `dir!(expr, "path", expr)` macro invocation.
+fn macro_second_str_arg(mac: &syn::Macro) -> Option<String> {
+    let args = mac
+        .parse_body_with(
+            syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
+        )
+        .ok()?;
+
+    if let Some(syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. })) = args.iter().nth(1) {
         Some(s.value())
     } else {
         None
-    }
-}
-
-fn join_in_dir(in_dir: &str, path: &str) -> String {
-    if in_dir.is_empty() || path.starts_with('/') || path.contains(':') {
-        path.to_string()
-    } else {
-        format!("{}/{}", in_dir.trim_end_matches('/'), path)
     }
 }

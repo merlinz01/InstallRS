@@ -9,40 +9,93 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
-/// FNV-1a 64-bit hash of a (normalized) path string.
-/// Must stay identical to the copy in installrs-build.
-pub fn path_hash(path: &str) -> u64 {
-    let normalized = path.replace('\\', "/");
+/// Compile-time FNV-1a 64-bit hash of a path string (backslashes normalized to forward slashes).
+///
+/// Used internally by the [`file!`] and [`dir!`] macros.
+pub const fn path_hash_const(path: &str) -> u64 {
+    let bytes = path.as_bytes();
     let mut h: u64 = 14695981039346656037;
-    for b in normalized.bytes() {
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = if bytes[i] == b'\\' { b'/' } else { bytes[i] };
         h ^= b as u64;
         h = h.wrapping_mul(1099511628211);
+        i += 1;
     }
     h
 }
 
-/// An embedded file entry baked into the installer binary at compile time.
-/// Source paths are stored only as hashes so build-time paths are not
-/// visible as strings in the output binary.
-pub struct EmbeddedFileEntry {
-    /// FNV-1a hash of the full source path
-    pub path_hash: u64,
-    /// FNV-1a hash of the parent directory's source path
-    pub parent_hash: u64,
-    /// Bare file or directory name (last path component only)
+/// Install a single embedded file to a destination path.
+///
+/// The source path is hashed at **compile time** — it never appears as a string
+/// in the final binary. Paths are relative to the project root (as seen by the
+/// build tool).
+///
+/// ```rust,ignore
+/// installrs::file!(i, "assets/config.toml", "etc/myapp/config.toml")?;
+/// ```
+#[macro_export]
+macro_rules! file {
+    ($installer:expr, $src:literal, $dst:expr) => {{
+        const H: u64 = $crate::path_hash_const($src);
+        $installer.file_hashed(H, $dst)
+    }};
+}
+
+/// Install an embedded directory tree to a destination path.
+///
+/// The source path is hashed at **compile time** — it never appears as a string
+/// in the final binary. Paths are relative to the project root (as seen by the
+/// build tool).
+///
+/// ```rust,ignore
+/// installrs::dir!(i, "assets/icons", "share/myapp/icons")?;
+/// ```
+#[macro_export]
+macro_rules! dir {
+    ($installer:expr, $src:literal, $dst:expr) => {{
+        const H: u64 = $crate::path_hash_const($src);
+        $installer.dir_hashed(H, $dst)
+    }};
+}
+
+/// A top-level embedded entry baked into the installer binary at compile time.
+///
+/// `File` entries store a single file keyed by path hash — no filename is
+/// retained. `Dir` entries store a recursive tree of children with names
+/// for directory traversal.
+pub enum EmbeddedEntry {
+    File {
+        path_hash: u64,
+        data: &'static [u8],
+        compression: &'static str,
+    },
+    Dir {
+        path_hash: u64,
+        children: &'static [DirChild],
+    },
+}
+
+/// A named child inside an [`EmbeddedEntry::Dir`] tree.
+pub struct DirChild {
     pub name: &'static str,
-    /// Raw (possibly compressed) file data
-    pub data: &'static [u8],
-    /// Compression used: "lzma", "gzip", "bzip2", or ""
-    pub compression: &'static str,
-    /// True if this entry represents a directory rather than a file
-    pub is_dir: bool,
+    pub kind: DirChildKind,
+}
+
+/// The payload of a [`DirChild`] — either file data or a nested directory.
+pub enum DirChildKind {
+    File {
+        data: &'static [u8],
+        compression: &'static str,
+    },
+    Dir {
+        children: &'static [DirChild],
+    },
 }
 
 pub struct Installer {
     pub headless: bool,
-    files: &'static [EmbeddedFileEntry],
-    in_dir: PathBuf,
+    entries: &'static [EmbeddedEntry],
     out_dir: Option<PathBuf>,
     uninstaller_data: &'static [u8],
     uninstaller_compression: &'static str,
@@ -50,14 +103,13 @@ pub struct Installer {
 
 impl Installer {
     pub fn new(
-        files: &'static [EmbeddedFileEntry],
+        entries: &'static [EmbeddedEntry],
         uninstaller_data: &'static [u8],
         uninstaller_compression: &'static str,
     ) -> Self {
         Installer {
             headless: false,
-            files,
-            in_dir: PathBuf::new(),
+            entries,
             out_dir: None,
             uninstaller_data,
             uninstaller_compression,
@@ -67,27 +119,6 @@ impl Installer {
     /// Set the base output directory for relative destination paths.
     pub fn set_out_dir(&mut self, dir: &str) {
         self.out_dir = Some(PathBuf::from(dir));
-    }
-
-    /// Set the base input directory for relative source paths.
-    /// Also detected by the build tool to resolve which files to embed.
-    pub fn set_in_dir(&mut self, dir: &str) {
-        self.in_dir = PathBuf::from(dir);
-    }
-
-    /// Hint the build tool to embed a specific file. No-op at runtime.
-    pub fn include_file(&self, _source_path: &str) {}
-
-    /// Hint the build tool to embed a directory. No-op at runtime.
-    pub fn include_dir(&self, _source_path: &str) {}
-
-    fn resolve_in_path(&self, source_path: &str) -> PathBuf {
-        let p = Path::new(source_path);
-        if p.is_absolute() || self.in_dir.as_os_str().is_empty() {
-            p.to_path_buf()
-        } else {
-            self.in_dir.join(p)
-        }
     }
 
     fn resolve_out_path(&self, dest_path: &str) -> Result<PathBuf> {
@@ -100,10 +131,6 @@ impl Installer {
             .as_ref()
             .ok_or_else(|| anyhow!("output directory not set; call set_out_dir() first"))?;
         Ok(out.join(p))
-    }
-
-    fn lookup_hash(&self, h: u64) -> Option<&'static EmbeddedFileEntry> {
-        self.files.iter().find(|e| e.path_hash == h)
     }
 
     fn decompress(data: &[u8], compression: &str) -> Result<Vec<u8>> {
@@ -132,52 +159,48 @@ impl Installer {
         }
     }
 
-    /// Install a single embedded file to the destination path.
-    pub fn file(&self, source_path: &str, dest_path: &str) -> Result<()> {
-        let source = self.resolve_in_path(source_path);
-        let h = path_hash(&source.to_string_lossy());
+    /// Install a file by pre-computed path hash. Prefer the [`file!`] macro.
+    pub fn file_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
         let dest = self.resolve_out_path(dest_path)?;
-
-        let entry = self
-            .lookup_hash(h)
-            .ok_or_else(|| anyhow!("file not embedded in installer: {}", source.display()))?;
-
-        if entry.is_dir {
-            return Err(anyhow!(
-                "expected a file but path is a directory: {}",
-                source.display()
-            ));
-        }
-
-        let data = Self::decompress(entry.data, entry.compression)?;
-        write_file(&dest, &data)
-    }
-
-    /// Install an embedded directory tree to the destination path.
-    pub fn dir(&self, source_path: &str, dest_path: &str) -> Result<()> {
-        let source = self.resolve_in_path(source_path);
-        let base_hash = path_hash(&source.to_string_lossy());
-        let dest = self.resolve_out_path(dest_path)?;
-
-        std::fs::create_dir_all(&dest)
-            .with_context(|| format!("failed to create directory: {}", dest.display()))?;
-
-        self.install_children(base_hash, &dest)
-    }
-
-    fn install_children(&self, parent_hash: u64, dest: &Path) -> Result<()> {
-        for entry in self.files {
-            if entry.parent_hash != parent_hash {
-                continue;
+        for entry in self.entries {
+            if let EmbeddedEntry::File { path_hash, data, compression } = entry {
+                if *path_hash == source_hash {
+                    let bytes = Self::decompress(data, compression)?;
+                    return write_file(&dest, &bytes);
+                }
             }
-            let target = dest.join(entry.name);
-            if entry.is_dir {
-                std::fs::create_dir_all(&target)
-                    .with_context(|| format!("failed to create dir: {}", target.display()))?;
-                self.install_children(entry.path_hash, &target)?;
-            } else {
-                let data = Self::decompress(entry.data, entry.compression)?;
-                write_file(&target, &data)?;
+        }
+        Err(anyhow!("file not embedded in installer (hash: {source_hash:#018x})"))
+    }
+
+    /// Install a directory tree by pre-computed path hash. Prefer the [`dir!`] macro.
+    pub fn dir_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
+        let dest = self.resolve_out_path(dest_path)?;
+        for entry in self.entries {
+            if let EmbeddedEntry::Dir { path_hash, children } = entry {
+                if *path_hash == source_hash {
+                    std::fs::create_dir_all(&dest)
+                        .with_context(|| format!("failed to create directory: {}", dest.display()))?;
+                    return Self::install_children(children, &dest);
+                }
+            }
+        }
+        Err(anyhow!("directory not embedded in installer (hash: {source_hash:#018x})"))
+    }
+
+    fn install_children(children: &[DirChild], dest: &Path) -> Result<()> {
+        for child in children {
+            let target = dest.join(child.name);
+            match &child.kind {
+                DirChildKind::File { data, compression } => {
+                    let bytes = Self::decompress(data, compression)?;
+                    write_file(&target, &bytes)?;
+                }
+                DirChildKind::Dir { children } => {
+                    std::fs::create_dir_all(&target)
+                        .with_context(|| format!("failed to create dir: {}", target.display()))?;
+                    Self::install_children(children, &target)?;
+                }
             }
         }
         Ok(())
@@ -271,15 +294,19 @@ mod tests {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    fn leak_entries(entries: Vec<EmbeddedFileEntry>) -> &'static [EmbeddedFileEntry] {
+    fn leak_entries(entries: Vec<EmbeddedEntry>) -> &'static [EmbeddedEntry] {
         Box::leak(entries.into_boxed_slice())
+    }
+
+    fn leak_children(children: Vec<DirChild>) -> &'static [DirChild] {
+        Box::leak(children.into_boxed_slice())
     }
 
     fn leak_bytes(data: Vec<u8>) -> &'static [u8] {
         Box::leak(data.into_boxed_slice())
     }
 
-    fn make_installer(entries: Vec<EmbeddedFileEntry>, out_dir: &std::path::Path) -> Installer {
+    fn make_installer(entries: Vec<EmbeddedEntry>, out_dir: &std::path::Path) -> Installer {
         let mut i = Installer::new(leak_entries(entries), leak_bytes(vec![]), "");
         i.set_out_dir(&out_dir.to_string_lossy());
         i
@@ -305,73 +332,57 @@ mod tests {
         enc.finish().unwrap()
     }
 
-    fn file_entry(path: &str, data: &'static [u8]) -> EmbeddedFileEntry {
+    fn file_entry(path: &str, data: &'static [u8]) -> EmbeddedEntry {
         let norm = path.replace('\\', "/");
-        let parent = std::path::Path::new(&norm)
-            .parent()
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default();
-        let name: &'static str = Box::leak(
-            std::path::Path::new(&norm)
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| norm.clone())
-                .into_boxed_str(),
-        );
-        EmbeddedFileEntry {
-            path_hash: path_hash(&norm),
-            parent_hash: path_hash(&parent),
-            name,
+        EmbeddedEntry::File {
+            path_hash: path_hash_const(&norm),
             data,
             compression: "",
-            is_dir: false,
         }
     }
 
-    fn dir_entry(path: &str) -> EmbeddedFileEntry {
+    fn dir_entry(path: &str, children: Vec<DirChild>) -> EmbeddedEntry {
         let norm = path.replace('\\', "/");
-        let parent = std::path::Path::new(&norm)
-            .parent()
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default();
-        let name: &'static str = Box::leak(
-            std::path::Path::new(&norm)
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| norm.clone())
-                .into_boxed_str(),
-        );
-        EmbeddedFileEntry {
-            path_hash: path_hash(&norm),
-            parent_hash: path_hash(&parent),
-            name,
-            data: &[],
-            compression: "",
-            is_dir: true,
+        EmbeddedEntry::Dir {
+            path_hash: path_hash_const(&norm),
+            children: leak_children(children),
         }
     }
 
-    // ── path_hash ────────────────────────────────────────────────────────────
+    fn child_file(name: &str, data: &'static [u8]) -> DirChild {
+        DirChild {
+            name: Box::leak(name.to_string().into_boxed_str()),
+            kind: DirChildKind::File { data, compression: "" },
+        }
+    }
+
+    fn child_dir(name: &str, children: Vec<DirChild>) -> DirChild {
+        DirChild {
+            name: Box::leak(name.to_string().into_boxed_str()),
+            kind: DirChildKind::Dir { children: leak_children(children) },
+        }
+    }
+
+    // ── path_hash_const ───────────────────────────────────────────────────────
 
     #[test]
-    fn path_hash_is_stable() {
-        assert_eq!(path_hash("foo/bar.txt"), path_hash("foo/bar.txt"));
+    fn path_hash_const_is_stable() {
+        assert_eq!(path_hash_const("foo/bar.txt"), path_hash_const("foo/bar.txt"));
     }
 
     #[test]
-    fn path_hash_normalizes_backslashes() {
-        assert_eq!(path_hash("foo\\bar.txt"), path_hash("foo/bar.txt"));
+    fn path_hash_const_normalizes_backslashes() {
+        assert_eq!(path_hash_const("foo\\bar.txt"), path_hash_const("foo/bar.txt"));
     }
 
     #[test]
-    fn path_hash_different_inputs_differ() {
-        assert_ne!(path_hash("a.txt"), path_hash("b.txt"));
-        assert_ne!(path_hash(""), path_hash("a"));
+    fn path_hash_const_different_inputs_differ() {
+        assert_ne!(path_hash_const("a.txt"), path_hash_const("b.txt"));
+        assert_ne!(path_hash_const(""), path_hash_const("a"));
     }
 
     #[test]
-    fn path_hash_known_value() {
-        // Pin the FNV-1a-64 output so regressions are immediately visible.
+    fn path_hash_const_known_value() {
         let expected: u64 = {
             let mut h: u64 = 14695981039346656037;
             for b in "hello".bytes() {
@@ -380,7 +391,80 @@ mod tests {
             }
             h
         };
-        assert_eq!(path_hash("hello"), expected);
+        assert_eq!(path_hash_const("hello"), expected);
+    }
+
+    // ── file! macro ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn file_macro_writes_content() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![file_entry("vendor/lib.so", b"ELF")], tmp.path());
+        file!(i, "vendor/lib.so", "lib.so").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("lib.so")).unwrap(), b"ELF");
+    }
+
+    #[test]
+    fn file_macro_creates_parent_dirs() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![file_entry("data.txt", b"x")], tmp.path());
+        file!(i, "data.txt", "a/b/out.txt").unwrap();
+        assert!(tmp.path().join("a/b/out.txt").exists());
+    }
+
+    #[test]
+    fn file_macro_error_when_not_embedded() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![], tmp.path());
+        assert!(file!(i, "missing.txt", "out.txt").is_err());
+    }
+
+    #[test]
+    fn file_macro_decompresses_on_write() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let original = b"compressed content";
+        let compressed = compress_gzip(original);
+        let data: &'static [u8] = leak_bytes(compressed);
+        let entry = EmbeddedEntry::File {
+            path_hash: path_hash_const("comp.gz"),
+            data,
+            compression: "gzip",
+        };
+        let i = make_installer(vec![entry], tmp.path());
+        file!(i, "comp.gz", "out.txt").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out.txt")).unwrap(), original);
+    }
+
+    // ── dir! macro ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn dir_macro_installs_tree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let entries = vec![
+            dir_entry("pkg", vec![
+                child_file("readme.txt", b"readme"),
+                child_dir("bin", vec![
+                    child_file("app", b"binary"),
+                ]),
+            ]),
+        ];
+        let i = make_installer(entries, tmp.path());
+        dir!(i, "pkg", "out").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out/readme.txt")).unwrap(), b"readme");
+        assert_eq!(std::fs::read(tmp.path().join("out/bin/app")).unwrap(), b"binary");
+    }
+
+    #[test]
+    fn dir_macro_installs_flat_directory() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let entries = vec![
+            dir_entry("assets", vec![
+                child_file("logo.png", b"PNG"),
+            ]),
+        ];
+        let i = make_installer(entries, tmp.path());
+        dir!(i, "assets", "out").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out/logo.png")).unwrap(), b"PNG");
     }
 
     // ── decompress ───────────────────────────────────────────────────────────
@@ -421,81 +505,6 @@ mod tests {
         assert!(err.to_string().contains("unsupported compression"));
     }
 
-    // ── Installer::file() ────────────────────────────────────────────────────
-
-    #[test]
-    fn file_writes_content_to_destination() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![file_entry("data.txt", b"hello world")], tmp.path());
-        i.file("data.txt", "output.txt").unwrap();
-        assert_eq!(std::fs::read(tmp.path().join("output.txt")).unwrap(), b"hello world");
-    }
-
-    #[test]
-    fn file_creates_parent_directories() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![file_entry("data.txt", b"x")], tmp.path());
-        i.file("data.txt", "a/b/c/out.txt").unwrap();
-        assert!(tmp.path().join("a/b/c/out.txt").exists());
-    }
-
-    #[test]
-    fn file_error_when_not_embedded() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![], tmp.path());
-        assert!(i.file("missing.txt", "out.txt").is_err());
-    }
-
-    #[test]
-    fn file_error_when_entry_is_directory() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![dir_entry("mydir")], tmp.path());
-        let err = i.file("mydir", "out").unwrap_err();
-        assert!(err.to_string().contains("directory"));
-    }
-
-    #[test]
-    fn file_decompresses_on_write() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let original = b"compressed content here";
-        let compressed = compress_gzip(original);
-        let data: &'static [u8] = leak_bytes(compressed);
-        let mut entry = file_entry("comp.gz", data);
-        entry.compression = "gzip";
-        let i = make_installer(vec![entry], tmp.path());
-        i.file("comp.gz", "out.txt").unwrap();
-        assert_eq!(std::fs::read(tmp.path().join("out.txt")).unwrap(), original);
-    }
-
-    // ── Installer::dir() ─────────────────────────────────────────────────────
-
-    #[test]
-    fn dir_installs_flat_directory() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let entries = vec![
-            dir_entry("assets"),
-            file_entry("assets/logo.png", b"PNG"),
-        ];
-        let i = make_installer(entries, tmp.path());
-        i.dir("assets", "out").unwrap();
-        assert_eq!(std::fs::read(tmp.path().join("out/logo.png")).unwrap(), b"PNG");
-    }
-
-    #[test]
-    fn dir_installs_recursive_tree() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let entries = vec![
-            dir_entry("app"),
-            file_entry("app/main.txt", b"main"),
-            dir_entry("app/sub"),
-            file_entry("app/sub/helper.txt", b"helper"),
-        ];
-        let i = make_installer(entries, tmp.path());
-        i.dir("app", "out").unwrap();
-        assert_eq!(std::fs::read(tmp.path().join("out/main.txt")).unwrap(), b"main");
-        assert_eq!(std::fs::read(tmp.path().join("out/sub/helper.txt")).unwrap(), b"helper");
-    }
-
     // ── Installer::mkdir() ───────────────────────────────────────────────────
 
     #[test]
@@ -511,13 +520,12 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let i = make_installer(vec![], tmp.path());
         i.mkdir("exists").unwrap();
-        i.mkdir("exists").unwrap(); // must not error
+        i.mkdir("exists").unwrap();
     }
 
     #[test]
     fn mkdir_requires_out_dir() {
-        let i = Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "");
-        // no set_out_dir
+        let i = Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "none");
         assert!(i.mkdir("foo").is_err());
     }
 
@@ -546,7 +554,7 @@ mod tests {
     fn remove_noop_when_nonexistent() {
         let tmp = tempfile::TempDir::new().unwrap();
         let i = make_installer(vec![], tmp.path());
-        i.remove("does_not_exist.txt").unwrap(); // must not error
+        i.remove("does_not_exist.txt").unwrap();
     }
 
     // ── Installer::exists() ──────────────────────────────────────────────────

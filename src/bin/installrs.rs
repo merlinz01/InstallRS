@@ -210,68 +210,57 @@ mod tests {
         assert!(!r.has_uninstall_fn);
     }
 
-    // ── scanner: file/dir detection ───────────────────────────────────────────
+    // ── scanner: file!/dir! macro detection ──────────────────────────────────
 
     #[test]
-    fn scanner_detects_file_calls() {
-        let r = scan_str(r#"fn f(i: &T) { i.file("cfg.toml", "dst")?; }"#);
+    fn scanner_detects_file_macro() {
+        let r = scan_str(r#"fn f(i: &mut T) { installrs::file!(i, "cfg.toml", "dst").unwrap(); }"#);
         assert!(r.included_files.contains(&"cfg.toml".to_string()));
         assert!(r.included_dirs.is_empty());
     }
 
     #[test]
-    fn scanner_detects_dir_calls() {
-        let r = scan_str(r#"fn f(i: &T) { i.dir("assets", "out")?; }"#);
+    fn scanner_detects_dir_macro() {
+        let r = scan_str(r#"fn f(i: &mut T) { installrs::dir!(i, "assets", "out").unwrap(); }"#);
         assert!(r.included_dirs.contains(&"assets".to_string()));
         assert!(r.included_files.is_empty());
     }
 
     #[test]
-    fn scanner_detects_include_file() {
-        let r = scan_str(r#"fn f(i: &T) { i.include_file("extra.dat"); }"#);
-        assert!(r.included_files.contains(&"extra.dat".to_string()));
+    fn scanner_detects_unqualified_file_macro() {
+        let r = scan_str(r#"fn f(i: &mut T) { file!(i, "data.txt", "dst")?; }"#);
+        assert!(r.included_files.contains(&"data.txt".to_string()));
     }
 
     #[test]
-    fn scanner_detects_include_dir() {
-        let r = scan_str(r#"fn f(i: &T) { i.include_dir("resources"); }"#);
-        assert!(r.included_dirs.contains(&"resources".to_string()));
+    fn scanner_detects_unqualified_dir_macro() {
+        let r = scan_str(r#"fn f(i: &mut T) { dir!(i, "res", "dst")?; }"#);
+        assert!(r.included_dirs.contains(&"res".to_string()));
     }
-
-    // ── scanner: set_in_dir prefixing ─────────────────────────────────────────
-
-    #[test]
-    fn scanner_set_in_dir_prefixes_file() {
-        let r = scan_str(r#"fn f(i: &T) { i.set_in_dir("vendor"); i.file("lib.so", "x")?; }"#);
-        assert!(r.included_files.contains(&"vendor/lib.so".to_string()),
-            "got: {:?}", r.included_files);
-    }
-
-    #[test]
-    fn scanner_set_in_dir_prefixes_dir() {
-        let r = scan_str(r#"fn f(i: &T) { i.set_in_dir("base"); i.dir("data", "out")?; }"#);
-        assert!(r.included_dirs.contains(&"base/data".to_string()),
-            "got: {:?}", r.included_dirs);
-    }
-
-    #[test]
-    fn scanner_absolute_path_ignores_in_dir() {
-        let r = scan_str(r#"fn f(i: &T) { i.set_in_dir("ignored"); i.file("/abs/p.txt", "dst")?; }"#);
-        assert!(r.included_files.contains(&"/abs/p.txt".to_string()),
-            "got: {:?}", r.included_files);
-    }
-
-    // ── scanner: deduplication ────────────────────────────────────────────────
 
     #[test]
     fn scanner_no_duplicate_files() {
-        let r = scan_str(r#"fn f(i: &T) { i.file("x.txt", "a")?; i.file("x.txt", "b")?; }"#);
+        let r = scan_str(r#"fn f(i: &mut T) { file!(i, "x.txt", "a")?; file!(i, "x.txt", "b")?; }"#);
         assert_eq!(r.included_files.iter().filter(|p| p.as_str() == "x.txt").count(), 1);
     }
 
     #[test]
     fn scanner_no_duplicate_dirs() {
-        let r = scan_str(r#"fn f(i: &T) { i.dir("d", "a")?; i.dir("d", "b")?; }"#);
+        let r = scan_str(r#"fn f(i: &mut T) { dir!(i, "d", "a")?; dir!(i, "d", "b")?; }"#);
         assert_eq!(r.included_dirs.iter().filter(|p| p.as_str() == "d").count(), 1);
+    }
+
+    #[test]
+    fn scanner_file_macro_nested_path() {
+        let r = scan_str(r#"fn f(i: &mut T) { file!(i, "vendor/lib.so", "lib.so")?; }"#);
+        assert!(r.included_files.contains(&"vendor/lib.so".to_string()),
+            "got: {:?}", r.included_files);
+    }
+
+    #[test]
+    fn scanner_dir_macro_nested_path() {
+        let r = scan_str(r#"fn f(i: &mut T) { dir!(i, "assets/icons", "icons")?; }"#);
+        assert!(r.included_dirs.contains(&"assets/icons".to_string()),
+            "got: {:?}", r.included_dirs);
     }
 }

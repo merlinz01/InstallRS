@@ -5,8 +5,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     let out = std::env::var("INSTALLRS_TEST_OUT")
         .expect("INSTALLRS_TEST_OUT must be set before running the test installer");
     i.set_out_dir(&out);
-    i.set_in_dir(".");
-    i.file("data.txt", "data.txt")?;
+    installrs::file!(i, "data.txt", "data.txt")?;
     i.uninstaller("uninstall")?;
     Ok(())
 }

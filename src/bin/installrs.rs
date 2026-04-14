@@ -96,3 +96,182 @@ fn run(cli: Cli) -> Result<()> {
 
     build::builder::build(&params)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::build::compress;
+    use super::build::scanner;
+    use std::io::Read;
+
+    // ── compress::validate_method ─────────────────────────────────────────────
+
+    #[test]
+    fn validate_accepts_lzma() { compress::validate_method("lzma").unwrap(); }
+
+    #[test]
+    fn validate_accepts_gzip() { compress::validate_method("gzip").unwrap(); }
+
+    #[test]
+    fn validate_accepts_bzip2() { compress::validate_method("bzip2").unwrap(); }
+
+    #[test]
+    fn validate_accepts_none() { compress::validate_method("none").unwrap(); }
+
+    #[test]
+    fn validate_rejects_unknown() {
+        assert!(compress::validate_method("zstd").unwrap_err()
+            .to_string().contains("unsupported"));
+    }
+
+    #[test]
+    fn validate_rejects_empty_string() {
+        // "" is not in the accepted set; only the explicit string "none" is.
+        assert!(compress::validate_method("").is_err());
+    }
+
+    // ── compress round-trips ──────────────────────────────────────────────────
+
+    const SAMPLE: &[u8] = b"round-trip test data for compression algorithms";
+
+    #[test]
+    fn compress_none_is_passthrough() {
+        assert_eq!(compress::compress(SAMPLE, "none").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn compress_empty_is_passthrough() {
+        assert_eq!(compress::compress(SAMPLE, "").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn compress_lzma_roundtrip() {
+        let compressed = compress::compress(SAMPLE, "lzma").unwrap();
+        let mut out = Vec::new();
+        lzma_rs::lzma_decompress(&mut std::io::Cursor::new(&compressed), &mut out).unwrap();
+        assert_eq!(out, SAMPLE);
+    }
+
+    #[test]
+    fn compress_gzip_roundtrip() {
+        let compressed = compress::compress(SAMPLE, "gzip").unwrap();
+        let mut out = Vec::new();
+        flate2::read::GzDecoder::new(compressed.as_slice()).read_to_end(&mut out).unwrap();
+        assert_eq!(out, SAMPLE);
+    }
+
+    #[test]
+    fn compress_bzip2_roundtrip() {
+        let compressed = compress::compress(SAMPLE, "bzip2").unwrap();
+        let mut out = Vec::new();
+        bzip2::read::BzDecoder::new(compressed.as_slice()).read_to_end(&mut out).unwrap();
+        assert_eq!(out, SAMPLE);
+    }
+
+    #[test]
+    fn compress_unknown_errors() {
+        assert!(compress::compress(SAMPLE, "zstd").is_err());
+    }
+
+    // ── scanner helper ────────────────────────────────────────────────────────
+
+    fn scan_str(source: &str) -> scanner::ScanResult {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("lib.rs"), source).unwrap();
+        scanner::scan_source_dir(tmp.path()).unwrap()
+    }
+
+    // ── scanner: function detection ───────────────────────────────────────────
+
+    #[test]
+    fn scanner_detects_install_fn() {
+        let r = scan_str("pub fn install(i: &mut T) -> R { Ok(()) }");
+        assert!(r.has_install_fn);
+        assert!(!r.has_uninstall_fn);
+    }
+
+    #[test]
+    fn scanner_detects_uninstall_fn() {
+        let r = scan_str("pub fn uninstall(i: &mut T) -> R { Ok(()) }");
+        assert!(!r.has_install_fn);
+        assert!(r.has_uninstall_fn);
+    }
+
+    #[test]
+    fn scanner_detects_both_fns() {
+        let r = scan_str("pub fn install() {} pub fn uninstall() {}");
+        assert!(r.has_install_fn);
+        assert!(r.has_uninstall_fn);
+    }
+
+    #[test]
+    fn scanner_detects_neither_fn() {
+        let r = scan_str("fn helper() {}");
+        assert!(!r.has_install_fn);
+        assert!(!r.has_uninstall_fn);
+    }
+
+    // ── scanner: file/dir detection ───────────────────────────────────────────
+
+    #[test]
+    fn scanner_detects_file_calls() {
+        let r = scan_str(r#"fn f(i: &T) { i.file("cfg.toml", "dst")?; }"#);
+        assert!(r.included_files.contains(&"cfg.toml".to_string()));
+        assert!(r.included_dirs.is_empty());
+    }
+
+    #[test]
+    fn scanner_detects_dir_calls() {
+        let r = scan_str(r#"fn f(i: &T) { i.dir("assets", "out")?; }"#);
+        assert!(r.included_dirs.contains(&"assets".to_string()));
+        assert!(r.included_files.is_empty());
+    }
+
+    #[test]
+    fn scanner_detects_include_file() {
+        let r = scan_str(r#"fn f(i: &T) { i.include_file("extra.dat"); }"#);
+        assert!(r.included_files.contains(&"extra.dat".to_string()));
+    }
+
+    #[test]
+    fn scanner_detects_include_dir() {
+        let r = scan_str(r#"fn f(i: &T) { i.include_dir("resources"); }"#);
+        assert!(r.included_dirs.contains(&"resources".to_string()));
+    }
+
+    // ── scanner: set_in_dir prefixing ─────────────────────────────────────────
+
+    #[test]
+    fn scanner_set_in_dir_prefixes_file() {
+        let r = scan_str(r#"fn f(i: &T) { i.set_in_dir("vendor"); i.file("lib.so", "x")?; }"#);
+        assert!(r.included_files.contains(&"vendor/lib.so".to_string()),
+            "got: {:?}", r.included_files);
+    }
+
+    #[test]
+    fn scanner_set_in_dir_prefixes_dir() {
+        let r = scan_str(r#"fn f(i: &T) { i.set_in_dir("base"); i.dir("data", "out")?; }"#);
+        assert!(r.included_dirs.contains(&"base/data".to_string()),
+            "got: {:?}", r.included_dirs);
+    }
+
+    #[test]
+    fn scanner_absolute_path_ignores_in_dir() {
+        let r = scan_str(r#"fn f(i: &T) { i.set_in_dir("ignored"); i.file("/abs/p.txt", "dst")?; }"#);
+        assert!(r.included_files.contains(&"/abs/p.txt".to_string()),
+            "got: {:?}", r.included_files);
+    }
+
+    // ── scanner: deduplication ────────────────────────────────────────────────
+
+    #[test]
+    fn scanner_no_duplicate_files() {
+        let r = scan_str(r#"fn f(i: &T) { i.file("x.txt", "a")?; i.file("x.txt", "b")?; }"#);
+        assert_eq!(r.included_files.iter().filter(|p| p.as_str() == "x.txt").count(), 1);
+    }
+
+    #[test]
+    fn scanner_no_duplicate_dirs() {
+        let r = scan_str(r#"fn f(i: &T) { i.dir("d", "a")?; i.dir("d", "b")?; }"#);
+        assert_eq!(r.included_dirs.iter().filter(|p| p.as_str() == "d").count(), 1);
+    }
+}

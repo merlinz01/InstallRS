@@ -1,0 +1,12 @@
+[package]
+name = "simple-installer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "simple_installer"
+path = "installer.rs"
+
+[dependencies]
+installrs = { path = "../../.." }
+anyhow = "1"

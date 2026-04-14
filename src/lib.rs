@@ -265,6 +265,316 @@ impl Installer {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    fn leak_entries(entries: Vec<EmbeddedFileEntry>) -> &'static [EmbeddedFileEntry] {
+        Box::leak(entries.into_boxed_slice())
+    }
+
+    fn leak_bytes(data: Vec<u8>) -> &'static [u8] {
+        Box::leak(data.into_boxed_slice())
+    }
+
+    fn make_installer(entries: Vec<EmbeddedFileEntry>, out_dir: &std::path::Path) -> Installer {
+        let mut i = Installer::new(leak_entries(entries), leak_bytes(vec![]), "");
+        i.set_out_dir(&out_dir.to_string_lossy());
+        i
+    }
+
+    fn compress_gzip(data: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        enc.write_all(data).unwrap();
+        enc.finish().unwrap()
+    }
+
+    fn compress_lzma(data: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        lzma_rs::lzma_compress(&mut std::io::Cursor::new(data), &mut out).unwrap();
+        out
+    }
+
+    fn compress_bzip2(data: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut enc = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+        enc.write_all(data).unwrap();
+        enc.finish().unwrap()
+    }
+
+    fn file_entry(path: &str, data: &'static [u8]) -> EmbeddedFileEntry {
+        let norm = path.replace('\\', "/");
+        let parent = std::path::Path::new(&norm)
+            .parent()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        let name: &'static str = Box::leak(
+            std::path::Path::new(&norm)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| norm.clone())
+                .into_boxed_str(),
+        );
+        EmbeddedFileEntry {
+            path_hash: path_hash(&norm),
+            parent_hash: path_hash(&parent),
+            name,
+            data,
+            compression: "",
+            is_dir: false,
+        }
+    }
+
+    fn dir_entry(path: &str) -> EmbeddedFileEntry {
+        let norm = path.replace('\\', "/");
+        let parent = std::path::Path::new(&norm)
+            .parent()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        let name: &'static str = Box::leak(
+            std::path::Path::new(&norm)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| norm.clone())
+                .into_boxed_str(),
+        );
+        EmbeddedFileEntry {
+            path_hash: path_hash(&norm),
+            parent_hash: path_hash(&parent),
+            name,
+            data: &[],
+            compression: "",
+            is_dir: true,
+        }
+    }
+
+    // ── path_hash ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn path_hash_is_stable() {
+        assert_eq!(path_hash("foo/bar.txt"), path_hash("foo/bar.txt"));
+    }
+
+    #[test]
+    fn path_hash_normalizes_backslashes() {
+        assert_eq!(path_hash("foo\\bar.txt"), path_hash("foo/bar.txt"));
+    }
+
+    #[test]
+    fn path_hash_different_inputs_differ() {
+        assert_ne!(path_hash("a.txt"), path_hash("b.txt"));
+        assert_ne!(path_hash(""), path_hash("a"));
+    }
+
+    #[test]
+    fn path_hash_known_value() {
+        // Pin the FNV-1a-64 output so regressions are immediately visible.
+        let expected: u64 = {
+            let mut h: u64 = 14695981039346656037;
+            for b in "hello".bytes() {
+                h ^= b as u64;
+                h = h.wrapping_mul(1099511628211);
+            }
+            h
+        };
+        assert_eq!(path_hash("hello"), expected);
+    }
+
+    // ── decompress ───────────────────────────────────────────────────────────
+
+    const SAMPLE: &[u8] = b"Hello, InstallRS test data! Hello, InstallRS!";
+
+    #[test]
+    fn decompress_none_empty() {
+        assert_eq!(Installer::decompress(SAMPLE, "").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn decompress_none_explicit() {
+        assert_eq!(Installer::decompress(SAMPLE, "none").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn decompress_lzma_roundtrip() {
+        let compressed = compress_lzma(SAMPLE);
+        assert_eq!(Installer::decompress(&compressed, "lzma").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn decompress_gzip_roundtrip() {
+        let compressed = compress_gzip(SAMPLE);
+        assert_eq!(Installer::decompress(&compressed, "gzip").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn decompress_bzip2_roundtrip() {
+        let compressed = compress_bzip2(SAMPLE);
+        assert_eq!(Installer::decompress(&compressed, "bzip2").unwrap(), SAMPLE);
+    }
+
+    #[test]
+    fn decompress_unknown_method_errors() {
+        let err = Installer::decompress(b"data", "zstd").unwrap_err();
+        assert!(err.to_string().contains("unsupported compression"));
+    }
+
+    // ── Installer::file() ────────────────────────────────────────────────────
+
+    #[test]
+    fn file_writes_content_to_destination() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![file_entry("data.txt", b"hello world")], tmp.path());
+        i.file("data.txt", "output.txt").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("output.txt")).unwrap(), b"hello world");
+    }
+
+    #[test]
+    fn file_creates_parent_directories() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![file_entry("data.txt", b"x")], tmp.path());
+        i.file("data.txt", "a/b/c/out.txt").unwrap();
+        assert!(tmp.path().join("a/b/c/out.txt").exists());
+    }
+
+    #[test]
+    fn file_error_when_not_embedded() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![], tmp.path());
+        assert!(i.file("missing.txt", "out.txt").is_err());
+    }
+
+    #[test]
+    fn file_error_when_entry_is_directory() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![dir_entry("mydir")], tmp.path());
+        let err = i.file("mydir", "out").unwrap_err();
+        assert!(err.to_string().contains("directory"));
+    }
+
+    #[test]
+    fn file_decompresses_on_write() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let original = b"compressed content here";
+        let compressed = compress_gzip(original);
+        let data: &'static [u8] = leak_bytes(compressed);
+        let mut entry = file_entry("comp.gz", data);
+        entry.compression = "gzip";
+        let i = make_installer(vec![entry], tmp.path());
+        i.file("comp.gz", "out.txt").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out.txt")).unwrap(), original);
+    }
+
+    // ── Installer::dir() ─────────────────────────────────────────────────────
+
+    #[test]
+    fn dir_installs_flat_directory() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let entries = vec![
+            dir_entry("assets"),
+            file_entry("assets/logo.png", b"PNG"),
+        ];
+        let i = make_installer(entries, tmp.path());
+        i.dir("assets", "out").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out/logo.png")).unwrap(), b"PNG");
+    }
+
+    #[test]
+    fn dir_installs_recursive_tree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let entries = vec![
+            dir_entry("app"),
+            file_entry("app/main.txt", b"main"),
+            dir_entry("app/sub"),
+            file_entry("app/sub/helper.txt", b"helper"),
+        ];
+        let i = make_installer(entries, tmp.path());
+        i.dir("app", "out").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out/main.txt")).unwrap(), b"main");
+        assert_eq!(std::fs::read(tmp.path().join("out/sub/helper.txt")).unwrap(), b"helper");
+    }
+
+    // ── Installer::mkdir() ───────────────────────────────────────────────────
+
+    #[test]
+    fn mkdir_creates_nested_directories() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![], tmp.path());
+        i.mkdir("a/b/c/d").unwrap();
+        assert!(tmp.path().join("a/b/c/d").is_dir());
+    }
+
+    #[test]
+    fn mkdir_is_idempotent() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![], tmp.path());
+        i.mkdir("exists").unwrap();
+        i.mkdir("exists").unwrap(); // must not error
+    }
+
+    #[test]
+    fn mkdir_requires_out_dir() {
+        let i = Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "");
+        // no set_out_dir
+        assert!(i.mkdir("foo").is_err());
+    }
+
+    // ── Installer::remove() ──────────────────────────────────────────────────
+
+    #[test]
+    fn remove_deletes_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("victim.txt"), b"x").unwrap();
+        let i = make_installer(vec![], tmp.path());
+        i.remove("victim.txt").unwrap();
+        assert!(!tmp.path().join("victim.txt").exists());
+    }
+
+    #[test]
+    fn remove_deletes_directory_recursively() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join("tree/leaf")).unwrap();
+        std::fs::write(tmp.path().join("tree/leaf/f.txt"), b"x").unwrap();
+        let i = make_installer(vec![], tmp.path());
+        i.remove("tree").unwrap();
+        assert!(!tmp.path().join("tree").exists());
+    }
+
+    #[test]
+    fn remove_noop_when_nonexistent() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![], tmp.path());
+        i.remove("does_not_exist.txt").unwrap(); // must not error
+    }
+
+    // ── Installer::exists() ──────────────────────────────────────────────────
+
+    #[test]
+    fn exists_true_for_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("present.txt"), b"hi").unwrap();
+        let i = make_installer(vec![], tmp.path());
+        assert!(i.exists("present.txt").unwrap());
+    }
+
+    #[test]
+    fn exists_false_for_missing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let i = make_installer(vec![], tmp.path());
+        assert!(!i.exists("absent.txt").unwrap());
+    }
+
+    #[test]
+    fn exists_true_for_directory() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir(tmp.path().join("mydir")).unwrap();
+        let i = make_installer(vec![], tmp.path());
+        assert!(i.exists("mydir").unwrap());
+    }
+}
+
 fn write_file(dest: &Path, data: &[u8]) -> Result<()> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)

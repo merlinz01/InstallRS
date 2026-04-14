@@ -122,7 +122,7 @@ pub fn build(params: &BuildParams) -> Result<()> {
     log::info!("Total entries gathered: {}", gathered.len());
 
     // ── Compile uninstaller ──────────────────────────────────────────────────
-    write_uninstaller_sources(&uninstaller_dir, &user_crate_name, &params.target_dir)?;
+    write_uninstaller_sources(&uninstaller_dir, &user_crate_name, &params.target_dir, "none")?;
     compile_cargo_project(&uninstaller_dir, params.target_triple.as_deref())?;
 
     // Copy compiled uninstaller to known path
@@ -138,9 +138,13 @@ pub fn build(params: &BuildParams) -> Result<()> {
         } else {
             "uninstaller"
         });
-    std::fs::copy(&compiled, &uninstaller_bin)
-        .with_context(|| format!("failed to copy uninstaller from {}", compiled.display()))?;
-    log::info!("Uninstaller binary ready: {}", uninstaller_bin.display());
+    let uninstaller_raw = std::fs::read(&compiled)
+        .with_context(|| format!("failed to read uninstaller from {}", compiled.display()))?;
+    let uninstaller_compressed = compress::compress(&uninstaller_raw, &params.compression)
+        .context("failed to compress uninstaller binary")?;
+    std::fs::write(&uninstaller_bin, &uninstaller_compressed)
+        .with_context(|| format!("failed to write compressed uninstaller to {}", uninstaller_bin.display()))?;
+    log::info!("Uninstaller binary ready: {} (compression: {})", uninstaller_bin.display(), params.compression);
 
     // ── Prune stale cached files ─────────────────────────────────────────────
     prune_files_dir(&files_dir, &gathered)?;
@@ -347,12 +351,27 @@ fn prune_files_dir(files_dir: &Path, gathered: &[GatheredFile]) -> Result<()> {
     Ok(())
 }
 
+fn compression_feature(method: &str) -> Option<&str> {
+    match method {
+        "lzma" => Some("lzma"),
+        "gzip" => Some("gzip"),
+        "bzip2" => Some("bzip2"),
+        _ => None,
+    }
+}
+
 fn write_uninstaller_sources(
     uninstaller_dir: &Path,
     user_crate_name: &str,
     user_crate_path: &Path,
+    compression: &str,
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
+
+    let features_str = match compression_feature(compression) {
+        Some(f) => format!(", default-features = false, features = [{f:?}]"),
+        None => ", default-features = false".to_string(),
+    };
 
     let cargo_toml = format!(
         r#"[package]
@@ -363,7 +382,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-installrs = {{ path = {installrs_path:?} }}
+installrs = {{ path = {installrs_path:?}{features_str} }}
 {user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
 
 [profile.release]
@@ -399,9 +418,14 @@ fn write_installer_sources(
     user_crate_name: &str,
     user_crate_path: &Path,
     gathered: &[GatheredFile],
-    _compression: &str,
+    compression: &str,
 ) -> Result<()> {
     log::debug!("Writing installer sources");
+
+    let features_str = match compression_feature(compression) {
+        Some(f) => format!(", default-features = false, features = [{f:?}]"),
+        None => ", default-features = false".to_string(),
+    };
 
     let cargo_toml = format!(
         r#"[package]
@@ -412,7 +436,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-installrs = {{ path = {installrs_path:?} }}
+installrs = {{ path = {installrs_path:?}{features_str} }}
 {user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
 
 [profile.release]
@@ -527,7 +551,7 @@ static ENTRIES: &[installrs::EmbeddedEntry] = &[
 static UNINSTALLER_DATA: &[u8] = include_bytes!("../../uninstaller-bin");
 
 fn main() {{
-    let mut i = installrs::Installer::new(ENTRIES, UNINSTALLER_DATA, "none");
+    let mut i = installrs::Installer::new(ENTRIES, UNINSTALLER_DATA, {compression:?});
     i.install_main({user_crate_name}::install);
 }}
 "#

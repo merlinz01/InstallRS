@@ -134,21 +134,25 @@ impl Installer {
     }
 
     fn decompress(data: &[u8], compression: &str) -> Result<Vec<u8>> {
+        #[allow(unused_imports)]
         use std::io::Read;
         match compression {
             "" | "none" => Ok(data.to_vec()),
+            #[cfg(feature = "lzma")]
             "lzma" => {
                 let mut out = Vec::new();
                 lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut out)
                     .context("LZMA decompression failed")?;
                 Ok(out)
             }
+            #[cfg(feature = "gzip")]
             "gzip" => {
                 let mut decoder = flate2::read::GzDecoder::new(data);
                 let mut out = Vec::new();
                 decoder.read_to_end(&mut out).context("gzip decompression failed")?;
                 Ok(out)
             }
+            #[cfg(feature = "bzip2")]
             "bzip2" => {
                 let mut decoder = bzip2::read::BzDecoder::new(data);
                 let mut out = Vec::new();

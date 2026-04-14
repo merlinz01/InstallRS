@@ -1,0 +1,28 @@
+[package]
+name = "installrs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "installrs"
+path = "src/bin/installrs.rs"
+
+[dependencies]
+anyhow = "1"
+lzma-rs = "0.3"
+flate2 = { version = "1", features = ["rust_backend"] }
+bzip2 = "0.4"
+clap = { version = "4", features = ["derive"] }
+sha2 = "0.10"
+hex = "0.4"
+syn = { version = "2", features = ["full", "visit"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2"
+glob = "0.3"
+toml = "0.8"
+log = "0.4"
+env_logger = "0.11"
+
+[package.metadata]
+# resolver = "2" applies at workspace level; not needed for single-package crates

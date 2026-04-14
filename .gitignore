@@ -1,0 +1,6 @@
+*.exe
+*.manifest
+target/
+/example-rs/build/
+/installer
+CLAUDE.md

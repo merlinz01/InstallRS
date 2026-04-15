@@ -10,3 +10,26 @@ path = "installer.rs"
 [dependencies]
 installrs = { path = ".." }
 anyhow = "1"
+
+# Shared defaults for both installer and uninstaller
+[package.metadata.installrs]
+icon = "../installrs.png"
+icon-sizes = [16, 32, 48, 256]
+language = 0x0409
+execution-level = "requireAdministrator"
+dpi-aware = "permonitorv2"
+supported-os = ["7", "8", "8.1", "10"]
+product-name = "InstallRS Example"
+file-version = "0.1.0.0"
+product-version = "0.1.0.0"
+legal-copyright = "Copyright (c) 2026"
+
+# Installer-specific overrides
+[package.metadata.installrs.installer]
+file-description = "Example InstallRS installer"
+original-filename = "installer.exe"
+
+# Uninstaller-specific overrides
+[package.metadata.installrs.uninstaller]
+file-description = "Example InstallRS uninstaller"
+original-filename = "uninstaller.exe"

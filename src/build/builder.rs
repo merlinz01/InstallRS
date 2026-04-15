@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use sha2::{Digest, Sha256};
 
 use super::compress;
+use super::ico_convert;
 use super::scanner;
 
 // Embedded at compile time so the build tool is self-contained.
@@ -21,6 +22,31 @@ fn fnv1a(s: &str) -> u64 {
 }
 
 
+#[derive(Clone)]
+pub enum ManifestConfig {
+    /// Path to an external .manifest file
+    File(PathBuf),
+    /// Raw XML string
+    Raw(String),
+    /// Structured config — XML is generated automatically
+    Generated {
+        execution_level: String,
+        dpi_aware: Option<String>,
+        long_path_aware: Option<bool>,
+        supported_os: Vec<String>,
+    },
+}
+
+#[derive(Clone)]
+pub struct WinResourceConfig {
+    pub icon: Option<PathBuf>,
+    pub icon_sizes: Vec<u32>,
+    pub manifest: Option<ManifestConfig>,
+    pub language: Option<u16>,
+    pub windows_subsystem: String,
+    pub version_info: Vec<(String, String)>,
+}
+
 pub struct BuildParams {
     pub target_dir: PathBuf,
     pub build_dir: PathBuf,
@@ -28,6 +54,8 @@ pub struct BuildParams {
     pub compression: String,
     pub ignore_patterns: Vec<String>,
     pub target_triple: Option<String>,
+    pub installer_win_resource: Option<WinResourceConfig>,
+    pub uninstaller_win_resource: Option<WinResourceConfig>,
 }
 
 struct GatheredFile {
@@ -39,7 +67,7 @@ struct GatheredFile {
     is_dir: bool,
 }
 
-pub fn build(params: &BuildParams) -> Result<()> {
+pub fn build(mut params: BuildParams) -> Result<()> {
     log::info!("Starting build...");
 
     compress::validate_method(&params.compression)?;
@@ -47,6 +75,22 @@ pub fn build(params: &BuildParams) -> Result<()> {
     // ── Prepare directories ──────────────────────────────────────────────────
     std::fs::create_dir_all(&params.build_dir)
         .context("failed to create build directory")?;
+
+    // ── Convert PNG icons to ICO if needed ─────────────────────────────────
+    for (label, win_res) in [
+        ("installer", &mut params.installer_win_resource),
+        ("uninstaller", &mut params.uninstaller_win_resource),
+    ] {
+        if let Some(ref mut cfg) = win_res {
+            if let Some(ref icon_path) = cfg.icon {
+                if icon_path.extension().and_then(|e| e.to_str()) == Some("png") {
+                    let ico_path = params.build_dir.join(format!("{label}-icon-generated.ico"));
+                    ico_convert::png_to_ico(icon_path, &ico_path, &cfg.icon_sizes)?;
+                    cfg.icon = Some(ico_path);
+                }
+            }
+        }
+    }
     std::fs::write(params.build_dir.join(".gitignore"), "*\n")
         .context("failed to write .gitignore")?;
 
@@ -172,6 +216,7 @@ pub fn build(params: &BuildParams) -> Result<()> {
         &params.target_dir,
         uninstall_compression,
         &uninstall_gathered,
+        params.uninstaller_win_resource.as_ref(),
     )?;
     compile_cargo_project(&uninstaller_dir, params.target_triple.as_deref())?;
 
@@ -207,6 +252,7 @@ pub fn build(params: &BuildParams) -> Result<()> {
         &params.target_dir,
         &install_gathered,
         &params.compression,
+        params.installer_win_resource.as_ref(),
     )?;
     compile_cargo_project(&installer_dir, params.target_triple.as_deref())?;
 
@@ -255,6 +301,247 @@ fn read_package_info(target_dir: &Path) -> Result<(String, String, PathBuf)> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("src/lib.rs"));
     Ok((package_name, lib_crate_name, lib_path))
+}
+
+/// Returns (installer_config, uninstaller_config).
+///
+/// Base keys in `[package.metadata.installrs]` apply to both. Keys in
+/// `[package.metadata.installrs.installer]` or `…uninstaller` override the base.
+pub fn read_win_resource_config(
+    target_dir: &Path,
+) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
+    let cargo_toml_path = target_dir.join("Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)
+        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
+    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
+
+    let meta = match value
+        .get("package")
+        .and_then(|p| p.get("metadata"))
+        .and_then(|m| m.get("installrs"))
+    {
+        Some(v) => v,
+        None => return Ok((None, None)),
+    };
+
+    let base = parse_win_resource_table(meta, target_dir)?;
+
+    let installer = if let Some(sub) = meta.get("installer") {
+        let overrides = parse_win_resource_table(sub, target_dir)?;
+        merge_win_resource_config(&base, &overrides)
+    } else {
+        base.clone()
+    };
+
+    let uninstaller = if let Some(sub) = meta.get("uninstaller") {
+        let overrides = parse_win_resource_table(sub, target_dir)?;
+        merge_win_resource_config(&base, &overrides)
+    } else {
+        base
+    };
+
+    Ok((Some(installer), Some(uninstaller)))
+}
+
+const VERSION_INFO_KEYS: &[(&str, &str)] = &[
+    ("product-name", "ProductName"),
+    ("file-description", "FileDescription"),
+    ("file-version", "FileVersion"),
+    ("product-version", "ProductVersion"),
+    ("original-filename", "OriginalFilename"),
+    ("legal-copyright", "LegalCopyright"),
+    ("legal-trademarks", "LegalTrademarks"),
+    ("company-name", "CompanyName"),
+    ("internal-name", "InternalName"),
+    ("comments", "Comments"),
+];
+
+fn parse_win_resource_table(meta: &toml::Value, target_dir: &Path) -> Result<WinResourceConfig> {
+    let icon = meta
+        .get("icon")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| target_dir.join(s));
+
+    if let Some(ref icon_path) = icon {
+        if !icon_path.exists() {
+            return Err(anyhow!("icon file not found: {}", icon_path.display()));
+        }
+        match icon_path.extension().and_then(|e| e.to_str()) {
+            Some("png") | Some("ico") => {}
+            _ => return Err(anyhow!(
+                "icon must be a .png or .ico file, got: {}",
+                icon_path.display()
+            )),
+        }
+    }
+
+    let icon_sizes: Vec<u32> = if let Some(arr) = meta.get("icon-sizes").and_then(|v| v.as_array()) {
+        let mut sizes = Vec::new();
+        for v in arr {
+            let size = v.as_integer().ok_or_else(|| anyhow!("`icon-sizes` entries must be integers"))? as u32;
+            if size == 0 || size > 256 {
+                return Err(anyhow!("icon-sizes values must be 1..=256, got {size}"));
+            }
+            sizes.push(size);
+        }
+        sizes
+    } else {
+        Vec::new()
+    };
+
+    let has_manifest_file = meta.get("manifest-file").is_some();
+    let has_manifest_raw = meta.get("manifest-raw").is_some();
+    let has_execution_level = meta.get("execution-level").is_some();
+    let has_dpi_aware = meta.get("dpi-aware").is_some();
+    let has_long_path_aware = meta.get("long-path-aware").is_some();
+    let has_supported_os = meta.get("supported-os").is_some();
+    let has_generated = has_execution_level || has_dpi_aware || has_long_path_aware || has_supported_os;
+
+    if (has_manifest_file as u8 + has_manifest_raw as u8 + has_generated as u8) > 1 {
+        return Err(anyhow!(
+            "only one of `manifest-file`, `manifest-raw`, or generated manifest keys (execution-level, dpi-aware, long-path-aware) may be used"
+        ));
+    }
+
+    let manifest = if has_manifest_file {
+        let path = meta
+            .get("manifest-file")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("`manifest-file` must be a string"))?;
+        Some(ManifestConfig::File(target_dir.join(path)))
+    } else if has_manifest_raw {
+        let xml = meta
+            .get("manifest-raw")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("`manifest-raw` must be a string"))?;
+        Some(ManifestConfig::Raw(xml.to_string()))
+    } else if has_generated {
+        let execution_level = meta
+            .get("execution-level")
+            .and_then(|v| v.as_str())
+            .unwrap_or("asInvoker")
+            .to_string();
+        if !matches!(
+            execution_level.as_str(),
+            "asInvoker" | "requireAdministrator" | "highestAvailable"
+        ) {
+            return Err(anyhow!(
+                "invalid execution-level {:?}, expected \"asInvoker\", \"requireAdministrator\", or \"highestAvailable\"",
+                execution_level
+            ));
+        }
+
+        let dpi_aware = meta
+            .get("dpi-aware")
+            .map(|v| match v {
+                toml::Value::Boolean(b) => Ok(b.to_string()),
+                toml::Value::String(s) => {
+                    if matches!(s.as_str(), "true" | "false" | "system" | "permonitor" | "permonitorv2") {
+                        Ok(s.clone())
+                    } else {
+                        Err(anyhow!(
+                            "invalid dpi-aware value {:?}, expected true, false, \"system\", \"permonitor\", or \"permonitorv2\"",
+                            s
+                        ))
+                    }
+                }
+                _ => Err(anyhow!("`dpi-aware` must be a boolean or string")),
+            })
+            .transpose()?;
+
+        let long_path_aware = meta
+            .get("long-path-aware")
+            .map(|v| {
+                v.as_bool()
+                    .ok_or_else(|| anyhow!("`long-path-aware` must be a boolean"))
+            })
+            .transpose()?;
+
+        let supported_os = parse_supported_os(meta)?;
+
+        Some(ManifestConfig::Generated {
+            execution_level,
+            dpi_aware,
+            long_path_aware,
+            supported_os,
+        })
+    } else {
+        None
+    };
+
+    let windows_subsystem = meta
+        .get("subsystem")
+        .and_then(|v| v.as_str())
+        .unwrap_or("console")
+        .to_string();
+
+    if windows_subsystem != "console" && windows_subsystem != "windows" {
+        return Err(anyhow!(
+            "invalid subsystem value {:?}, expected \"console\" or \"windows\"",
+            windows_subsystem
+        ));
+    }
+
+    let language = meta
+        .get("language")
+        .map(|v| {
+            v.as_integer()
+                .ok_or_else(|| anyhow!("`language` must be an integer (Windows LANGID, e.g. 0x0409 for en-US)"))
+                .and_then(|n| {
+                    u16::try_from(n).map_err(|_| anyhow!("`language` must be a valid u16 LANGID, got {n}"))
+                })
+        })
+        .transpose()?;
+
+    let mut version_info = Vec::new();
+    for (toml_key, win_key) in VERSION_INFO_KEYS {
+        if let Some(s) = meta.get(*toml_key).and_then(|v| v.as_str()) {
+            version_info.push((win_key.to_string(), s.to_string()));
+        }
+    }
+
+    Ok(WinResourceConfig {
+        icon,
+        icon_sizes,
+        manifest,
+        language,
+        windows_subsystem,
+        version_info,
+    })
+}
+
+/// Merge an override config on top of a base. Override fields take precedence
+/// when present; empty/None fields in the override fall through to base.
+fn merge_win_resource_config(base: &WinResourceConfig, over: &WinResourceConfig) -> WinResourceConfig {
+    WinResourceConfig {
+        icon: over.icon.clone().or_else(|| base.icon.clone()),
+        icon_sizes: if over.icon_sizes.is_empty() {
+            base.icon_sizes.clone()
+        } else {
+            over.icon_sizes.clone()
+        },
+        manifest: over.manifest.clone().or_else(|| base.manifest.clone()),
+        language: over.language.or(base.language),
+        windows_subsystem: if over.windows_subsystem != "console"
+            || base.windows_subsystem == "console"
+        {
+            over.windows_subsystem.clone()
+        } else {
+            base.windows_subsystem.clone()
+        },
+        version_info: {
+            let mut merged = base.version_info.clone();
+            for (key, val) in &over.version_info {
+                if let Some(entry) = merged.iter_mut().find(|(k, _)| k == key) {
+                    entry.1 = val.clone();
+                } else {
+                    merged.push((key.clone(), val.clone()));
+                }
+            }
+            merged
+        },
+    }
 }
 
 fn gather_file(
@@ -505,18 +792,175 @@ fn generate_embedded_code(gathered: &[GatheredFile]) -> Result<(String, String)>
     Ok((statics_code, entries_code))
 }
 
+const SUPPORTED_OS_MAP: &[(&str, &str, &str)] = &[
+    ("vista",  "e2011457-1546-43c5-a5fe-008deee3d3f0", "Windows Vista"),
+    ("7",      "35138b9a-5d96-4fbd-8e2d-a2440225f93a", "Windows 7"),
+    ("8",      "4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38", "Windows 8"),
+    ("8.1",    "1f676c76-80e1-4239-95bb-83d0f6d0da78", "Windows 8.1"),
+    ("10",     "8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a", "Windows 10 / 11"),
+];
+
+const DEFAULT_SUPPORTED_OS: &[&str] = &["vista", "7", "8", "8.1", "10"];
+
+fn parse_supported_os(meta: &toml::Value) -> Result<Vec<String>> {
+    match meta.get("supported-os").and_then(|v| v.as_array()) {
+        Some(arr) => {
+            let mut os_list = Vec::new();
+            for v in arr {
+                let s = v.as_str().ok_or_else(|| anyhow!("`supported-os` entries must be strings"))?;
+                if !SUPPORTED_OS_MAP.iter().any(|(name, _, _)| *name == s) {
+                    let valid: Vec<&str> = SUPPORTED_OS_MAP.iter().map(|(n, _, _)| *n).collect();
+                    return Err(anyhow!(
+                        "unknown supported-os value {:?}, expected one of: {}",
+                        s,
+                        valid.join(", ")
+                    ));
+                }
+                os_list.push(s.to_string());
+            }
+            Ok(os_list)
+        }
+        None => Ok(Vec::new()),
+    }
+}
+
+fn generate_manifest_xml(execution_level: &str, dpi_aware: Option<&str>, long_path_aware: Option<bool>, supported_os: &[String]) -> String {
+    let mut settings = String::new();
+    if let Some(dpi) = dpi_aware {
+        let (aware_val, awareness_val) = match dpi {
+            "true" => ("true", "system"),
+            "false" => ("false", "unaware"),
+            "system" => ("true", "system"),
+            "permonitor" => ("true/pm", "permonitor"),
+            "permonitorv2" => ("true/pm", "permonitorv2"),
+            _ => ("true", "system"),
+        };
+        settings.push_str(&format!(
+            "        <dpiAware xmlns=\"http://schemas.microsoft.com/SMI/2005/WindowsSettings\">{aware_val}</dpiAware>\n\
+             \x20       <dpiAwareness xmlns=\"http://schemas.microsoft.com/SMI/2016/WindowsSettings\">{awareness_val}</dpiAwareness>\n"
+        ));
+    }
+    if let Some(true) = long_path_aware {
+        settings.push_str(
+            "        <longPathAware xmlns=\"http://schemas.microsoft.com/SMI/2016/WindowsSettings\">true</longPathAware>\n"
+        );
+    }
+
+    let ws_block = if settings.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "  <asmv3:application>\n\
+             \x20   <asmv3:windowsSettings>\n\
+             {settings}\
+             \x20   </asmv3:windowsSettings>\n\
+             \x20 </asmv3:application>\n"
+        )
+    };
+
+    let os_names: &[&str] = if supported_os.is_empty() {
+        DEFAULT_SUPPORTED_OS
+    } else {
+        // Safe: we only use this slice within this function call
+        &supported_os.iter().map(|s| s.as_str()).collect::<Vec<_>>()
+    };
+
+    let mut compat_entries = String::new();
+    for name in os_names {
+        if let Some((_, guid, label)) = SUPPORTED_OS_MAP.iter().find(|(n, _, _)| n == name) {
+            compat_entries.push_str(&format!(
+                "      <!-- {label} -->\n      <supportedOS Id=\"{{{guid}}}\" />\n"
+            ));
+        }
+    }
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="InstallRS.Installer" version="1.0.0.0" processorArchitecture="*" />
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="{execution_level}" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+{compat_entries}    </application>
+  </compatibility>
+{ws_block}</assembly>
+"#
+    )
+}
+
+fn write_build_rs(dir: &Path, config: &WinResourceConfig) -> Result<()> {
+    let mut code = String::from("fn main() {\n    let mut res = winresource::WindowsResource::new();\n");
+
+    if let Some(icon) = &config.icon {
+        let icon_str = icon.display().to_string().replace('\\', "/");
+        code.push_str(&format!("    res.set_icon(r\"{icon_str}\");\n"));
+    }
+
+    match &config.manifest {
+        Some(ManifestConfig::File(path)) => {
+            let path_str = path.display().to_string().replace('\\', "/");
+            code.push_str(&format!("    res.set_manifest_file(r\"{path_str}\");\n"));
+        }
+        Some(ManifestConfig::Raw(xml)) => {
+            code.push_str(&format!("    res.set_manifest(r#\"{}\"#);\n", xml));
+        }
+        Some(ManifestConfig::Generated {
+            execution_level,
+            dpi_aware,
+            long_path_aware,
+            supported_os,
+        }) => {
+            let xml = generate_manifest_xml(
+                execution_level,
+                dpi_aware.as_deref(),
+                *long_path_aware,
+                supported_os,
+            );
+            code.push_str(&format!("    res.set_manifest(r#\"{}\"#);\n", xml));
+        }
+        None => {}
+    }
+
+    if let Some(lang) = config.language {
+        code.push_str(&format!("    res.set_language({lang:#06x});\n"));
+    }
+
+    for (key, val) in &config.version_info {
+        code.push_str(&format!("    res.set({key:?}, {val:?});\n"));
+    }
+
+    code.push_str("    res.compile().unwrap();\n}\n");
+
+    std::fs::write(dir.join("build.rs"), &code)
+        .context("failed to write build.rs")?;
+    Ok(())
+}
+
 fn write_uninstaller_sources(
     uninstaller_dir: &Path,
     user_crate_name: &str,
     user_crate_path: &Path,
     compression: &str,
     gathered: &[GatheredFile],
+    win_resource: Option<&WinResourceConfig>,
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
     let features_str = match compression_feature(compression) {
         Some(f) => format!(", default-features = false, features = [{f:?}]"),
         None => ", default-features = false".to_string(),
+    };
+
+    let build_deps = if win_resource.is_some() {
+        "\n[build-dependencies]\nwinresource = \"0.1\"\n"
+    } else {
+        ""
     };
 
     let cargo_toml = format!(
@@ -530,7 +974,7 @@ edition = "2021"
 [dependencies]
 installrs = {{ path = {installrs_path:?}{features_str} }}
 {user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
-
+{build_deps}
 [profile.release]
 opt-level = "z"
 strip = true
@@ -542,10 +986,15 @@ codegen-units = 1
         user_package_name = user_crate_name.replace('_', "-"),
     );
 
+    let subsystem_attr = match win_resource {
+        Some(cfg) if cfg.windows_subsystem == "windows" => "#![windows_subsystem = \"windows\"]\n",
+        _ => "",
+    };
+
     let main_rs = if gathered.is_empty() {
         format!(
             r#"// Code generated by installrs; DO NOT EDIT.
-fn main() {{
+{subsystem_attr}fn main() {{
     let mut i = installrs::Installer::new(&[], &[], "none");
     i.uninstall_main({user_crate_name}::uninstall);
 }}
@@ -555,7 +1004,7 @@ fn main() {{
         let (statics_code, entries_code) = generate_embedded_code(gathered)?;
         format!(
             r#"// Code generated by installrs; DO NOT EDIT.
-{statics_code}
+{subsystem_attr}{statics_code}
 static ENTRIES: &[installrs::EmbeddedEntry] = &[
 {entries_code}];
 
@@ -572,6 +1021,10 @@ fn main() {{
     std::fs::write(uninstaller_dir.join("src").join("main.rs"), &main_rs)
         .context("failed to write uninstaller main.rs")?;
 
+    if let Some(cfg) = win_resource {
+        write_build_rs(uninstaller_dir, cfg)?;
+    }
+
     Ok(())
 }
 
@@ -581,12 +1034,19 @@ fn write_installer_sources(
     user_crate_path: &Path,
     gathered: &[GatheredFile],
     compression: &str,
+    win_resource: Option<&WinResourceConfig>,
 ) -> Result<()> {
     log::debug!("Writing installer sources");
 
     let features_str = match compression_feature(compression) {
         Some(f) => format!(", default-features = false, features = [{f:?}]"),
         None => ", default-features = false".to_string(),
+    };
+
+    let build_deps = if win_resource.is_some() {
+        "\n[build-dependencies]\nwinresource = \"0.1\"\n"
+    } else {
+        ""
     };
 
     let cargo_toml = format!(
@@ -600,7 +1060,7 @@ edition = "2021"
 [dependencies]
 installrs = {{ path = {installrs_path:?}{features_str} }}
 {user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
-
+{build_deps}
 [profile.release]
 opt-level = "z"
 strip = true
@@ -614,9 +1074,14 @@ codegen-units = 1
 
     let (statics_code, entries_code) = generate_embedded_code(gathered)?;
 
+    let subsystem_attr = match win_resource {
+        Some(cfg) if cfg.windows_subsystem == "windows" => "#![windows_subsystem = \"windows\"]\n",
+        _ => "",
+    };
+
     let main_rs = format!(
         r#"// Code generated by installrs; DO NOT EDIT.
-{statics_code}
+{subsystem_attr}{statics_code}
 static ENTRIES: &[installrs::EmbeddedEntry] = &[
 {entries_code}];
 static UNINSTALLER_DATA: &[u8] = include_bytes!("../../uninstaller-bin");
@@ -632,6 +1097,10 @@ fn main() {{
         .context("failed to write installer Cargo.toml")?;
     std::fs::write(installer_dir.join("src").join("main.rs"), &main_rs)
         .context("failed to write installer main.rs")?;
+
+    if let Some(cfg) = win_resource {
+        write_build_rs(installer_dir, cfg)?;
+    }
 
     Ok(())
 }

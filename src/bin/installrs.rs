@@ -92,6 +92,15 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
 
+    let (installer_win_resource, uninstaller_win_resource) =
+        if cli.target_triple.as_deref().is_some_and(|t| t.contains("windows"))
+            || cfg!(target_os = "windows")
+        {
+            build::builder::read_win_resource_config(&target)?
+        } else {
+            (None, None)
+        };
+
     let params = build::builder::BuildParams {
         target_dir: target,
         build_dir,
@@ -99,9 +108,11 @@ fn run(cli: Cli) -> Result<()> {
         compression: cli.compression,
         ignore_patterns,
         target_triple: cli.target_triple,
+        installer_win_resource,
+        uninstaller_win_resource,
     };
 
-    build::builder::build(&params)
+    build::builder::build(params)
 }
 
 #[cfg(test)]

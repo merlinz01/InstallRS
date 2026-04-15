@@ -1,1 +1,1 @@
-Hello from installer1!
+Hello from InstallRS!

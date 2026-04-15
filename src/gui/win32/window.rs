@@ -52,7 +52,9 @@ pub fn run(
             | co::WS::SYSMENU
             | co::WS::CLIPCHILDREN
             | co::WS::VISIBLE
-            | co::WS::MINIMIZEBOX,
+            | co::WS::MINIMIZEBOX
+            | co::WS::MAXIMIZEBOX
+            | co::WS::THICKFRAME,
         ..Default::default()
     });
 
@@ -79,6 +81,7 @@ pub fn run(
                         co::WS::NoValue
                     },
                 ex_style: co::WS_EX::NoValue,
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
                 ..Default::default()
             },
         );
@@ -126,6 +129,7 @@ pub fn run(
             position: gui::dpi(WINDOW_WIDTH - 3 * (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
+            resize_behavior: (gui::Horz::Repos, gui::Vert::Repos),
             ..Default::default()
         },
     );
@@ -137,6 +141,7 @@ pub fn run(
             position: gui::dpi(WINDOW_WIDTH - 2 * (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
+            resize_behavior: (gui::Horz::Repos, gui::Vert::Repos),
             ..Default::default()
         },
     );
@@ -148,6 +153,7 @@ pub fn run(
             position: gui::dpi(WINDOW_WIDTH - 1 * (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
+            resize_behavior: (gui::Horz::Repos, gui::Vert::Repos),
             ..Default::default()
         },
     );

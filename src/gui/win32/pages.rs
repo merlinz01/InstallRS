@@ -46,6 +46,7 @@ impl WelcomePage {
                 text: title,
                 position: gui::dpi(10, 20),
                 size: gui::dpi(width - 20, 30),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -56,6 +57,7 @@ impl WelcomePage {
                 text: message,
                 position: gui::dpi(10, 60),
                 size: gui::dpi(width - 20, 200),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
                 ..Default::default()
             },
         );
@@ -132,6 +134,7 @@ impl LicensePage {
                 text: "I accept the license agreement",
                 position: gui::dpi(10, edit_height + 20),
                 size: gui::dpi(width - 20, 20),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Repos),
                 ..Default::default()
             },
         );
@@ -163,6 +166,7 @@ impl DirectoryPickerPage {
                 text: "Install to:",
                 position: gui::dpi(10, 20),
                 size: gui::dpi(width - 20, 20),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -177,6 +181,7 @@ impl DirectoryPickerPage {
                 position: gui::dpi(10, 50),
                 width: ew,
                 height: eh,
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -189,6 +194,7 @@ impl DirectoryPickerPage {
                 position: gui::dpi(10 + edit_width + 10, 49),
                 width: bw,
                 height: bh,
+                resize_behavior: (gui::Horz::Repos, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -250,6 +256,7 @@ impl InstallPage {
                 text: "Waiting to start...",
                 position: gui::dpi(10, 20),
                 size: gui::dpi(width - 20, 20),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -259,6 +266,7 @@ impl InstallPage {
             gui::ProgressBarOpts {
                 position: gui::dpi(10, 50),
                 size: gui::dpi(width - 20, 22),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -329,6 +337,7 @@ impl FinishPage {
                 text: title,
                 position: gui::dpi(10, 20),
                 size: gui::dpi(width - 20, 30),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
@@ -339,6 +348,7 @@ impl FinishPage {
                 text: message,
                 position: gui::dpi(10, 60),
                 size: gui::dpi(width - 20, 200),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
                 ..Default::default()
             },
         );

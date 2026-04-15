@@ -11,7 +11,7 @@ fn setup_transparent_labels(parent: &gui::WindowControl) {
         .on()
         .wm_ctl_color_static(move |p: wm::CtlColorStatic| {
             p.hdc.SetBkMode(co::BKMODE::TRANSPARENT)?;
-            Ok(HBRUSH::GetStockObject(co::STOCK_BRUSH::NULL)?)
+            Ok(HBRUSH::GetSysColorBrush(co::COLOR::WINDOW)?)
         });
 }
 
@@ -146,6 +146,8 @@ impl LicensePage {
                 ..Default::default()
             },
         );
+
+        setup_transparent_labels(parent);
 
         Self {
             _text_edit: text_edit,

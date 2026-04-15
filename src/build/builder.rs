@@ -56,6 +56,7 @@ pub struct WinResourceConfig {
     pub icon_sizes: Vec<u32>,
     pub manifest: Option<ManifestConfig>,
     pub language: Option<u16>,
+    /// `"console"`, `"windows"`, or `"auto"` (resolved at build time).
     pub windows_subsystem: String,
     pub version_info: Vec<(String, String)>,
 }
@@ -298,13 +299,20 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         .is_some_and(|t| t.contains("windows"))
         || cfg!(target_os = "windows");
 
-    // When GUI is enabled and no explicit subsystem is set, default to "windows"
-    // to prevent a console window flash.
-    if params.gui_enabled && target_is_windows {
-        if let Some(ref mut cfg) = params.installer_win_resource {
-            if cfg.windows_subsystem == "console" {
-                log::debug!("GUI enabled: defaulting installer subsystem to \"windows\"");
-                cfg.windows_subsystem = "windows".to_string();
+    // Resolve "auto" subsystem: "windows" when GUI is enabled, "console" otherwise.
+    let auto_resolved = if params.gui_enabled {
+        "windows"
+    } else {
+        "console"
+    };
+    for cfg in [
+        &mut params.installer_win_resource,
+        &mut params.uninstaller_win_resource,
+    ] {
+        if let Some(cfg) = cfg.as_mut() {
+            if cfg.windows_subsystem == "auto" {
+                log::debug!("Resolved subsystem \"auto\" → {auto_resolved:?}");
+                cfg.windows_subsystem = auto_resolved.to_string();
             }
         }
     }
@@ -578,12 +586,12 @@ fn parse_win_resource_table(meta: &toml::Value, target_dir: &Path) -> Result<Win
     let windows_subsystem = meta
         .get("subsystem")
         .and_then(|v| v.as_str())
-        .unwrap_or("console")
+        .unwrap_or("auto")
         .to_string();
 
-    if windows_subsystem != "console" && windows_subsystem != "windows" {
+    if !matches!(windows_subsystem.as_str(), "console" | "windows" | "auto") {
         return Err(anyhow!(
-            "invalid subsystem value {:?}, expected \"console\" or \"windows\"",
+            "invalid subsystem value {:?}, expected \"console\", \"windows\", or \"auto\"",
             windows_subsystem
         ));
     }
@@ -634,9 +642,7 @@ fn merge_win_resource_config(
         },
         manifest: over.manifest.clone().or_else(|| base.manifest.clone()),
         language: over.language.or(base.language),
-        windows_subsystem: if over.windows_subsystem != "console"
-            || base.windows_subsystem == "console"
-        {
+        windows_subsystem: if over.windows_subsystem != "auto" {
             over.windows_subsystem.clone()
         } else {
             base.windows_subsystem.clone()

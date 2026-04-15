@@ -17,12 +17,13 @@ We can do better in 2026.
 - Automatically generates both installer and uninstaller binaries
 - Supports file compression (lzma, gzip, bzip2) to reduce binary size
 - Small binaries — no runtime overhead
+- Windows resource support: icons (PNG auto-converted to ICO), version info, manifests
+- Separate configuration for installer and uninstaller binaries
 
 ## Unfeatures
 
 - No GUI (yet)
 - No advanced installation options (yet)
-- No control over exe icons, version info, etc. (yet)
 
 ## Usage
 
@@ -52,7 +53,7 @@ Then build with the `installrs` CLI:
 installrs --target ./my-installer --output installer.exe
 ```
 
-See the `example-rs` directory for a working example.
+See the `example/` directory for a working example.
 
 ## Installer API
 
@@ -78,9 +79,39 @@ See the `example-rs` directory for a working example.
 --compression <method>   lzma, gzip, bzip2, or none (default: lzma)
 --ignore <patterns>      Comma-separated glob patterns to ignore (default: .git,.svn,node_modules)
 --target-triple <triple> Rust target triple for cross-compilation (e.g. x86_64-pc-windows-gnu)
---verbose                Enable debug output
---quiet                  Suppress non-error output
---silent                 Suppress all output
+-v                       Debug output (use -vv for trace)
+-q, --quiet              Suppress non-error output
+-s, --silent             Suppress all output
+```
+
+## Windows Resource Configuration
+
+Configure icons, version info, and manifests via `[package.metadata.installrs]` in your installer's `Cargo.toml`. Shared settings apply to both installer and uninstaller; use `[package.metadata.installrs.installer]` and `[…uninstaller]` sub-tables to override per-binary.
+
+```toml
+# Shared defaults
+[package.metadata.installrs]
+icon = "assets/app.png"                   # .png or .ico — PNG auto-converts to ICO
+icon-sizes = [16, 32, 48, 256]            # optional, defaults to [16, 32, 48, 64, 128, 256]
+language = 0x0409                          # Windows LANGID
+subsystem = "console"                      # "console" or "windows"
+execution-level = "requireAdministrator"   # manifest: asInvoker, requireAdministrator, highestAvailable
+dpi-aware = "permonitorv2"                 # manifest: true, false, system, permonitor, permonitorv2
+supported-os = ["7", "8", "8.1", "10"]    # manifest: vista, 7, 8, 8.1, 10 (defaults to all)
+product-name = "My App"
+file-version = "1.0.0.0"
+product-version = "1.0.0.0"
+legal-copyright = "Copyright (c) 2026"
+
+# Installer-specific overrides
+[package.metadata.installrs.installer]
+file-description = "My App Installer"
+original-filename = "installer.exe"
+
+# Uninstaller-specific overrides
+[package.metadata.installrs.uninstaller]
+file-description = "My App Uninstaller"
+original-filename = "uninstaller.exe"
 ```
 
 ## Requirements

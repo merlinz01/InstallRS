@@ -305,6 +305,43 @@ pub fn run(
             });
         }
 
+        // Enforce minimum window size (the initial dimensions + non-client area).
+        {
+            let (client_w, client_h) = gui::dpi(WINDOW_WIDTH, WINDOW_HEIGHT);
+            let style = co::WS::CAPTION
+                | co::WS::SYSMENU
+                | co::WS::CLIPCHILDREN
+                | co::WS::VISIBLE
+                | co::WS::MINIMIZEBOX
+                | co::WS::MAXIMIZEBOX
+                | co::WS::THICKFRAME;
+            let rc = winsafe::AdjustWindowRectEx(
+                winsafe::RECT {
+                    left: 0,
+                    top: 0,
+                    right: client_w,
+                    bottom: client_h,
+                },
+                style,
+                false,
+                co::WS_EX::NoValue,
+            )
+            .unwrap_or(winsafe::RECT {
+                left: 0,
+                top: 0,
+                right: client_w,
+                bottom: client_h,
+            });
+            let min_w = rc.right - rc.left;
+            let min_h = rc.bottom - rc.top;
+
+            wnd.on().wm_get_min_max_info(move |p| {
+                p.info.ptMinTrackSize.x = min_w;
+                p.info.ptMinTrackSize.y = min_h;
+                Ok(())
+            });
+        }
+
         // Timer to poll the message channel from the background thread.
         const TIMER_ID: usize = 1;
         {

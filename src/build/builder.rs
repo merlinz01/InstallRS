@@ -232,6 +232,12 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     );
 
     // ── Compile uninstaller ──────────────────────────────────────────────────
+    let target_is_windows = params
+        .target_triple
+        .as_deref()
+        .is_some_and(|t| t.contains("windows"))
+        || cfg!(target_os = "windows");
+
     let uninstall_compression = if uninstall_gathered.is_empty() {
         "none"
     } else {
@@ -245,6 +251,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &uninstall_gathered,
         params.uninstaller_win_resource.as_ref(),
         params.gui_enabled,
+        target_is_windows,
     )?;
     compile_cargo_project(
         &uninstaller_dir,
@@ -293,11 +300,6 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     prune_files_dir(&uninstall_files_dir, &uninstall_gathered)?;
 
     // ── Write installer sources and compile ──────────────────────────────────
-    let target_is_windows = params
-        .target_triple
-        .as_deref()
-        .is_some_and(|t| t.contains("windows"))
-        || cfg!(target_os = "windows");
 
     // Resolve "auto" subsystem: "windows" when GUI is enabled, "console" otherwise.
     let auto_resolved = if params.gui_enabled {
@@ -1123,17 +1125,19 @@ fn write_uninstaller_sources(
     gathered: &[GatheredFile],
     win_resource: Option<&WinResourceConfig>,
     gui_enabled: bool,
+    target_is_windows: bool,
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
-    // Uninstaller needs the `gui` feature (so the user crate compiles) but
-    // never needs the platform-specific `gui-win32` backend.
     let mut features: Vec<&str> = Vec::new();
     if let Some(f) = compression_feature(compression) {
         features.push(f);
     }
     if gui_enabled {
         features.push("gui");
+        if target_is_windows {
+            features.push("gui-win32");
+        }
     }
     let features_str = if features.is_empty() {
         ", default-features = false".to_string()

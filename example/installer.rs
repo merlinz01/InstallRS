@@ -44,8 +44,33 @@ pub fn install(i: &mut Installer) -> Result<()> {
 }
 
 pub fn uninstall(i: &mut Installer) -> Result<()> {
+    use installrs::gui::*;
+
     #[cfg(windows)]
     i.enable_self_delete();
-    i.remove("C:/InstallRS test")?;
+
+    InstallerGui::wizard()
+        .title("InstallRS Example — Uninstall")
+        .welcome(
+            "Uninstall InstallRS Example",
+            "This will remove InstallRS Example from your system.\n\nClick Next to continue.",
+        )
+        .install_page(|ctx| {
+            ctx.set_status("Removing files...");
+            ctx.set_progress(0.0);
+
+            ctx.log("Removing install directory...");
+            ctx.installer().remove("C:/InstallRS test")?;
+            ctx.set_progress(1.0);
+
+            ctx.set_status("Uninstallation complete!");
+            Ok(())
+        })
+        .finish_page(
+            "Uninstallation Complete!",
+            "All files have been removed successfully.\n\nClick Finish to exit.",
+        )
+        .run(i)?;
+
     Ok(())
 }

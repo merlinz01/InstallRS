@@ -11,6 +11,19 @@ use super::scanner;
 // Embedded at compile time so the build tool is self-contained.
 const INSTALLRS_CRATE_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
+/// Write a file only if its content has changed, preserving mtime for build caching.
+fn write_if_changed(path: &Path, content: &str) -> Result<()> {
+    if path.exists() {
+        if let Ok(existing) = std::fs::read_to_string(path) {
+            if existing == content {
+                return Ok(());
+            }
+        }
+    }
+    std::fs::write(path, content)
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
 /// FNV-1a 64-bit hash — must stay identical to the copy in installrs/src/lib.rs.
 fn fnv1a(s: &str) -> u64 {
     let mut h: u64 = 14695981039346656037;
@@ -934,8 +947,7 @@ fn write_build_rs(dir: &Path, config: &WinResourceConfig) -> Result<()> {
 
     code.push_str("    res.compile().unwrap();\n}\n");
 
-    std::fs::write(dir.join("build.rs"), &code)
-        .context("failed to write build.rs")?;
+    write_if_changed(&dir.join("build.rs"), &code)?;
     Ok(())
 }
 
@@ -1013,10 +1025,8 @@ fn main() {{
         )
     };
 
-    std::fs::write(uninstaller_dir.join("Cargo.toml"), &cargo_toml)
-        .context("failed to write uninstaller Cargo.toml")?;
-    std::fs::write(uninstaller_dir.join("src").join("main.rs"), &main_rs)
-        .context("failed to write uninstaller main.rs")?;
+    write_if_changed(&uninstaller_dir.join("Cargo.toml"), &cargo_toml)?;
+    write_if_changed(&uninstaller_dir.join("src").join("main.rs"), &main_rs)?;
 
     if let Some(cfg) = win_resource {
         write_build_rs(uninstaller_dir, cfg)?;
@@ -1090,10 +1100,8 @@ fn main() {{
 "#
     );
 
-    std::fs::write(installer_dir.join("Cargo.toml"), &cargo_toml)
-        .context("failed to write installer Cargo.toml")?;
-    std::fs::write(installer_dir.join("src").join("main.rs"), &main_rs)
-        .context("failed to write installer main.rs")?;
+    write_if_changed(&installer_dir.join("Cargo.toml"), &cargo_toml)?;
+    write_if_changed(&installer_dir.join("src").join("main.rs"), &main_rs)?;
 
     if let Some(cfg) = win_resource {
         write_build_rs(installer_dir, cfg)?;

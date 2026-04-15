@@ -126,6 +126,11 @@ impl LicensePage {
                     | co::ES::READONLY
                     | co::ES::AUTOVSCROLL
                     | co::ES::WANTRETURN,
+                window_style: co::WS::CHILD
+                    | co::WS::GROUP
+                    | co::WS::TABSTOP
+                    | co::WS::VISIBLE
+                    | co::WS::VSCROLL,
                 resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
                 ..Default::default()
             },

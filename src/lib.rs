@@ -1,3 +1,6 @@
+#[cfg(feature = "gui")]
+pub mod gui;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};

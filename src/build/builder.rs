@@ -71,6 +71,7 @@ pub struct BuildParams {
     pub verbosity: u8,
     pub installer_win_resource: Option<WinResourceConfig>,
     pub uninstaller_win_resource: Option<WinResourceConfig>,
+    pub gui_enabled: bool,
 }
 
 struct GatheredFile {
@@ -242,6 +243,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         uninstall_compression,
         &uninstall_gathered,
         params.uninstaller_win_resource.as_ref(),
+        params.gui_enabled,
     )?;
     compile_cargo_project(
         &uninstaller_dir,
@@ -290,6 +292,23 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     prune_files_dir(&uninstall_files_dir, &uninstall_gathered)?;
 
     // ── Write installer sources and compile ──────────────────────────────────
+    let target_is_windows = params
+        .target_triple
+        .as_deref()
+        .is_some_and(|t| t.contains("windows"))
+        || cfg!(target_os = "windows");
+
+    // When GUI is enabled and no explicit subsystem is set, default to "windows"
+    // to prevent a console window flash.
+    if params.gui_enabled && target_is_windows {
+        if let Some(ref mut cfg) = params.installer_win_resource {
+            if cfg.windows_subsystem == "console" {
+                log::debug!("GUI enabled: defaulting installer subsystem to \"windows\"");
+                cfg.windows_subsystem = "windows".to_string();
+            }
+        }
+    }
+
     write_installer_sources(
         &installer_dir,
         &user_crate_name,
@@ -297,6 +316,8 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &install_gathered,
         &params.compression,
         params.installer_win_resource.as_ref(),
+        params.gui_enabled,
+        target_is_windows,
     )?;
     compile_cargo_project(
         &installer_dir,
@@ -400,6 +421,24 @@ pub fn read_win_resource_config(
     };
 
     Ok((Some(installer), Some(uninstaller)))
+}
+
+/// Read `gui = true` from `[package.metadata.installrs]`.
+pub fn read_gui_config(target_dir: &Path) -> Result<bool> {
+    let cargo_toml_path = target_dir.join("Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)
+        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
+    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
+
+    let gui = value
+        .get("package")
+        .and_then(|p| p.get("metadata"))
+        .and_then(|m| m.get("installrs"))
+        .and_then(|i| i.get("gui"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    Ok(gui)
 }
 
 const VERSION_INFO_KEYS: &[(&str, &str)] = &[
@@ -1077,12 +1116,27 @@ fn write_uninstaller_sources(
     compression: &str,
     gathered: &[GatheredFile],
     win_resource: Option<&WinResourceConfig>,
+    gui_enabled: bool,
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
-    let features_str = match compression_feature(compression) {
-        Some(f) => format!(", default-features = false, features = [{f:?}]"),
-        None => ", default-features = false".to_string(),
+    // Uninstaller needs the `gui` feature (so the user crate compiles) but
+    // never needs the platform-specific `gui-win32` backend.
+    let mut features: Vec<&str> = Vec::new();
+    if let Some(f) = compression_feature(compression) {
+        features.push(f);
+    }
+    if gui_enabled {
+        features.push("gui");
+    }
+    let features_str = if features.is_empty() {
+        ", default-features = false".to_string()
+    } else {
+        let feat_list: Vec<String> = features.iter().map(|f| format!("{f:?}")).collect();
+        format!(
+            ", default-features = false, features = [{}]",
+            feat_list.join(", ")
+        )
     };
 
     let build_deps = if win_resource.is_some() {
@@ -1154,6 +1208,7 @@ fn main() {{
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_installer_sources(
     installer_dir: &Path,
     user_crate_name: &str,
@@ -1161,12 +1216,29 @@ fn write_installer_sources(
     gathered: &[GatheredFile],
     compression: &str,
     win_resource: Option<&WinResourceConfig>,
+    gui_enabled: bool,
+    target_is_windows: bool,
 ) -> Result<()> {
     log::debug!("Writing installer sources");
 
-    let features_str = match compression_feature(compression) {
-        Some(f) => format!(", default-features = false, features = [{f:?}]"),
-        None => ", default-features = false".to_string(),
+    let mut features: Vec<&str> = Vec::new();
+    if let Some(f) = compression_feature(compression) {
+        features.push(f);
+    }
+    if gui_enabled {
+        features.push("gui");
+        if target_is_windows {
+            features.push("gui-win32");
+        }
+    }
+    let features_str = if features.is_empty() {
+        ", default-features = false".to_string()
+    } else {
+        let feat_list: Vec<String> = features.iter().map(|f| format!("{f:?}")).collect();
+        format!(
+            ", default-features = false, features = [{}]",
+            feat_list.join(", ")
+        )
     };
 
     let build_deps = if win_resource.is_some() {

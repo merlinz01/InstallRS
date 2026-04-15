@@ -105,6 +105,11 @@ fn run(cli: Cli) -> Result<()> {
         (None, None)
     };
 
+    let gui_enabled = build::builder::read_gui_config(&target)?;
+    if gui_enabled {
+        log::info!("GUI support enabled");
+    }
+
     let params = build::builder::BuildParams {
         target_dir: target,
         build_dir,
@@ -115,6 +120,7 @@ fn run(cli: Cli) -> Result<()> {
         verbosity: cli.verbose,
         installer_win_resource,
         uninstaller_win_resource,
+        gui_enabled,
     };
 
     build::builder::build(params)

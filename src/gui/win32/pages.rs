@@ -110,6 +110,9 @@ pub struct LicensePage {
 
 impl LicensePage {
     pub fn new(parent: &gui::WindowControl, text: &str, width: i32, height: i32) -> Self {
+        // Win32 Edit controls require \r\n line endings.
+        let text = &text.replace("\r\n", "\n").replace('\n', "\r\n");
+
         let edit_height = height - 60;
         let (ew, eh) = gui::dpi(width - 20, edit_height);
         let text_edit = gui::Edit::new(

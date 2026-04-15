@@ -15,5 +15,6 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         .expect("INSTALLRS_TEST_OUT must be set before running the test uninstaller");
     i.set_out_dir(&out);
     i.remove("data.txt")?;
+    i.remove("uninstall")?;
     Ok(())
 }

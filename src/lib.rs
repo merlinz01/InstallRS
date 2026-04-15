@@ -1,10 +1,3 @@
-#[cfg(target_os = "windows")]
-#[path = "self_destruct_windows.rs"]
-mod self_destruct;
-
-#[cfg(not(target_os = "windows"))]
-mod self_destruct;
-
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -99,6 +92,8 @@ pub struct Installer {
     out_dir: Option<PathBuf>,
     uninstaller_data: &'static [u8],
     uninstaller_compression: &'static str,
+    #[cfg(target_os = "windows")]
+    self_delete: bool,
 }
 
 impl Installer {
@@ -113,6 +108,8 @@ impl Installer {
             out_dir: None,
             uninstaller_data,
             uninstaller_compression,
+            #[cfg(target_os = "windows")]
+            self_delete: false,
         }
     }
 
@@ -149,14 +146,18 @@ impl Installer {
             "gzip" => {
                 let mut decoder = flate2::read::GzDecoder::new(data);
                 let mut out = Vec::new();
-                decoder.read_to_end(&mut out).context("gzip decompression failed")?;
+                decoder
+                    .read_to_end(&mut out)
+                    .context("gzip decompression failed")?;
                 Ok(out)
             }
             #[cfg(feature = "bzip2")]
             "bzip2" => {
                 let mut decoder = bzip2::read::BzDecoder::new(data);
                 let mut out = Vec::new();
-                decoder.read_to_end(&mut out).context("bzip2 decompression failed")?;
+                decoder
+                    .read_to_end(&mut out)
+                    .context("bzip2 decompression failed")?;
                 Ok(out)
             }
             other => Err(anyhow!("unsupported compression: {other}")),
@@ -167,29 +168,43 @@ impl Installer {
     pub fn file_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
         let dest = self.resolve_out_path(dest_path)?;
         for entry in self.entries {
-            if let EmbeddedEntry::File { source_path_hash, data, compression } = entry {
+            if let EmbeddedEntry::File {
+                source_path_hash,
+                data,
+                compression,
+            } = entry
+            {
                 if *source_path_hash == source_hash {
                     let bytes = Self::decompress(data, compression)?;
                     return write_file(&dest, &bytes);
                 }
             }
         }
-        Err(anyhow!("file not embedded in installer (hash: {source_hash:#018x})"))
+        Err(anyhow!(
+            "file not embedded in installer (hash: {source_hash:#018x})"
+        ))
     }
 
     /// Install a directory tree by pre-computed path hash. Prefer the [`dir!`] macro.
     pub fn dir_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
         let dest = self.resolve_out_path(dest_path)?;
         for entry in self.entries {
-            if let EmbeddedEntry::Dir { source_path_hash, children } = entry {
+            if let EmbeddedEntry::Dir {
+                source_path_hash,
+                children,
+            } = entry
+            {
                 if *source_path_hash == source_hash {
-                    std::fs::create_dir_all(&dest)
-                        .with_context(|| format!("failed to create directory: {}", dest.display()))?;
+                    std::fs::create_dir_all(&dest).with_context(|| {
+                        format!("failed to create directory: {}", dest.display())
+                    })?;
                     return Self::install_children(children, &dest);
                 }
             }
         }
-        Err(anyhow!("directory not embedded in installer (hash: {source_hash:#018x})"))
+        Err(anyhow!(
+            "directory not embedded in installer (hash: {source_hash:#018x})"
+        ))
     }
 
     fn install_children(children: &[DirChild], dest: &Path) -> Result<()> {
@@ -270,6 +285,56 @@ impl Installer {
         Ok(())
     }
 
+    /// Enable self-deletion of the executable after it finishes.
+    ///
+    /// On Windows this copies the running executable to a temporary directory and
+    /// relaunches from there (with `--self-delete`) so the original file can
+    /// be removed during uninstallation. After `uninstall_main` returns, a
+    /// PowerShell process cleans up the temp copy.
+    ///
+    /// This method is only available on Windows. On Unix, use `i.remove()` to
+    /// delete the uninstaller as part of your normal cleanup.
+    #[cfg(target_os = "windows")]
+    pub fn enable_self_delete(&mut self) {
+        if std::env::args().any(|a| a == "--self-delete") {
+            self.self_delete = true;
+            return;
+        }
+
+        let exe = match std::env::current_exe() {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("Error getting executable path: {e}");
+                std::process::exit(1);
+            }
+        };
+
+        let tmp_dir = std::env::temp_dir().join(format!("uninstall-{}", std::process::id()));
+        if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
+            eprintln!("Error creating temp dir: {e}");
+            std::process::exit(1);
+        }
+
+        let tmp_exe = tmp_dir.join("uninstaller.exe");
+        if let Err(e) = std::fs::copy(&exe, &tmp_exe) {
+            eprintln!("Error copying to temp: {e}");
+            std::process::exit(1);
+        }
+
+        let mut args: Vec<String> = std::env::args().skip(1).collect();
+        args.push("--self-delete".to_string());
+
+        match std::process::Command::new(&tmp_exe).args(&args).spawn() {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error spawning temp uninstaller: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        std::process::exit(0);
+    }
+
     /// Entry point for installer binaries. Call this from `main()`.
     pub fn install_main(&mut self, install_fn: impl Fn(&mut Installer) -> Result<()>) {
         self.headless = std::env::args().any(|a| a == "--headless");
@@ -282,13 +347,26 @@ impl Installer {
     /// Entry point for uninstaller binaries. Call this from `main()`.
     pub fn uninstall_main(&mut self, uninstall_fn: impl Fn(&mut Installer) -> Result<()>) {
         self.headless = std::env::args().any(|a| a == "--headless");
-        self_destruct::prepare();
         if let Err(e) = uninstall_fn(self) {
             eprintln!("Error: {e:#}");
             std::process::exit(1);
         }
-        self_destruct::destruct();
-        std::process::exit(0);
+        #[cfg(target_os = "windows")]
+        if self.self_delete {
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(dir) = exe.parent() {
+                    let dir = dir.to_string_lossy().into_owned();
+                    let _ = std::process::Command::new("powershell")
+                        .args([
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-Command",
+                            &format!("Start-Sleep 5; Remove-Item -Path '{}' -Recurse -Force", dir),
+                        ])
+                        .spawn();
+                }
+            }
+        }
     }
 }
 
@@ -356,14 +434,19 @@ mod tests {
     fn child_file(name: &str, data: &'static [u8]) -> DirChild {
         DirChild {
             name: Box::leak(name.to_string().into_boxed_str()),
-            kind: DirChildKind::File { data, compression: "" },
+            kind: DirChildKind::File {
+                data,
+                compression: "",
+            },
         }
     }
 
     fn child_dir(name: &str, children: Vec<DirChild>) -> DirChild {
         DirChild {
             name: Box::leak(name.to_string().into_boxed_str()),
-            kind: DirChildKind::Dir { children: leak_children(children) },
+            kind: DirChildKind::Dir {
+                children: leak_children(children),
+            },
         }
     }
 
@@ -371,17 +454,26 @@ mod tests {
 
     #[test]
     fn source_path_hash_const_is_stable() {
-        assert_eq!(source_path_hash_const("foo/bar.txt"), source_path_hash_const("foo/bar.txt"));
+        assert_eq!(
+            source_path_hash_const("foo/bar.txt"),
+            source_path_hash_const("foo/bar.txt")
+        );
     }
 
     #[test]
     fn source_path_hash_const_normalizes_backslashes() {
-        assert_eq!(source_path_hash_const("foo\\bar.txt"), source_path_hash_const("foo/bar.txt"));
+        assert_eq!(
+            source_path_hash_const("foo\\bar.txt"),
+            source_path_hash_const("foo/bar.txt")
+        );
     }
 
     #[test]
     fn source_path_hash_const_different_inputs_differ() {
-        assert_ne!(source_path_hash_const("a.txt"), source_path_hash_const("b.txt"));
+        assert_ne!(
+            source_path_hash_const("a.txt"),
+            source_path_hash_const("b.txt")
+        );
         assert_ne!(source_path_hash_const(""), source_path_hash_const("a"));
     }
 
@@ -444,31 +536,35 @@ mod tests {
     #[test]
     fn dir_macro_installs_tree() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let entries = vec![
-            dir_entry("pkg", vec![
+        let entries = vec![dir_entry(
+            "pkg",
+            vec![
                 child_file("readme.txt", b"readme"),
-                child_dir("bin", vec![
-                    child_file("app", b"binary"),
-                ]),
-            ]),
-        ];
+                child_dir("bin", vec![child_file("app", b"binary")]),
+            ],
+        )];
         let i = make_installer(entries, tmp.path());
         dir!(i, "pkg", "out").unwrap();
-        assert_eq!(std::fs::read(tmp.path().join("out/readme.txt")).unwrap(), b"readme");
-        assert_eq!(std::fs::read(tmp.path().join("out/bin/app")).unwrap(), b"binary");
+        assert_eq!(
+            std::fs::read(tmp.path().join("out/readme.txt")).unwrap(),
+            b"readme"
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("out/bin/app")).unwrap(),
+            b"binary"
+        );
     }
 
     #[test]
     fn dir_macro_installs_flat_directory() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let entries = vec![
-            dir_entry("assets", vec![
-                child_file("logo.png", b"PNG"),
-            ]),
-        ];
+        let entries = vec![dir_entry("assets", vec![child_file("logo.png", b"PNG")])];
         let i = make_installer(entries, tmp.path());
         dir!(i, "assets", "out").unwrap();
-        assert_eq!(std::fs::read(tmp.path().join("out/logo.png")).unwrap(), b"PNG");
+        assert_eq!(
+            std::fs::read(tmp.path().join("out/logo.png")).unwrap(),
+            b"PNG"
+        );
     }
 
     // ── decompress ───────────────────────────────────────────────────────────
@@ -592,6 +688,5 @@ fn write_file(dest: &Path, data: &[u8]) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create parent dir for: {}", dest.display()))?;
     }
-    std::fs::write(dest, data)
-        .with_context(|| format!("failed to write: {}", dest.display()))
+    std::fs::write(dest, data).with_context(|| format!("failed to write: {}", dest.display()))
 }

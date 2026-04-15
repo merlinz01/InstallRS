@@ -10,6 +10,8 @@ pub fn install(i: &mut Installer) -> Result<()> {
 }
 
 pub fn uninstall(i: &mut Installer) -> Result<()> {
+    #[cfg(windows)]
+    i.enable_self_delete();
     i.remove("C:/installer1_test")?;
     Ok(())
 }

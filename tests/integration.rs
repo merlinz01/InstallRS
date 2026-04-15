@@ -124,12 +124,9 @@ fn build_install_uninstall(compression: &str) {
         !installed_data.exists(),
         "data.txt was not removed by the uninstaller (compression={compression})"
     );
-
-    // On Unix, the uninstaller binary self-deletes via self_destruct::destruct().
-    #[cfg(unix)]
     assert!(
         !uninstaller_path.exists(),
-        "uninstaller did not self-delete on Unix (compression={compression})"
+        "uninstaller was not removed (compression={compression})"
     );
 }
 

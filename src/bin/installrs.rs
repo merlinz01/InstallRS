@@ -85,10 +85,17 @@ fn run(cli: Cli) -> Result<()> {
         .filter(|s| !s.is_empty())
         .collect();
 
+    let mut output_file = cli.output;
+    if let Some(ref triple) = cli.target_triple {
+        if triple.contains("windows") && output_file.extension().is_none_or(|e| e != "exe") {
+            output_file.set_extension("exe");
+        }
+    }
+
     let params = build::builder::BuildParams {
         target_dir: target,
         build_dir,
-        output_file: cli.output,
+        output_file,
         compression: cli.compression,
         ignore_patterns,
         target_triple: cli.target_triple,

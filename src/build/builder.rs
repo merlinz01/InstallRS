@@ -183,7 +183,7 @@ pub fn build(params: &BuildParams) -> Result<()> {
         } else {
             "release".to_string()
         })
-        .join(if cfg!(target_os = "windows") {
+        .join(if params.target_triple.as_deref().is_some_and(|t| t.contains("windows")) || cfg!(target_os = "windows") {
             "uninstaller.exe"
         } else {
             "uninstaller"
@@ -218,7 +218,7 @@ pub fn build(params: &BuildParams) -> Result<()> {
         } else {
             "release".to_string()
         })
-        .join(if cfg!(target_os = "windows") {
+        .join(if params.target_triple.as_deref().is_some_and(|t| t.contains("windows")) || cfg!(target_os = "windows") {
             "installer-generated.exe"
         } else {
             "installer-generated"

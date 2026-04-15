@@ -4,16 +4,20 @@ use anyhow::{Context, Result};
 use syn::visit::Visit;
 
 pub struct ScanResult {
-    pub included_files: Vec<String>,
-    pub included_dirs: Vec<String>,
+    pub install_files: Vec<String>,
+    pub install_dirs: Vec<String>,
+    pub uninstall_files: Vec<String>,
+    pub uninstall_dirs: Vec<String>,
     pub has_install_fn: bool,
     pub has_uninstall_fn: bool,
 }
 
 pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
     let mut result = ScanResult {
-        included_files: Vec::new(),
-        included_dirs: Vec::new(),
+        install_files: Vec::new(),
+        install_dirs: Vec::new(),
+        uninstall_files: Vec::new(),
+        uninstall_dirs: Vec::new(),
         has_install_fn: false,
         has_uninstall_fn: false,
     };
@@ -36,10 +40,13 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
         };
 
         let mut visitor = SourceVisitor {
-            included_files: &mut result.included_files,
-            included_dirs: &mut result.included_dirs,
+            install_files: &mut result.install_files,
+            install_dirs: &mut result.install_dirs,
+            uninstall_files: &mut result.uninstall_files,
+            uninstall_dirs: &mut result.uninstall_dirs,
             has_install_fn: &mut result.has_install_fn,
             has_uninstall_fn: &mut result.has_uninstall_fn,
+            current_fn: None,
         };
         visitor.visit_file(&file);
     }
@@ -48,13 +55,65 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
 }
 
 struct SourceVisitor<'a> {
-    included_files: &'a mut Vec<String>,
-    included_dirs: &'a mut Vec<String>,
+    install_files: &'a mut Vec<String>,
+    install_dirs: &'a mut Vec<String>,
+    uninstall_files: &'a mut Vec<String>,
+    uninstall_dirs: &'a mut Vec<String>,
     has_install_fn: &'a mut bool,
     has_uninstall_fn: &'a mut bool,
+    current_fn: Option<String>,
 }
 
-impl<'ast, 'a> Visit<'ast> for SourceVisitor<'a> {
+impl SourceVisitor<'_> {
+    fn push_file(&mut self, path: String) {
+        match self.current_fn.as_deref() {
+            Some("install") => {
+                if !self.install_files.contains(&path) {
+                    self.install_files.push(path);
+                }
+            }
+            Some("uninstall") => {
+                if !self.uninstall_files.contains(&path) {
+                    self.uninstall_files.push(path);
+                }
+            }
+            _ => {
+                // Outside install/uninstall — add to both
+                if !self.install_files.contains(&path) {
+                    self.install_files.push(path.clone());
+                }
+                if !self.uninstall_files.contains(&path) {
+                    self.uninstall_files.push(path);
+                }
+            }
+        }
+    }
+
+    fn push_dir(&mut self, path: String) {
+        match self.current_fn.as_deref() {
+            Some("install") => {
+                if !self.install_dirs.contains(&path) {
+                    self.install_dirs.push(path);
+                }
+            }
+            Some("uninstall") => {
+                if !self.uninstall_dirs.contains(&path) {
+                    self.uninstall_dirs.push(path);
+                }
+            }
+            _ => {
+                if !self.install_dirs.contains(&path) {
+                    self.install_dirs.push(path.clone());
+                }
+                if !self.uninstall_dirs.contains(&path) {
+                    self.uninstall_dirs.push(path);
+                }
+            }
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for SourceVisitor<'_> {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         let name = node.sig.ident.to_string();
         if name == "install" {
@@ -62,7 +121,10 @@ impl<'ast, 'a> Visit<'ast> for SourceVisitor<'a> {
         } else if name == "uninstall" {
             *self.has_uninstall_fn = true;
         }
+        let prev = self.current_fn.take();
+        self.current_fn = Some(name);
         syn::visit::visit_item_fn(self, node);
+        self.current_fn = prev;
     }
 
     fn visit_expr_macro(&mut self, node: &'ast syn::ExprMacro) {
@@ -72,19 +134,13 @@ impl<'ast, 'a> Visit<'ast> for SourceVisitor<'a> {
 
         match name.as_str() {
             "file" => {
-                // file!(installer, "source/path", "dest") — source is the 2nd arg
                 if let Some(s) = macro_second_str_arg(&node.mac) {
-                    if !self.included_files.contains(&s) {
-                        self.included_files.push(s);
-                    }
+                    self.push_file(s);
                 }
             }
             "dir" => {
-                // dir!(installer, "source/dir", "dest") — source is the 2nd arg
                 if let Some(s) = macro_second_str_arg(&node.mac) {
-                    if !self.included_dirs.contains(&s) {
-                        self.included_dirs.push(s);
-                    }
+                    self.push_dir(s);
                 }
             }
             _ => {}

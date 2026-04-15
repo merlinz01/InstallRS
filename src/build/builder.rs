@@ -52,10 +52,12 @@ pub fn build(params: &BuildParams) -> Result<()> {
 
     let installer_dir = params.build_dir.join("installer");
     let uninstaller_dir = params.build_dir.join("uninstaller");
-    let files_dir = installer_dir.join("files");
+    let install_files_dir = installer_dir.join("files");
+    let uninstall_files_dir = uninstaller_dir.join("files");
     let uninstaller_bin = params.build_dir.join("uninstaller-bin");
 
-    std::fs::create_dir_all(&files_dir).context("failed to create files directory")?;
+    std::fs::create_dir_all(&install_files_dir).context("failed to create installer files directory")?;
+    std::fs::create_dir_all(&uninstall_files_dir).context("failed to create uninstaller files directory")?;
     std::fs::create_dir_all(uninstaller_dir.join("src"))
         .context("failed to create uninstaller src directory")?;
     std::fs::create_dir_all(installer_dir.join("src"))
@@ -82,47 +84,95 @@ pub fn build(params: &BuildParams) -> Result<()> {
         return Err(anyhow!("source must define a public `uninstall` function"));
     }
 
-    log::info!("Included files ({}):", scan.included_files.len());
-    for f in &scan.included_files {
+    log::info!("Install files ({}):", scan.install_files.len());
+    for f in &scan.install_files {
         log::info!("  {f}");
     }
-    log::info!("Included directories ({}):", scan.included_dirs.len());
-    for d in &scan.included_dirs {
+    log::info!("Install directories ({}):", scan.install_dirs.len());
+    for d in &scan.install_dirs {
+        log::info!("  {d}");
+    }
+    log::info!("Uninstall files ({}):", scan.uninstall_files.len());
+    for f in &scan.uninstall_files {
+        log::info!("  {f}");
+    }
+    log::info!("Uninstall directories ({}):", scan.uninstall_dirs.len());
+    for d in &scan.uninstall_dirs {
         log::info!("  {d}");
     }
 
-    // ── Gather and compress files ────────────────────────────────────────────
-    let mut gathered: Vec<GatheredFile> = Vec::new();
-    let mut hash_cache: HashMap<String, String> = HashMap::new(); // hash -> storage_name
+    // ── Gather and compress files for installer ──────────────────────────────
+    let mut install_gathered: Vec<GatheredFile> = Vec::new();
+    let mut hash_cache: HashMap<String, String> = HashMap::new();
 
-    for file_path in &scan.included_files {
+    for file_path in &scan.install_files {
         let abs = params.target_dir.join(file_path);
         gather_file(
             file_path,
             &abs,
-            &files_dir,
+            &install_files_dir,
             &params.compression,
             &params.ignore_patterns,
-            &mut gathered,
+            &mut install_gathered,
             &mut hash_cache,
         )?;
     }
-    for dir_path in &scan.included_dirs {
+    for dir_path in &scan.install_dirs {
         let abs = params.target_dir.join(dir_path);
         gather_dir(
             dir_path,
             &abs,
-            &files_dir,
+            &install_files_dir,
             &params.compression,
             &params.ignore_patterns,
-            &mut gathered,
+            &mut install_gathered,
             &mut hash_cache,
         )?;
     }
-    log::info!("Total entries gathered: {}", gathered.len());
+    log::info!("Total install entries gathered: {}", install_gathered.len());
+
+    // ── Gather and compress files for uninstaller ────────────────────────────
+    let mut uninstall_gathered: Vec<GatheredFile> = Vec::new();
+
+    for file_path in &scan.uninstall_files {
+        let abs = params.target_dir.join(file_path);
+        gather_file(
+            file_path,
+            &abs,
+            &uninstall_files_dir,
+            &params.compression,
+            &params.ignore_patterns,
+            &mut uninstall_gathered,
+            &mut hash_cache,
+        )?;
+    }
+    for dir_path in &scan.uninstall_dirs {
+        let abs = params.target_dir.join(dir_path);
+        gather_dir(
+            dir_path,
+            &abs,
+            &uninstall_files_dir,
+            &params.compression,
+            &params.ignore_patterns,
+            &mut uninstall_gathered,
+            &mut hash_cache,
+        )?;
+    }
+    log::info!("Total uninstall entries gathered: {}", uninstall_gathered.len());
 
     // ── Compile uninstaller ──────────────────────────────────────────────────
-    write_uninstaller_sources(&uninstaller_dir, &user_crate_name, &params.target_dir, "none")?;
+    let uninstall_compression = if uninstall_gathered.is_empty() {
+        "none"
+    } else {
+        &params.compression
+    };
+    write_uninstaller_sources(
+        &uninstaller_dir,
+        &user_crate_name,
+        &params.target_dir,
+        uninstall_compression,
+        &uninstall_gathered,
+    )?;
     compile_cargo_project(&uninstaller_dir, params.target_triple.as_deref())?;
 
     // Copy compiled uninstaller to known path
@@ -147,14 +197,15 @@ pub fn build(params: &BuildParams) -> Result<()> {
     log::info!("Uninstaller binary ready: {} (compression: {})", uninstaller_bin.display(), params.compression);
 
     // ── Prune stale cached files ─────────────────────────────────────────────
-    prune_files_dir(&files_dir, &gathered)?;
+    prune_files_dir(&install_files_dir, &install_gathered)?;
+    prune_files_dir(&uninstall_files_dir, &uninstall_gathered)?;
 
     // ── Write installer sources and compile ──────────────────────────────────
     write_installer_sources(
         &installer_dir,
         &user_crate_name,
         &params.target_dir,
-        &gathered,
+        &install_gathered,
         &params.compression,
     )?;
     compile_cargo_project(&installer_dir, params.target_triple.as_deref())?;
@@ -360,11 +411,106 @@ fn compression_feature(method: &str) -> Option<&str> {
     }
 }
 
+/// Generate the statics and ENTRIES code for a set of gathered files.
+/// Returns (statics_code, entries_code).
+fn generate_embedded_code(gathered: &[GatheredFile]) -> Result<(String, String)> {
+    // One named static per unique storage file
+    let mut seen_statics: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut statics_code = String::new();
+    for f in gathered.iter().filter(|f| !f.is_dir) {
+        if seen_statics.insert(f.storage_name.clone()) {
+            let ident = format!("D_{}", f.storage_name.replace('-', "_").to_uppercase());
+            statics_code.push_str(&format!(
+                "static {ident}: &[u8] = include_bytes!(\"../files/{}\");\n",
+                f.storage_name
+            ));
+        }
+    }
+
+    // Identify root entries
+    let dir_prefixes: Vec<&str> = gathered
+        .iter()
+        .filter(|f| f.is_dir)
+        .filter(|f| {
+            !gathered.iter().any(|other| {
+                other.is_dir
+                    && other.source_path != f.source_path
+                    && f.source_path.starts_with(&format!("{}/", other.source_path))
+            })
+        })
+        .map(|f| f.source_path.as_str())
+        .collect();
+
+    let root_files: Vec<&GatheredFile> = gathered
+        .iter()
+        .filter(|f| !f.is_dir)
+        .filter(|f| {
+            !dir_prefixes
+                .iter()
+                .any(|dp| f.source_path.starts_with(&format!("{dp}/")))
+        })
+        .collect();
+
+    // Check for path hash collisions
+    let mut hash_to_path: HashMap<u64, &str> = HashMap::new();
+    for f in root_files.iter() {
+        let ph = fnv1a(&f.source_path);
+        if let Some(existing) = hash_to_path.get(&ph) {
+            if *existing != f.source_path {
+                return Err(anyhow!(
+                    "path hash collision: {:?} and {:?} both hash to {:#018x}",
+                    existing,
+                    f.source_path,
+                    ph
+                ));
+            }
+        } else {
+            hash_to_path.insert(ph, &f.source_path);
+        }
+    }
+    for dp in &dir_prefixes {
+        let ph = fnv1a(dp);
+        if let Some(existing) = hash_to_path.get(&ph) {
+            if *existing != *dp {
+                return Err(anyhow!(
+                    "path hash collision: {:?} and {:?} both hash to {:#018x}",
+                    existing,
+                    dp,
+                    ph
+                ));
+            }
+        } else {
+            hash_to_path.insert(ph, dp);
+        }
+    }
+
+    // Build the ENTRIES array
+    let mut entries_code = String::new();
+    for f in &root_files {
+        let ph = fnv1a(&f.source_path);
+        let ident = format!("D_{}", f.storage_name.replace('-', "_").to_uppercase());
+        entries_code.push_str(&format!(
+            "    installrs::EmbeddedEntry::File {{ source_path_hash: {ph}u64, data: {ident}, compression: {:?} }},\n",
+            f.compression,
+        ));
+    }
+    for dp in &dir_prefixes {
+        let ph = fnv1a(dp);
+        let children_code = emit_dir_children(gathered, dp, 2);
+        entries_code.push_str(&format!(
+            "    installrs::EmbeddedEntry::Dir {{ source_path_hash: {ph}u64, children: &[\n{children_code}    ] }},\n"
+        ));
+    }
+
+    Ok((statics_code, entries_code))
+}
+
 fn write_uninstaller_sources(
     uninstaller_dir: &Path,
     user_crate_name: &str,
     user_crate_path: &Path,
     compression: &str,
+    gathered: &[GatheredFile],
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
@@ -396,14 +542,30 @@ codegen-units = 1
         user_package_name = user_crate_name.replace('_', "-"),
     );
 
-    let main_rs = format!(
-        r#"// Code generated by installrs; DO NOT EDIT.
+    let main_rs = if gathered.is_empty() {
+        format!(
+            r#"// Code generated by installrs; DO NOT EDIT.
 fn main() {{
     let mut i = installrs::Installer::new(&[], &[], "none");
     i.uninstall_main({user_crate_name}::uninstall);
 }}
 "#
-    );
+        )
+    } else {
+        let (statics_code, entries_code) = generate_embedded_code(gathered)?;
+        format!(
+            r#"// Code generated by installrs; DO NOT EDIT.
+{statics_code}
+static ENTRIES: &[installrs::EmbeddedEntry] = &[
+{entries_code}];
+
+fn main() {{
+    let mut i = installrs::Installer::new(ENTRIES, &[], {compression:?});
+    i.uninstall_main({user_crate_name}::uninstall);
+}}
+"#
+        )
+    };
 
     std::fs::write(uninstaller_dir.join("Cargo.toml"), &cargo_toml)
         .context("failed to write uninstaller Cargo.toml")?;
@@ -450,98 +612,7 @@ codegen-units = 1
         user_package_name = user_crate_name.replace('_', "-"),
     );
 
-    // One named static per unique storage file so that files with identical
-    // content share a single &[u8] reference in the binary (content-addressed
-    // deduplication).
-    let mut seen_statics: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut statics_code = String::new();
-    for f in gathered.iter().filter(|f| !f.is_dir) {
-        if seen_statics.insert(f.storage_name.clone()) {
-            let ident = format!("D_{}", f.storage_name.replace('-', "_").to_uppercase());
-            statics_code.push_str(&format!(
-                "static {ident}: &[u8] = include_bytes!(\"../files/{}\");\n",
-                f.storage_name
-            ));
-        }
-    }
-
-    // Identify root entries: root files are those not under any included dir,
-    // root dirs are the top-level included directories.
-    let dir_prefixes: Vec<&str> = gathered
-        .iter()
-        .filter(|f| f.is_dir)
-        .filter(|f| {
-            // A root dir has no parent that is also a gathered dir
-            !gathered.iter().any(|other| {
-                other.is_dir
-                    && other.source_path != f.source_path
-                    && f.source_path.starts_with(&format!("{}/", other.source_path))
-            })
-        })
-        .map(|f| f.source_path.as_str())
-        .collect();
-
-    let root_files: Vec<&GatheredFile> = gathered
-        .iter()
-        .filter(|f| !f.is_dir)
-        .filter(|f| {
-            // Not under any root dir
-            !dir_prefixes
-                .iter()
-                .any(|dp| f.source_path.starts_with(&format!("{dp}/")))
-        })
-        .collect();
-
-    // Check for path hash collisions among root entries only
-    let mut hash_to_path: HashMap<u64, &str> = HashMap::new();
-    for f in root_files.iter() {
-        let ph = fnv1a(&f.source_path);
-        if let Some(existing) = hash_to_path.get(&ph) {
-            if *existing != f.source_path {
-                return Err(anyhow!(
-                    "path hash collision: {:?} and {:?} both hash to {:#018x}",
-                    existing,
-                    f.source_path,
-                    ph
-                ));
-            }
-        } else {
-            hash_to_path.insert(ph, &f.source_path);
-        }
-    }
-    for dp in &dir_prefixes {
-        let ph = fnv1a(dp);
-        if let Some(existing) = hash_to_path.get(&ph) {
-            if *existing != *dp {
-                return Err(anyhow!(
-                    "path hash collision: {:?} and {:?} both hash to {:#018x}",
-                    existing,
-                    dp,
-                    ph
-                ));
-            }
-        } else {
-            hash_to_path.insert(ph, dp);
-        }
-    }
-
-    // Build the ENTRIES array with tree-structured entries
-    let mut entries_code = String::new();
-    for f in &root_files {
-        let ph = fnv1a(&f.source_path);
-        let ident = format!("D_{}", f.storage_name.replace('-', "_").to_uppercase());
-        entries_code.push_str(&format!(
-            "    installrs::EmbeddedEntry::File {{ source_path_hash: {ph}u64, data: {ident}, compression: {:?} }},\n",
-            f.compression,
-        ));
-    }
-    for dp in &dir_prefixes {
-        let ph = fnv1a(dp);
-        let children_code = emit_dir_children(gathered, dp, 2);
-        entries_code.push_str(&format!(
-            "    installrs::EmbeddedEntry::Dir {{ source_path_hash: {ph}u64, children: &[\n{children_code}    ] }},\n"
-        ));
-    }
+    let (statics_code, entries_code) = generate_embedded_code(gathered)?;
 
     let main_rs = format!(
         r#"// Code generated by installrs; DO NOT EDIT.

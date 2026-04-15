@@ -30,6 +30,35 @@ pub fn compress(data: &[u8], method: &str) -> Result<Vec<u8>> {
     }
 }
 
+pub fn decompress(data: &[u8], method: &str) -> Result<Vec<u8>> {
+    use std::io::Read;
+    match method {
+        "none" | "" => Ok(data.to_vec()),
+        #[cfg(feature = "lzma")]
+        "lzma" => {
+            let mut out = Vec::new();
+            lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut out)
+                .context("LZMA decompression failed")?;
+            Ok(out)
+        }
+        #[cfg(feature = "gzip")]
+        "gzip" => {
+            let mut out = Vec::new();
+            flate2::read::GzDecoder::new(data).read_to_end(&mut out)
+                .context("gzip decompression failed")?;
+            Ok(out)
+        }
+        #[cfg(feature = "bzip2")]
+        "bzip2" => {
+            let mut out = Vec::new();
+            bzip2::read::BzDecoder::new(data).read_to_end(&mut out)
+                .context("bzip2 decompression failed")?;
+            Ok(out)
+        }
+        other => Err(anyhow!("unsupported compression method: {other}")),
+    }
+}
+
 pub fn validate_method(method: &str) -> Result<()> {
     match method {
         #[cfg(feature = "lzma")]

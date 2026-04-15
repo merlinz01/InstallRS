@@ -581,12 +581,45 @@ fn gather_file(
     let storage_name = format!("{hash}-{compression}");
     let storage_path = files_dir.join(&storage_name);
 
-    if !hash_cache.contains_key(&storage_name) && !storage_path.exists() {
-        let compressed = compress::compress(&data, compression)
-            .with_context(|| format!("failed to compress: {source_path}"))?;
-        std::fs::write(&storage_path, &compressed)
-            .with_context(|| format!("failed to write cache: {}", storage_path.display()))?;
-        log::debug!("Compressed {source_path} → {storage_name}");
+    if hash_cache.contains_key(&storage_name) {
+        log::trace!("Already verified this run: {storage_name}");
+    } else {
+        let needs_write = if storage_path.exists() {
+            log::trace!("Verifying cached file: {storage_name}");
+            match std::fs::read(&storage_path) {
+                Ok(cached) => match compress::decompress(&cached, compression) {
+                    Ok(decompressed) => {
+                        let cached_hash = hex::encode(Sha256::digest(&decompressed));
+                        if cached_hash != hash {
+                            log::warn!("Corrupt cache entry {storage_name}, recompressing");
+                            true
+                        } else {
+                            log::debug!("Cache hit: {storage_name}");
+                            false
+                        }
+                    }
+                    Err(_) => {
+                        log::warn!("Corrupt cache entry {storage_name} (decompression failed), recompressing");
+                        true
+                    }
+                },
+                Err(e) => {
+                    log::warn!("Failed to read cache entry {storage_name}: {e}, recompressing");
+                    true
+                }
+            }
+        } else {
+            log::trace!("No cached file for {storage_name}");
+            true
+        };
+
+        if needs_write {
+            let compressed = compress::compress(&data, compression)
+                .with_context(|| format!("failed to compress: {source_path}"))?;
+            std::fs::write(&storage_path, &compressed)
+                .with_context(|| format!("failed to write cache: {}", storage_path.display()))?;
+            log::debug!("Compressed {source_path} → {storage_name}");
+        }
     }
     hash_cache.insert(storage_name.clone(), storage_name.clone());
 

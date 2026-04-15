@@ -1,6 +1,19 @@
 use winsafe::co;
 use winsafe::gui;
+use winsafe::msg::wm;
 use winsafe::prelude::*;
+use winsafe::{HBRUSH, HFONT, SIZE};
+
+/// Handle WM_CTLCOLORSTATIC on a parent panel to make all static (label)
+/// controls draw with a transparent background.
+fn setup_transparent_labels(parent: &gui::WindowControl) {
+    parent
+        .on()
+        .wm_ctl_color_static(move |p: wm::CtlColorStatic| {
+            p.hdc.SetBkMode(co::BKMODE::TRANSPARENT)?;
+            Ok(HBRUSH::GetStockObject(co::STOCK_BRUSH::NULL)?)
+        });
+}
 
 /// Discriminant for the page type — stored alongside the panel.
 #[allow(dead_code)]
@@ -46,6 +59,38 @@ impl WelcomePage {
                 ..Default::default()
             },
         );
+
+        // Set bold + larger font on title after the panel is created.
+        {
+            let title_c = title_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    title_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                Ok(0)
+            });
+        }
+
+        // Transparent label backgrounds.
+        setup_transparent_labels(parent);
 
         Self {
             _title_label: title_label,
@@ -175,6 +220,8 @@ impl DirectoryPickerPage {
             });
         }
 
+        setup_transparent_labels(parent);
+
         Self {
             _label: label,
             dir_edit,
@@ -231,6 +278,8 @@ impl InstallPage {
                 ..Default::default()
             },
         );
+
+        setup_transparent_labels(parent);
 
         Self {
             status_label,
@@ -293,6 +342,38 @@ impl FinishPage {
                 ..Default::default()
             },
         );
+
+        // Set bold + larger font on title after the panel is created.
+        {
+            let title_c = title_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    title_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                Ok(0)
+            });
+        }
+
+        // Transparent label backgrounds.
+        setup_transparent_labels(parent);
 
         Self {
             _title_label: title_label,

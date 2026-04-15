@@ -28,6 +28,7 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
         .filter(|e| e.path().extension().map(|x| x == "rs").unwrap_or(false))
     {
         let path = entry.path();
+        log::trace!("Scanning source file: {}", path.display());
         let source = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read source file: {}", path.display()))?;
 

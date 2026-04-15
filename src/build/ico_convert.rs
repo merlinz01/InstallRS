@@ -28,18 +28,21 @@ pub fn png_to_ico(png_path: &Path, build_dir: &Path, sizes: &[u32]) -> Result<Pa
         .context("failed to create icons cache directory")?;
 
     let ico_path = icons_dir.join(format!("{short_hash}.ico"));
+    log::trace!("Icon cache key: {short_hash} (from {} + {sizes:?})", png_path.display());
 
     if ico_path.exists() {
-        log::info!("Using cached icon: {}", ico_path.display());
+        log::debug!("Using cached icon: {}", ico_path.display());
         return Ok(ico_path);
     }
 
+    log::debug!("Generating icon from {} with sizes {sizes:?}", png_path.display());
     let img = image::load_from_memory(&png_data)
         .with_context(|| format!("failed to decode PNG: {}", png_path.display()))?;
 
     let mut icon_dir = IconDir::new(ResourceType::Icon);
 
     for &size in sizes {
+        log::trace!("Resizing to {size}x{size}");
         let resized = img.resize_exact(size, size, FilterType::Lanczos3);
         let rgba = resized.to_rgba8();
         let (w, h) = rgba.dimensions();

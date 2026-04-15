@@ -32,9 +32,9 @@ struct Cli {
     #[arg(long)]
     target_triple: Option<String>,
 
-    /// Enable debug output
-    #[arg(long, short)]
-    verbose: bool,
+    /// Enable debug output (-v) or trace output (-vv)
+    #[arg(long, short, action = clap::ArgAction::Count)]
+    verbose: u8,
 
     /// Suppress non-error output
     #[arg(long, short)]
@@ -52,10 +52,12 @@ fn main() {
         "off"
     } else if cli.quiet {
         "error"
-    } else if cli.verbose {
-        "debug"
     } else {
-        "info"
+        match cli.verbose {
+            0 => "info",
+            1 => "debug",
+            _ => "trace",
+        }
     };
 
     env_logger::Builder::new()
@@ -108,6 +110,7 @@ fn run(cli: Cli) -> Result<()> {
         compression: cli.compression,
         ignore_patterns,
         target_triple: cli.target_triple,
+        verbosity: cli.verbose,
         installer_win_resource,
         uninstaller_win_resource,
     };

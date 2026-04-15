@@ -16,10 +16,12 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
     if path.exists() {
         if let Ok(existing) = std::fs::read_to_string(path) {
             if existing == content {
+                log::trace!("Unchanged, skipping write: {}", path.display());
                 return Ok(());
             }
         }
     }
+    log::debug!("Writing: {}", path.display());
     std::fs::write(path, content)
         .with_context(|| format!("failed to write {}", path.display()))
 }
@@ -67,6 +69,8 @@ pub struct BuildParams {
     pub compression: String,
     pub ignore_patterns: Vec<String>,
     pub target_triple: Option<String>,
+    /// 0 = normal (quiet cargo), 1 = debug (cargo default), 2+ = trace (cargo -vv)
+    pub verbosity: u8,
     pub installer_win_resource: Option<WinResourceConfig>,
     pub uninstaller_win_resource: Option<WinResourceConfig>,
 }
@@ -82,10 +86,18 @@ struct GatheredFile {
 
 pub fn build(mut params: BuildParams) -> Result<()> {
     log::info!("Starting build...");
+    log::debug!("Target: {}", params.target_dir.display());
+    log::debug!("Build dir: {}", params.build_dir.display());
+    log::debug!("Output: {}", params.output_file.display());
+    log::debug!("Compression: {}", params.compression);
+    if let Some(ref triple) = params.target_triple {
+        log::debug!("Target triple: {triple}");
+    }
 
     compress::validate_method(&params.compression)?;
 
     // ── Prepare directories ──────────────────────────────────────────────────
+    log::trace!("Creating build directory: {}", params.build_dir.display());
     std::fs::create_dir_all(&params.build_dir)
         .context("failed to create build directory")?;
 
@@ -228,7 +240,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &uninstall_gathered,
         params.uninstaller_win_resource.as_ref(),
     )?;
-    compile_cargo_project(&uninstaller_dir, params.target_triple.as_deref())?;
+    compile_cargo_project(&uninstaller_dir, params.target_triple.as_deref(), params.verbosity)?;
 
     // Copy compiled uninstaller to known path
     let compiled = uninstaller_dir
@@ -249,7 +261,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         .context("failed to compress uninstaller binary")?;
     std::fs::write(&uninstaller_bin, &uninstaller_compressed)
         .with_context(|| format!("failed to write compressed uninstaller to {}", uninstaller_bin.display()))?;
-    log::info!("Uninstaller binary ready: {} (compression: {})", uninstaller_bin.display(), params.compression);
+    log::debug!("Uninstaller binary ready: {} (compression: {})", uninstaller_bin.display(), params.compression);
 
     // ── Prune stale cached files ─────────────────────────────────────────────
     prune_files_dir(&install_files_dir, &install_gathered)?;
@@ -264,7 +276,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &params.compression,
         params.installer_win_resource.as_ref(),
     )?;
-    compile_cargo_project(&installer_dir, params.target_triple.as_deref())?;
+    compile_cargo_project(&installer_dir, params.target_triple.as_deref(), params.verbosity)?;
 
     // Copy final binary to output path
     let compiled_installer = installer_dir
@@ -1177,7 +1189,7 @@ fn emit_dir_children(gathered: &[GatheredFile], parent_path: &str, indent: usize
     out
 }
 
-fn compile_cargo_project(project_dir: &Path, target_triple: Option<&str>) -> Result<()> {
+fn compile_cargo_project(project_dir: &Path, target_triple: Option<&str>, verbosity: u8) -> Result<()> {
     log::info!("Compiling {}", project_dir.display());
 
     let mut cmd = std::process::Command::new("cargo");
@@ -1185,7 +1197,14 @@ fn compile_cargo_project(project_dir: &Path, target_triple: Option<&str>) -> Res
     if let Some(triple) = target_triple {
         cmd.args(["--target", triple]);
     }
+    match verbosity {
+        0 => { cmd.arg("--quiet"); }
+        2.. => { cmd.arg("-vv"); }
+        _ => {}
+    }
     cmd.current_dir(project_dir);
+
+    log::trace!("Running: cargo build --release{}", target_triple.map(|t| format!(" --target {t}")).unwrap_or_default());
 
     let status = cmd
         .status()
@@ -1198,5 +1217,6 @@ fn compile_cargo_project(project_dir: &Path, target_triple: Option<&str>) -> Res
         ));
     }
 
+    log::debug!("Compiled successfully: {}", project_dir.display());
     Ok(())
 }

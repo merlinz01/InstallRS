@@ -33,9 +33,21 @@ pub fn run(
     rx: mpsc::Receiver<GuiMessage>,
     install_callback: Option<InstallCallback>,
 ) -> Result<()> {
+    // Try to load the application icon from embedded resources (resource ID 1,
+    // set by winresource).  Fall back to no icon if the resource doesn't exist.
+    let class_icon = {
+        use winsafe::HINSTANCE;
+        let hinst = HINSTANCE::GetModuleHandle(None).unwrap_or(HINSTANCE::NULL);
+        match hinst.LoadIcon(winsafe::IdIdiStr::Id(1)) {
+            Ok(mut hicon) => gui::Icon::Handle(hicon.leak()),
+            Err(_) => gui::Icon::None,
+        }
+    };
+
     let wnd = gui::WindowMain::new(gui::WindowMainOpts {
         title: &config.title,
         size: gui::dpi(WINDOW_WIDTH, WINDOW_HEIGHT),
+        class_icon,
         style: co::WS::CAPTION
             | co::WS::SYSMENU
             | co::WS::CLIPCHILDREN

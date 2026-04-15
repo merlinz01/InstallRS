@@ -21,8 +21,7 @@ pub fn compress(data: &[u8], method: &str) -> Result<Vec<u8>> {
         }
         #[cfg(feature = "bzip2")]
         "bzip2" => {
-            let mut encoder =
-                bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
+            let mut encoder = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::best());
             encoder.write_all(data).context("bzip2 write failed")?;
             encoder.finish().context("bzip2 finish failed")
         }
@@ -44,14 +43,16 @@ pub fn decompress(data: &[u8], method: &str) -> Result<Vec<u8>> {
         #[cfg(feature = "gzip")]
         "gzip" => {
             let mut out = Vec::new();
-            flate2::read::GzDecoder::new(data).read_to_end(&mut out)
+            flate2::read::GzDecoder::new(data)
+                .read_to_end(&mut out)
                 .context("gzip decompression failed")?;
             Ok(out)
         }
         #[cfg(feature = "bzip2")]
         "bzip2" => {
             let mut out = Vec::new();
-            bzip2::read::BzDecoder::new(data).read_to_end(&mut out)
+            bzip2::read::BzDecoder::new(data)
+                .read_to_end(&mut out)
                 .context("bzip2 decompression failed")?;
             Ok(out)
         }

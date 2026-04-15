@@ -6,8 +6,7 @@ fn installrs_bin() -> PathBuf {
 }
 
 fn fixture_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/simple")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/simple")
 }
 
 /// Copy the fixture to a temp directory so each test gets its own build dir.
@@ -58,9 +57,12 @@ fn build_install_uninstall(compression: &str) {
     // ── Step 1: build the installer ──────────────────────────────────────────
     let output = Command::new(installrs_bin())
         .args([
-            "--target",      &target_dir.to_string_lossy(),
-            "--output",      &installer_bin.to_string_lossy(),
-            "--compression", compression,
+            "--target",
+            &target_dir.to_string_lossy(),
+            "--output",
+            &installer_bin.to_string_lossy(),
+            "--compression",
+            compression,
             "--silent",
         ])
         .output()
@@ -95,15 +97,22 @@ fn build_install_uninstall(compression: &str) {
 
     // ── Step 3: verify installed files ────────────────────────────────────────
     let installed_data = out_dir.join("data.txt");
-    assert!(installed_data.exists(), "data.txt was not installed (compression={compression})");
     assert!(
-        std::fs::read_to_string(&installed_data).unwrap()
+        installed_data.exists(),
+        "data.txt was not installed (compression={compression})"
+    );
+    assert!(
+        std::fs::read_to_string(&installed_data)
+            .unwrap()
             .contains("Hello from the simple test fixture!"),
         "installed data.txt has unexpected content (compression={compression})"
     );
 
     let uninstaller_path = out_dir.join("uninstall");
-    assert!(uninstaller_path.exists(), "uninstaller was not installed (compression={compression})");
+    assert!(
+        uninstaller_path.exists(),
+        "uninstaller was not installed (compression={compression})"
+    );
 
     // ── Step 4: run the uninstaller ───────────────────────────────────────────
     let output = Command::new(&uninstaller_path)

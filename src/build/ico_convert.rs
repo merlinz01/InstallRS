@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use image::imageops::FilterType;
 use ico::{IconDir, IconDirEntry, IconImage, ResourceType};
+use image::imageops::FilterType;
 use sha2::{Digest, Sha256};
 
 /// Convert a PNG file to a multi-resolution `.ico` file, with caching.
@@ -24,18 +24,23 @@ pub fn png_to_ico(png_path: &Path, build_dir: &Path, sizes: &[u32]) -> Result<Pa
     let short_hash = &hash[..16];
 
     let icons_dir = build_dir.join("icons");
-    std::fs::create_dir_all(&icons_dir)
-        .context("failed to create icons cache directory")?;
+    std::fs::create_dir_all(&icons_dir).context("failed to create icons cache directory")?;
 
     let ico_path = icons_dir.join(format!("{short_hash}.ico"));
-    log::trace!("Icon cache key: {short_hash} (from {} + {sizes:?})", png_path.display());
+    log::trace!(
+        "Icon cache key: {short_hash} (from {} + {sizes:?})",
+        png_path.display()
+    );
 
     if ico_path.exists() {
         log::debug!("Using cached icon: {}", ico_path.display());
         return Ok(ico_path);
     }
 
-    log::debug!("Generating icon from {} with sizes {sizes:?}", png_path.display());
+    log::debug!(
+        "Generating icon from {} with sizes {sizes:?}",
+        png_path.display()
+    );
     let img = image::load_from_memory(&png_data)
         .with_context(|| format!("failed to decode PNG: {}", png_path.display()))?;
 

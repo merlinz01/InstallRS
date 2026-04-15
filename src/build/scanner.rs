@@ -129,7 +129,11 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
     }
 
     fn visit_expr_macro(&mut self, node: &'ast syn::ExprMacro) {
-        let name = node.mac.path.segments.last()
+        let name = node
+            .mac
+            .path
+            .segments
+            .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
 
@@ -157,12 +161,14 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
 /// `dir!(expr, "path", expr)` macro invocation.
 fn macro_second_str_arg(mac: &syn::Macro) -> Option<String> {
     let args = mac
-        .parse_body_with(
-            syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated,
-        )
+        .parse_body_with(syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated)
         .ok()?;
 
-    if let Some(syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. })) = args.iter().nth(1) {
+    if let Some(syn::Expr::Lit(syn::ExprLit {
+        lit: syn::Lit::Str(s),
+        ..
+    })) = args.iter().nth(1)
+    {
         Some(s.value())
     } else {
         None

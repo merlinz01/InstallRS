@@ -94,14 +94,16 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
 
-    let (installer_win_resource, uninstaller_win_resource) =
-        if cli.target_triple.as_deref().is_some_and(|t| t.contains("windows"))
-            || cfg!(target_os = "windows")
-        {
-            build::builder::read_win_resource_config(&target)?
-        } else {
-            (None, None)
-        };
+    let (installer_win_resource, uninstaller_win_resource) = if cli
+        .target_triple
+        .as_deref()
+        .is_some_and(|t| t.contains("windows"))
+        || cfg!(target_os = "windows")
+    {
+        build::builder::read_win_resource_config(&target)?
+    } else {
+        (None, None)
+    };
 
     let params = build::builder::BuildParams {
         target_dir: target,
@@ -127,21 +129,31 @@ mod tests {
     // ── compress::validate_method ─────────────────────────────────────────────
 
     #[test]
-    fn validate_accepts_lzma() { compress::validate_method("lzma").unwrap(); }
+    fn validate_accepts_lzma() {
+        compress::validate_method("lzma").unwrap();
+    }
 
     #[test]
-    fn validate_accepts_gzip() { compress::validate_method("gzip").unwrap(); }
+    fn validate_accepts_gzip() {
+        compress::validate_method("gzip").unwrap();
+    }
 
     #[test]
-    fn validate_accepts_bzip2() { compress::validate_method("bzip2").unwrap(); }
+    fn validate_accepts_bzip2() {
+        compress::validate_method("bzip2").unwrap();
+    }
 
     #[test]
-    fn validate_accepts_none() { compress::validate_method("none").unwrap(); }
+    fn validate_accepts_none() {
+        compress::validate_method("none").unwrap();
+    }
 
     #[test]
     fn validate_rejects_unknown() {
-        assert!(compress::validate_method("zstd").unwrap_err()
-            .to_string().contains("unsupported"));
+        assert!(compress::validate_method("zstd")
+            .unwrap_err()
+            .to_string()
+            .contains("unsupported"));
     }
 
     #[test]
@@ -176,7 +188,9 @@ mod tests {
     fn compress_gzip_roundtrip() {
         let compressed = compress::compress(SAMPLE, "gzip").unwrap();
         let mut out = Vec::new();
-        flate2::read::GzDecoder::new(compressed.as_slice()).read_to_end(&mut out).unwrap();
+        flate2::read::GzDecoder::new(compressed.as_slice())
+            .read_to_end(&mut out)
+            .unwrap();
         assert_eq!(out, SAMPLE);
     }
 
@@ -184,7 +198,9 @@ mod tests {
     fn compress_bzip2_roundtrip() {
         let compressed = compress::compress(SAMPLE, "bzip2").unwrap();
         let mut out = Vec::new();
-        bzip2::read::BzDecoder::new(compressed.as_slice()).read_to_end(&mut out).unwrap();
+        bzip2::read::BzDecoder::new(compressed.as_slice())
+            .read_to_end(&mut out)
+            .unwrap();
         assert_eq!(out, SAMPLE);
     }
 
@@ -235,14 +251,17 @@ mod tests {
 
     #[test]
     fn scanner_detects_file_macro() {
-        let r = scan_str(r#"fn install(i: &mut T) { installrs::file!(i, "cfg.toml", "dst").unwrap(); }"#);
+        let r = scan_str(
+            r#"fn install(i: &mut T) { installrs::file!(i, "cfg.toml", "dst").unwrap(); }"#,
+        );
         assert!(r.install_files.contains(&"cfg.toml".to_string()));
         assert!(r.install_dirs.is_empty());
     }
 
     #[test]
     fn scanner_detects_dir_macro() {
-        let r = scan_str(r#"fn install(i: &mut T) { installrs::dir!(i, "assets", "out").unwrap(); }"#);
+        let r =
+            scan_str(r#"fn install(i: &mut T) { installrs::dir!(i, "assets", "out").unwrap(); }"#);
         assert!(r.install_dirs.contains(&"assets".to_string()));
         assert!(r.install_files.is_empty());
     }
@@ -261,28 +280,45 @@ mod tests {
 
     #[test]
     fn scanner_no_duplicate_files() {
-        let r = scan_str(r#"fn install(i: &mut T) { file!(i, "x.txt", "a")?; file!(i, "x.txt", "b")?; }"#);
-        assert_eq!(r.install_files.iter().filter(|p| p.as_str() == "x.txt").count(), 1);
+        let r = scan_str(
+            r#"fn install(i: &mut T) { file!(i, "x.txt", "a")?; file!(i, "x.txt", "b")?; }"#,
+        );
+        assert_eq!(
+            r.install_files
+                .iter()
+                .filter(|p| p.as_str() == "x.txt")
+                .count(),
+            1
+        );
     }
 
     #[test]
     fn scanner_no_duplicate_dirs() {
         let r = scan_str(r#"fn install(i: &mut T) { dir!(i, "d", "a")?; dir!(i, "d", "b")?; }"#);
-        assert_eq!(r.install_dirs.iter().filter(|p| p.as_str() == "d").count(), 1);
+        assert_eq!(
+            r.install_dirs.iter().filter(|p| p.as_str() == "d").count(),
+            1
+        );
     }
 
     #[test]
     fn scanner_file_macro_nested_path() {
         let r = scan_str(r#"fn install(i: &mut T) { file!(i, "vendor/lib.so", "lib.so")?; }"#);
-        assert!(r.install_files.contains(&"vendor/lib.so".to_string()),
-            "got: {:?}", r.install_files);
+        assert!(
+            r.install_files.contains(&"vendor/lib.so".to_string()),
+            "got: {:?}",
+            r.install_files
+        );
     }
 
     #[test]
     fn scanner_dir_macro_nested_path() {
         let r = scan_str(r#"fn install(i: &mut T) { dir!(i, "assets/icons", "icons")?; }"#);
-        assert!(r.install_dirs.contains(&"assets/icons".to_string()),
-            "got: {:?}", r.install_dirs);
+        assert!(
+            r.install_dirs.contains(&"assets/icons".to_string()),
+            "got: {:?}",
+            r.install_dirs
+        );
     }
 
     // ── scanner: function-scoped macro detection ─────────────────────────────

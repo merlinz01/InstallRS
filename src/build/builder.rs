@@ -22,8 +22,7 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
         }
     }
     log::debug!("Writing: {}", path.display());
-    std::fs::write(path, content)
-        .with_context(|| format!("failed to write {}", path.display()))
+    std::fs::write(path, content).with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// FNV-1a 64-bit hash — must stay identical to the copy in installrs/src/lib.rs.
@@ -35,7 +34,6 @@ fn fnv1a(s: &str) -> u64 {
     }
     h
 }
-
 
 #[derive(Clone)]
 pub enum ManifestConfig {
@@ -98,17 +96,20 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 
     // ── Prepare directories ──────────────────────────────────────────────────
     log::trace!("Creating build directory: {}", params.build_dir.display());
-    std::fs::create_dir_all(&params.build_dir)
-        .context("failed to create build directory")?;
+    std::fs::create_dir_all(&params.build_dir).context("failed to create build directory")?;
 
     // ── Convert PNG icons to ICO if needed ─────────────────────────────────
     for cfg in [
         &mut params.installer_win_resource,
         &mut params.uninstaller_win_resource,
-    ].into_iter().flatten() {
+    ]
+    .into_iter()
+    .flatten()
+    {
         if let Some(ref icon_path) = cfg.icon {
             if icon_path.extension().and_then(|e| e.to_str()) == Some("png") {
-                let ico_path = ico_convert::png_to_ico(icon_path, &params.build_dir, &cfg.icon_sizes)?;
+                let ico_path =
+                    ico_convert::png_to_ico(icon_path, &params.build_dir, &cfg.icon_sizes)?;
                 cfg.icon = Some(ico_path);
             }
         }
@@ -122,8 +123,10 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     let uninstall_files_dir = uninstaller_dir.join("files");
     let uninstaller_bin = params.build_dir.join("uninstaller-bin");
 
-    std::fs::create_dir_all(&install_files_dir).context("failed to create installer files directory")?;
-    std::fs::create_dir_all(&uninstall_files_dir).context("failed to create uninstaller files directory")?;
+    std::fs::create_dir_all(&install_files_dir)
+        .context("failed to create installer files directory")?;
+    std::fs::create_dir_all(&uninstall_files_dir)
+        .context("failed to create uninstaller files directory")?;
     std::fs::create_dir_all(uninstaller_dir.join("src"))
         .context("failed to create uninstaller src directory")?;
     std::fs::create_dir_all(installer_dir.join("src"))
@@ -136,10 +139,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     // ── Scan user source ─────────────────────────────────────────────────────
     // Scan the directory containing the lib entry point (parent of lib_path).
     let abs_lib = params.target_dir.join(&lib_path);
-    let src_dir = abs_lib
-        .parent()
-        .unwrap_or(&params.target_dir)
-        .to_path_buf();
+    let src_dir = abs_lib.parent().unwrap_or(&params.target_dir).to_path_buf();
     log::info!("Scanning source files in {}", src_dir.display());
     let scan = scanner::scan_source_dir(&src_dir)?;
 
@@ -224,7 +224,10 @@ pub fn build(mut params: BuildParams) -> Result<()> {
             &mut hash_cache,
         )?;
     }
-    log::info!("Total uninstall entries gathered: {}", uninstall_gathered.len());
+    log::info!(
+        "Total uninstall entries gathered: {}",
+        uninstall_gathered.len()
+    );
 
     // ── Compile uninstaller ──────────────────────────────────────────────────
     let uninstall_compression = if uninstall_gathered.is_empty() {
@@ -240,7 +243,11 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &uninstall_gathered,
         params.uninstaller_win_resource.as_ref(),
     )?;
-    compile_cargo_project(&uninstaller_dir, params.target_triple.as_deref(), params.verbosity)?;
+    compile_cargo_project(
+        &uninstaller_dir,
+        params.target_triple.as_deref(),
+        params.verbosity,
+    )?;
 
     // Copy compiled uninstaller to known path
     let compiled = uninstaller_dir
@@ -250,18 +257,33 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         } else {
             "release".to_string()
         })
-        .join(if params.target_triple.as_deref().is_some_and(|t| t.contains("windows")) || cfg!(target_os = "windows") {
-            "uninstaller.exe"
-        } else {
-            "uninstaller"
-        });
+        .join(
+            if params
+                .target_triple
+                .as_deref()
+                .is_some_and(|t| t.contains("windows"))
+                || cfg!(target_os = "windows")
+            {
+                "uninstaller.exe"
+            } else {
+                "uninstaller"
+            },
+        );
     let uninstaller_raw = std::fs::read(&compiled)
         .with_context(|| format!("failed to read uninstaller from {}", compiled.display()))?;
     let uninstaller_compressed = compress::compress(&uninstaller_raw, &params.compression)
         .context("failed to compress uninstaller binary")?;
-    std::fs::write(&uninstaller_bin, &uninstaller_compressed)
-        .with_context(|| format!("failed to write compressed uninstaller to {}", uninstaller_bin.display()))?;
-    log::debug!("Uninstaller binary ready: {} (compression: {})", uninstaller_bin.display(), params.compression);
+    std::fs::write(&uninstaller_bin, &uninstaller_compressed).with_context(|| {
+        format!(
+            "failed to write compressed uninstaller to {}",
+            uninstaller_bin.display()
+        )
+    })?;
+    log::debug!(
+        "Uninstaller binary ready: {} (compression: {})",
+        uninstaller_bin.display(),
+        params.compression
+    );
 
     // ── Prune stale cached files ─────────────────────────────────────────────
     prune_files_dir(&install_files_dir, &install_gathered)?;
@@ -276,7 +298,11 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &params.compression,
         params.installer_win_resource.as_ref(),
     )?;
-    compile_cargo_project(&installer_dir, params.target_triple.as_deref(), params.verbosity)?;
+    compile_cargo_project(
+        &installer_dir,
+        params.target_triple.as_deref(),
+        params.verbosity,
+    )?;
 
     // Copy final binary to output path
     let compiled_installer = installer_dir
@@ -286,13 +312,24 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         } else {
             "release".to_string()
         })
-        .join(if params.target_triple.as_deref().is_some_and(|t| t.contains("windows")) || cfg!(target_os = "windows") {
-            "installer-generated.exe"
-        } else {
-            "installer-generated"
-        });
-    std::fs::copy(&compiled_installer, &params.output_file)
-        .with_context(|| format!("failed to copy installer to {}", params.output_file.display()))?;
+        .join(
+            if params
+                .target_triple
+                .as_deref()
+                .is_some_and(|t| t.contains("windows"))
+                || cfg!(target_os = "windows")
+            {
+                "installer-generated.exe"
+            } else {
+                "installer-generated"
+            },
+        );
+    std::fs::copy(&compiled_installer, &params.output_file).with_context(|| {
+        format!(
+            "failed to copy installer to {}",
+            params.output_file.display()
+        )
+    })?;
 
     log::info!("Build complete: {}", params.output_file.display());
     Ok(())
@@ -391,17 +428,23 @@ fn parse_win_resource_table(meta: &toml::Value, target_dir: &Path) -> Result<Win
         }
         match icon_path.extension().and_then(|e| e.to_str()) {
             Some("png") | Some("ico") => {}
-            _ => return Err(anyhow!(
-                "icon must be a .png or .ico file, got: {}",
-                icon_path.display()
-            )),
+            _ => {
+                return Err(anyhow!(
+                    "icon must be a .png or .ico file, got: {}",
+                    icon_path.display()
+                ))
+            }
         }
     }
 
-    let icon_sizes: Vec<u32> = if let Some(arr) = meta.get("icon-sizes").and_then(|v| v.as_array()) {
+    let icon_sizes: Vec<u32> = if let Some(arr) = meta.get("icon-sizes").and_then(|v| v.as_array())
+    {
         let mut sizes = Vec::new();
         for v in arr {
-            let size = v.as_integer().ok_or_else(|| anyhow!("`icon-sizes` entries must be integers"))? as u32;
+            let size = v
+                .as_integer()
+                .ok_or_else(|| anyhow!("`icon-sizes` entries must be integers"))?
+                as u32;
             if size == 0 || size > 256 {
                 return Err(anyhow!("icon-sizes values must be 1..=256, got {size}"));
             }
@@ -418,7 +461,8 @@ fn parse_win_resource_table(meta: &toml::Value, target_dir: &Path) -> Result<Win
     let has_dpi_aware = meta.get("dpi-aware").is_some();
     let has_long_path_aware = meta.get("long-path-aware").is_some();
     let has_supported_os = meta.get("supported-os").is_some();
-    let has_generated = has_execution_level || has_dpi_aware || has_long_path_aware || has_supported_os;
+    let has_generated =
+        has_execution_level || has_dpi_aware || has_long_path_aware || has_supported_os;
 
     if (has_manifest_file as u8 + has_manifest_raw as u8 + has_generated as u8) > 1 {
         return Err(anyhow!(
@@ -509,9 +553,12 @@ fn parse_win_resource_table(meta: &toml::Value, target_dir: &Path) -> Result<Win
         .get("language")
         .map(|v| {
             v.as_integer()
-                .ok_or_else(|| anyhow!("`language` must be an integer (Windows LANGID, e.g. 0x0409 for en-US)"))
+                .ok_or_else(|| {
+                    anyhow!("`language` must be an integer (Windows LANGID, e.g. 0x0409 for en-US)")
+                })
                 .and_then(|n| {
-                    u16::try_from(n).map_err(|_| anyhow!("`language` must be a valid u16 LANGID, got {n}"))
+                    u16::try_from(n)
+                        .map_err(|_| anyhow!("`language` must be a valid u16 LANGID, got {n}"))
                 })
         })
         .transpose()?;
@@ -535,7 +582,10 @@ fn parse_win_resource_table(meta: &toml::Value, target_dir: &Path) -> Result<Win
 
 /// Merge an override config on top of a base. Override fields take precedence
 /// when present; empty/None fields in the override fall through to base.
-fn merge_win_resource_config(base: &WinResourceConfig, over: &WinResourceConfig) -> WinResourceConfig {
+fn merge_win_resource_config(
+    base: &WinResourceConfig,
+    over: &WinResourceConfig,
+) -> WinResourceConfig {
     WinResourceConfig {
         icon: over.icon.clone().or_else(|| base.icon.clone()),
         icon_sizes: if over.icon_sizes.is_empty() {
@@ -582,7 +632,9 @@ fn gather_file(
     let stat = std::fs::metadata(abs_path)
         .with_context(|| format!("failed to stat: {}", abs_path.display()))?;
     if stat.is_dir() {
-        return Err(anyhow!("expected a file but got a directory: {source_path}"));
+        return Err(anyhow!(
+            "expected a file but got a directory: {source_path}"
+        ));
     }
 
     let data = std::fs::read(abs_path)
@@ -655,14 +707,19 @@ fn gather_dir(
     gathered: &mut Vec<GatheredFile>,
     hash_cache: &mut HashMap<String, String>,
 ) -> Result<()> {
-    if gathered.iter().any(|f| f.source_path == source_path && f.is_dir) {
+    if gathered
+        .iter()
+        .any(|f| f.source_path == source_path && f.is_dir)
+    {
         return Ok(());
     }
 
     let stat = std::fs::metadata(abs_path)
         .with_context(|| format!("failed to stat: {}", abs_path.display()))?;
     if !stat.is_dir() {
-        return Err(anyhow!("expected a directory but got a file: {source_path}"));
+        return Err(anyhow!(
+            "expected a directory but got a file: {source_path}"
+        ));
     }
 
     // Add the directory entry itself
@@ -777,7 +834,8 @@ fn generate_embedded_code(gathered: &[GatheredFile]) -> Result<(String, String)>
             !gathered.iter().any(|other| {
                 other.is_dir
                     && other.source_path != f.source_path
-                    && f.source_path.starts_with(&format!("{}/", other.source_path))
+                    && f.source_path
+                        .starts_with(&format!("{}/", other.source_path))
             })
         })
         .map(|f| f.source_path.as_str())
@@ -848,11 +906,19 @@ fn generate_embedded_code(gathered: &[GatheredFile]) -> Result<(String, String)>
 }
 
 const SUPPORTED_OS_MAP: &[(&str, &str, &str)] = &[
-    ("vista",  "e2011457-1546-43c5-a5fe-008deee3d3f0", "Windows Vista"),
-    ("7",      "35138b9a-5d96-4fbd-8e2d-a2440225f93a", "Windows 7"),
-    ("8",      "4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38", "Windows 8"),
-    ("8.1",    "1f676c76-80e1-4239-95bb-83d0f6d0da78", "Windows 8.1"),
-    ("10",     "8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a", "Windows 10 / 11"),
+    (
+        "vista",
+        "e2011457-1546-43c5-a5fe-008deee3d3f0",
+        "Windows Vista",
+    ),
+    ("7", "35138b9a-5d96-4fbd-8e2d-a2440225f93a", "Windows 7"),
+    ("8", "4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38", "Windows 8"),
+    ("8.1", "1f676c76-80e1-4239-95bb-83d0f6d0da78", "Windows 8.1"),
+    (
+        "10",
+        "8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a",
+        "Windows 10 / 11",
+    ),
 ];
 
 const DEFAULT_SUPPORTED_OS: &[&str] = &["vista", "7", "8", "8.1", "10"];
@@ -862,7 +928,9 @@ fn parse_supported_os(meta: &toml::Value) -> Result<Vec<String>> {
         Some(arr) => {
             let mut os_list = Vec::new();
             for v in arr {
-                let s = v.as_str().ok_or_else(|| anyhow!("`supported-os` entries must be strings"))?;
+                let s = v
+                    .as_str()
+                    .ok_or_else(|| anyhow!("`supported-os` entries must be strings"))?;
                 if !SUPPORTED_OS_MAP.iter().any(|(name, _, _)| *name == s) {
                     let valid: Vec<&str> = SUPPORTED_OS_MAP.iter().map(|(n, _, _)| *n).collect();
                     return Err(anyhow!(
@@ -879,7 +947,12 @@ fn parse_supported_os(meta: &toml::Value) -> Result<Vec<String>> {
     }
 }
 
-fn generate_manifest_xml(execution_level: &str, dpi_aware: Option<&str>, long_path_aware: Option<bool>, supported_os: &[String]) -> String {
+fn generate_manifest_xml(
+    execution_level: &str,
+    dpi_aware: Option<&str>,
+    long_path_aware: Option<bool>,
+    supported_os: &[String],
+) -> String {
     let mut settings = String::new();
     if let Some(dpi) = dpi_aware {
         let (aware_val, awareness_val) = match dpi {
@@ -950,7 +1023,8 @@ fn generate_manifest_xml(execution_level: &str, dpi_aware: Option<&str>, long_pa
 }
 
 fn write_build_rs(dir: &Path, config: &WinResourceConfig) -> Result<()> {
-    let mut code = String::from("fn main() {\n    let mut res = winresource::WindowsResource::new();\n");
+    let mut code =
+        String::from("fn main() {\n    let mut res = winresource::WindowsResource::new();\n");
 
     if let Some(icon) = &config.icon {
         let icon_str = icon.display().to_string().replace('\\', "/");
@@ -1189,7 +1263,11 @@ fn emit_dir_children(gathered: &[GatheredFile], parent_path: &str, indent: usize
     out
 }
 
-fn compile_cargo_project(project_dir: &Path, target_triple: Option<&str>, verbosity: u8) -> Result<()> {
+fn compile_cargo_project(
+    project_dir: &Path,
+    target_triple: Option<&str>,
+    verbosity: u8,
+) -> Result<()> {
     log::info!("Compiling {}", project_dir.display());
 
     let mut cmd = std::process::Command::new("cargo");
@@ -1198,23 +1276,29 @@ fn compile_cargo_project(project_dir: &Path, target_triple: Option<&str>, verbos
         cmd.args(["--target", triple]);
     }
     match verbosity {
-        0 => { cmd.arg("--quiet"); }
-        2.. => { cmd.arg("-vv"); }
+        0 => {
+            cmd.arg("--quiet");
+        }
+        2.. => {
+            cmd.arg("-vv");
+        }
         _ => {}
     }
     cmd.current_dir(project_dir);
 
-    log::trace!("Running: cargo build --release{}", target_triple.map(|t| format!(" --target {t}")).unwrap_or_default());
+    log::trace!(
+        "Running: cargo build --release{}",
+        target_triple
+            .map(|t| format!(" --target {t}"))
+            .unwrap_or_default()
+    );
 
     let status = cmd
         .status()
         .with_context(|| format!("failed to run cargo in {}", project_dir.display()))?;
 
     if !status.success() {
-        return Err(anyhow!(
-            "cargo build failed in {}",
-            project_dir.display()
-        ));
+        return Err(anyhow!("cargo build failed in {}", project_dir.display()));
     }
 
     log::debug!("Compiled successfully: {}", project_dir.display());

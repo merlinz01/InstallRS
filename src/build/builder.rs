@@ -77,17 +77,14 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         .context("failed to create build directory")?;
 
     // ── Convert PNG icons to ICO if needed ─────────────────────────────────
-    for (label, win_res) in [
-        ("installer", &mut params.installer_win_resource),
-        ("uninstaller", &mut params.uninstaller_win_resource),
-    ] {
-        if let Some(ref mut cfg) = win_res {
-            if let Some(ref icon_path) = cfg.icon {
-                if icon_path.extension().and_then(|e| e.to_str()) == Some("png") {
-                    let ico_path = params.build_dir.join(format!("{label}-icon-generated.ico"));
-                    ico_convert::png_to_ico(icon_path, &ico_path, &cfg.icon_sizes)?;
-                    cfg.icon = Some(ico_path);
-                }
+    for cfg in [
+        &mut params.installer_win_resource,
+        &mut params.uninstaller_win_resource,
+    ].into_iter().flatten() {
+        if let Some(ref icon_path) = cfg.icon {
+            if icon_path.extension().and_then(|e| e.to_str()) == Some("png") {
+                let ico_path = ico_convert::png_to_ico(icon_path, &params.build_dir, &cfg.icon_sizes)?;
+                cfg.icon = Some(ico_path);
             }
         }
     }

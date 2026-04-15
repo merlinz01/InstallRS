@@ -999,6 +999,7 @@ fn generate_manifest_xml(
     dpi_aware: Option<&str>,
     long_path_aware: Option<bool>,
     supported_os: &[String],
+    gui_enabled: bool,
 ) -> String {
     let mut settings = String::new();
     if let Some(dpi) = dpi_aware {
@@ -1049,11 +1050,21 @@ fn generate_manifest_xml(
         }
     }
 
+    let comctl_block = if gui_enabled {
+        "  <dependency>\n\
+         \x20   <dependentAssembly>\n\
+         \x20     <assemblyIdentity type=\"win32\" name=\"Microsoft.Windows.Common-Controls\" version=\"6.0.0.0\" processorArchitecture=\"*\" publicKeyToken=\"6595b64144ccf1df\" language=\"*\" />\n\
+         \x20   </dependentAssembly>\n\
+         \x20 </dependency>\n"
+    } else {
+        ""
+    };
+
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3" manifestVersion="1.0">
   <assemblyIdentity type="win32" name="InstallRS.Installer" version="1.0.0.0" processorArchitecture="*" />
-  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+{comctl_block}  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
         <requestedExecutionLevel level="{execution_level}" uiAccess="false" />
@@ -1069,7 +1080,7 @@ fn generate_manifest_xml(
     )
 }
 
-fn write_build_rs(dir: &Path, config: &WinResourceConfig) -> Result<()> {
+fn write_build_rs(dir: &Path, config: &WinResourceConfig, gui_enabled: bool) -> Result<()> {
     let mut code =
         String::from("fn main() {\n    let mut res = winresource::WindowsResource::new();\n");
 
@@ -1097,6 +1108,7 @@ fn write_build_rs(dir: &Path, config: &WinResourceConfig) -> Result<()> {
                 dpi_aware.as_deref(),
                 *long_path_aware,
                 supported_os,
+                gui_enabled,
             );
             code.push_str(&format!("    res.set_manifest(r#\"{}\"#);\n", xml));
         }
@@ -1212,7 +1224,7 @@ fn main() {{
     write_if_changed(&uninstaller_dir.join("src").join("main.rs"), &main_rs)?;
 
     if let Some(cfg) = win_resource {
-        write_build_rs(uninstaller_dir, cfg)?;
+        write_build_rs(uninstaller_dir, cfg, gui_enabled)?;
     }
 
     Ok(())
@@ -1305,7 +1317,7 @@ fn main() {{
     write_if_changed(&installer_dir.join("src").join("main.rs"), &main_rs)?;
 
     if let Some(cfg) = win_resource {
-        write_build_rs(installer_dir, cfg)?;
+        write_build_rs(installer_dir, cfg, gui_enabled)?;
     }
 
     Ok(())

@@ -43,22 +43,23 @@ pub fn install(i: &mut Installer) -> Result<()> {
         )
         .directory_picker("C:/InstallRS test")
         .install_page(|ctx| {
+            let mut i = ctx.installer();
             ctx.set_status(&t!("installer.install.status_installing"));
             ctx.set_progress(0.0);
 
             let out_dir = ctx.install_dir();
-            ctx.installer().set_out_dir(&out_dir);
+            i.set_out_dir(&out_dir);
 
             ctx.log(&t!("installer.install.log_testdir"));
-            installrs::dir!(ctx.installer(), "testdir", "testdir")?;
+            installrs::dir!(i, "testdir", "testdir")?;
             ctx.set_progress(0.33);
 
             ctx.log(&t!("installer.install.log_testfile"));
-            installrs::file!(ctx.installer(), "test.txt", "testfile.txt")?;
+            installrs::file!(i, "test.txt", "testfile.txt")?;
             ctx.set_progress(0.66);
 
             ctx.log(&t!("installer.install.log_uninstaller"));
-            ctx.installer().uninstaller("uninstall.exe")?;
+            i.uninstaller("uninstall.exe")?;
             ctx.set_progress(1.0);
 
             ctx.set_status(&t!("installer.install.status_complete"));
@@ -89,11 +90,12 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
             &t!("uninstaller.welcome.message"),
         )
         .install_page(|ctx| {
+            let i = ctx.installer();
             ctx.set_status(&t!("uninstaller.status_removing"));
             ctx.set_progress(0.0);
 
             ctx.log(&t!("uninstaller.log_removing"));
-            ctx.installer().remove("C:/InstallRS test")?;
+            i.remove("C:/InstallRS test")?;
             ctx.set_progress(1.0);
 
             ctx.set_status(&t!("uninstaller.status_complete"));

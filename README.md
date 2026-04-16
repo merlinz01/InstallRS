@@ -1,10 +1,10 @@
 <div align="center">
 
+![InstallRS](installrs.svg)
+
 # InstallRS
 
-![InstallRS](/installrs.svg)
-
-A Rust-based framework for building self-contained software installers.
+**A Rust-based framework for building self-contained software installers.**
 
 </div>
 

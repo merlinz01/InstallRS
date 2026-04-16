@@ -2,12 +2,13 @@
 pub mod gui;
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use anyhow::{anyhow, Context, Result};
 
 /// Compile-time FNV-1a 64-bit hash of a path string (backslashes normalized to forward slashes).
 ///
-/// Used internally by the [`file!`] and [`dir!`] macros.
+/// Used by the [`source!`] macro.
 pub const fn source_path_hash_const(path: &str) -> u64 {
     let bytes = path.as_bytes();
     let mut h: u64 = 14695981039346656037;
@@ -21,45 +22,31 @@ pub const fn source_path_hash_const(path: &str) -> u64 {
     h
 }
 
-/// Install a single embedded file to a destination path.
+/// Compile-time reference to an embedded file or directory.
 ///
-/// The source path is hashed at **compile time** — it never appears as a string
-/// in the final binary. Paths are relative to the project root (as seen by the
-/// build tool).
-///
-/// ```rust,ignore
-/// installrs::file!(i, "assets/config.toml", "etc/myapp/config.toml")?;
-/// ```
-#[macro_export]
-macro_rules! file {
-    ($installer:expr, $src:literal, $dst:expr) => {{
-        const H: u64 = $crate::source_path_hash_const($src);
-        $installer.file_hashed(H, $dst)
-    }};
-}
+/// Create one with the [`source!`] macro, then pass it to
+/// [`Installer::file`] or [`Installer::dir`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Source(pub u64);
 
-/// Install an embedded directory tree to a destination path.
+/// Produce a [`Source`] from a literal path, hashed at compile time.
 ///
-/// The source path is hashed at **compile time** — it never appears as a string
-/// in the final binary. Paths are relative to the project root (as seen by the
-/// build tool).
+/// The path string itself never appears in the final binary. Paths are
+/// relative to the project root as seen by the build tool.
 ///
 /// ```rust,ignore
-/// installrs::dir!(i, "assets/icons", "share/myapp/icons")?;
+/// i.file(installrs::source!("assets/config.toml"), "etc/myapp/config.toml")
+///     .install()?;
 /// ```
 #[macro_export]
-macro_rules! dir {
-    ($installer:expr, $src:literal, $dst:expr) => {{
-        const H: u64 = $crate::source_path_hash_const($src);
-        $installer.dir_hashed(H, $dst)
+macro_rules! source {
+    ($path:literal) => {{
+        const H: u64 = $crate::source_path_hash_const($path);
+        $crate::Source(H)
     }};
 }
 
 /// A top-level embedded entry baked into the installer binary at compile time.
-///
-/// `File` entries store a single file keyed by path hash — no filename is
-/// retained. `Dir` entries store a recursive tree of children with names
-/// for directory traversal.
 pub enum EmbeddedEntry {
     File {
         source_path_hash: u64,
@@ -89,6 +76,51 @@ pub enum DirChildKind {
     },
 }
 
+/// What to do when a destination file already exists.
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum OverwriteMode {
+    /// Replace the existing file (default).
+    #[default]
+    Overwrite,
+    /// Leave the existing file untouched and skip this file.
+    Skip,
+    /// Return an error if the destination exists.
+    Error,
+    /// Rename the existing file to `<name>.bak` (replacing any existing backup) before writing.
+    Backup,
+}
+
+/// Decision returned from an on-error handler inside a directory install.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ErrorAction {
+    /// Skip this file and continue installing the rest of the directory.
+    Skip,
+    /// Abort the directory install by propagating the error.
+    Abort,
+}
+
+/// Filter closure for directory installs. Receives the relative path within
+/// the directory (e.g. `"bin/app.exe"`) and returns `true` to include the file.
+pub type DirFilter = Box<dyn Fn(&str) -> bool + 'static>;
+
+/// Per-file error handler for directory installs.
+pub type DirErrorHandler = Box<dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static>;
+
+/// Sink for progress, status, and log events emitted by installer operations.
+///
+/// Attach one to an [`Installer`] with [`Installer::set_progress_sink`] (the
+/// wizard GUI does this automatically inside the install page).
+pub trait ProgressSink: Send + Sync {
+    fn set_status(&self, status: &str);
+    fn set_progress(&self, fraction: f64);
+    fn log(&self, message: &str);
+}
+
+struct ProgressState {
+    bytes_installed: u64,
+    bytes_total: u64,
+}
+
 pub struct Installer {
     pub headless: bool,
     entries: &'static [EmbeddedEntry],
@@ -97,6 +129,8 @@ pub struct Installer {
     uninstaller_compression: &'static str,
     #[cfg(target_os = "windows")]
     self_delete: bool,
+    sink: Option<Box<dyn ProgressSink>>,
+    progress: Mutex<ProgressState>,
 }
 
 impl Installer {
@@ -105,6 +139,10 @@ impl Installer {
         uninstaller_data: &'static [u8],
         uninstaller_compression: &'static str,
     ) -> Self {
+        // Default total = sum of all embedded bytes (uncompressed size is
+        // unknown without decompressing, so use raw data length as a proxy,
+        // plus the uninstaller).
+        let total = sum_embedded_bytes(entries) + uninstaller_data.len() as u64;
         Installer {
             headless: false,
             entries,
@@ -113,12 +151,76 @@ impl Installer {
             uninstaller_compression,
             #[cfg(target_os = "windows")]
             self_delete: false,
+            sink: None,
+            progress: Mutex::new(ProgressState {
+                bytes_installed: 0,
+                bytes_total: total,
+            }),
         }
     }
 
     /// Set the base output directory for relative destination paths.
     pub fn set_out_dir(&mut self, dir: &str) {
         self.out_dir = Some(PathBuf::from(dir));
+    }
+
+    /// Attach a [`ProgressSink`] that receives status, progress, and log events.
+    pub fn set_progress_sink(&mut self, sink: Box<dyn ProgressSink>) {
+        self.sink = Some(sink);
+    }
+
+    /// Remove the progress sink (if any).
+    pub fn clear_progress_sink(&mut self) {
+        self.sink = None;
+    }
+
+    /// Override the total byte count used for progress reporting.
+    ///
+    /// By default, total = sum of all embedded file bytes + uninstaller bytes.
+    /// Override this if you plan to install only a subset of the embedded
+    /// content and want progress to reach 100% at the end.
+    pub fn set_total_bytes(&mut self, total: u64) {
+        self.progress.lock().unwrap().bytes_total = total;
+    }
+
+    /// Reset the bytes-installed counter to zero.
+    pub fn reset_progress(&mut self) {
+        self.progress.lock().unwrap().bytes_installed = 0;
+    }
+
+    /// Sum the uncompressed byte size of one or more [`Source`]s.
+    ///
+    /// Useful for budgeting a custom total, e.g.
+    /// `i.set_total_bytes(i.bytes_of(&[source!("a"), source!("b")]))`.
+    pub fn bytes_of(&self, sources: &[Source]) -> u64 {
+        let mut total = 0u64;
+        for s in sources {
+            total += self.bytes_of_source(*s);
+        }
+        total
+    }
+
+    fn bytes_of_source(&self, source: Source) -> u64 {
+        for entry in self.entries {
+            match entry {
+                EmbeddedEntry::File {
+                    source_path_hash,
+                    data,
+                    ..
+                } if *source_path_hash == source.0 => {
+                    return data.len() as u64;
+                }
+                EmbeddedEntry::Dir {
+                    source_path_hash,
+                    children,
+                    ..
+                } if *source_path_hash == source.0 => {
+                    return sum_children_bytes(children);
+                }
+                _ => {}
+            }
+        }
+        0
     }
 
     fn resolve_out_path(&self, dest_path: &str) -> Result<PathBuf> {
@@ -167,100 +269,96 @@ impl Installer {
         }
     }
 
-    /// Install a file by pre-computed path hash. Prefer the [`file!`] macro.
-    pub fn file_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
-        let dest = self.resolve_out_path(dest_path)?;
-        for entry in self.entries {
-            if let EmbeddedEntry::File {
-                source_path_hash,
-                data,
-                compression,
-            } = entry
-            {
-                if *source_path_hash == source_hash {
-                    let bytes = Self::decompress(data, compression)?;
-                    return write_file(&dest, &bytes);
-                }
-            }
+    fn emit_status(&self, status: &Option<String>) {
+        if let (Some(sink), Some(s)) = (self.sink.as_ref(), status.as_ref()) {
+            sink.set_status(s);
         }
-        Err(anyhow!(
-            "file not embedded in installer (hash: {source_hash:#018x})"
-        ))
     }
 
-    /// Install a directory tree by pre-computed path hash. Prefer the [`dir!`] macro.
-    pub fn dir_hashed(&self, source_hash: u64, dest_path: &str) -> Result<()> {
-        let dest = self.resolve_out_path(dest_path)?;
-        for entry in self.entries {
-            if let EmbeddedEntry::Dir {
-                source_path_hash,
-                children,
-            } = entry
-            {
-                if *source_path_hash == source_hash {
-                    std::fs::create_dir_all(&dest).with_context(|| {
-                        format!("failed to create directory: {}", dest.display())
-                    })?;
-                    return Self::install_children(children, &dest);
-                }
-            }
+    fn emit_log(&self, log: &Option<String>) {
+        if let (Some(sink), Some(l)) = (self.sink.as_ref(), log.as_ref()) {
+            sink.log(l);
         }
-        Err(anyhow!(
-            "directory not embedded in installer (hash: {source_hash:#018x})"
-        ))
     }
 
-    fn install_children(children: &[DirChild], dest: &Path) -> Result<()> {
-        for child in children {
-            let target = dest.join(child.name);
-            match &child.kind {
-                DirChildKind::File { data, compression } => {
-                    let bytes = Self::decompress(data, compression)?;
-                    write_file(&target, &bytes)?;
-                }
-                DirChildKind::Dir { children } => {
-                    std::fs::create_dir_all(&target)
-                        .with_context(|| format!("failed to create dir: {}", target.display()))?;
-                    Self::install_children(children, &target)?;
-                }
-            }
+    fn advance_bytes(&self, bytes: u64) {
+        let mut state = self.progress.lock().unwrap();
+        state.bytes_installed = state.bytes_installed.saturating_add(bytes);
+        let fraction = if state.bytes_total == 0 {
+            0.0
+        } else {
+            (state.bytes_installed as f64 / state.bytes_total as f64).clamp(0.0, 1.0)
+        };
+        drop(state);
+        if let Some(sink) = self.sink.as_ref() {
+            sink.set_progress(fraction);
         }
-        Ok(())
     }
 
-    /// Create a directory (and all parents) on the target system.
-    pub fn mkdir(&self, dir: &str) -> Result<()> {
-        let path = self.resolve_out_path(dir)?;
-        std::fs::create_dir_all(&path)
-            .with_context(|| format!("failed to create directory: {}", path.display()))
+    // ── Builders ─────────────────────────────────────────────────────────────
+
+    /// Install a single embedded file. Pair with [`source!`]:
+    ///
+    /// ```rust,ignore
+    /// i.file(installrs::source!("app.exe"), "app.exe")
+    ///     .status("Installing app.exe")
+    ///     .install()?;
+    /// ```
+    pub fn file<'i>(&'i mut self, source: Source, dst: impl Into<String>) -> FileOp<'i> {
+        FileOp {
+            installer: self,
+            source,
+            dst: dst.into(),
+            status: None,
+            log: None,
+            overwrite: OverwriteMode::default(),
+            mode: None,
+        }
     }
 
-    /// Write the embedded uninstaller executable to the destination path.
-    pub fn uninstaller(&self, dest_path: &str) -> Result<()> {
-        let dest = self.resolve_out_path(dest_path)?;
-        let data = Self::decompress(self.uninstaller_data, self.uninstaller_compression)?;
-        write_file(&dest, &data)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
-                .with_context(|| format!("failed to set permissions on: {}", dest.display()))?;
+    /// Install an embedded directory tree.
+    pub fn dir<'i>(&'i mut self, source: Source, dst: impl Into<String>) -> DirOp<'i> {
+        DirOp {
+            installer: self,
+            source,
+            dst: dst.into(),
+            status: None,
+            log: None,
+            overwrite: OverwriteMode::default(),
+            mode: None,
+            filter: None,
+            on_error: None,
         }
-        Ok(())
+    }
+
+    /// Write the embedded uninstaller executable.
+    pub fn uninstaller<'i>(&'i mut self, dst: impl Into<String>) -> UninstallerOp<'i> {
+        UninstallerOp {
+            installer: self,
+            dst: dst.into(),
+            status: None,
+            log: None,
+            overwrite: OverwriteMode::default(),
+        }
+    }
+
+    /// Create a directory (and its parents) on the target system.
+    pub fn mkdir<'i>(&'i mut self, dst: impl Into<String>) -> MkdirOp<'i> {
+        MkdirOp {
+            installer: self,
+            dst: dst.into(),
+            status: None,
+            log: None,
+        }
     }
 
     /// Remove a file or directory from the target system.
-    pub fn remove(&self, path: &str) -> Result<()> {
-        let p = self.resolve_out_path(path)?;
-        if !p.exists() {
-            return Ok(());
-        }
-        if p.is_dir() {
-            std::fs::remove_dir_all(&p)
-                .with_context(|| format!("failed to remove directory: {}", p.display()))
-        } else {
-            std::fs::remove_file(&p)
-                .with_context(|| format!("failed to remove file: {}", p.display()))
+    pub fn remove<'i>(&'i mut self, path: impl Into<String>) -> RemoveOp<'i> {
+        RemoveOp {
+            installer: self,
+            path: path.into(),
+            status: None,
+            log: None,
         }
     }
 
@@ -373,11 +471,452 @@ impl Installer {
     }
 }
 
+// ── Builder types ───────────────────────────────────────────────────────────
+
+pub struct FileOp<'i> {
+    installer: &'i mut Installer,
+    source: Source,
+    dst: String,
+    status: Option<String>,
+    log: Option<String>,
+    overwrite: OverwriteMode,
+    mode: Option<u32>,
+}
+
+impl<'i> FileOp<'i> {
+    pub fn status(mut self, s: impl Into<String>) -> Self {
+        self.status = Some(s.into());
+        self
+    }
+    pub fn log(mut self, s: impl Into<String>) -> Self {
+        self.log = Some(s.into());
+        self
+    }
+    pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
+        self.overwrite = mode;
+        self
+    }
+    /// Unix file permissions (octal, e.g. `0o755`). No-op on Windows.
+    pub fn mode(mut self, mode: u32) -> Self {
+        self.mode = Some(mode);
+        self
+    }
+    pub fn install(self) -> Result<()> {
+        self.installer.emit_status(&self.status);
+        self.installer.emit_log(&self.log);
+
+        let (raw_bytes, compression) = find_file(self.installer.entries, self.source.0)?;
+        let dest = self.installer.resolve_out_path(&self.dst)?;
+
+        match self.overwrite {
+            OverwriteMode::Overwrite => {}
+            OverwriteMode::Skip => {
+                if dest.exists() {
+                    self.installer.advance_bytes(raw_bytes.len() as u64);
+                    return Ok(());
+                }
+            }
+            OverwriteMode::Error => {
+                if dest.exists() {
+                    return Err(anyhow!("destination already exists: {}", dest.display()));
+                }
+            }
+            OverwriteMode::Backup => {
+                if dest.exists() {
+                    backup_path(&dest)?;
+                }
+            }
+        }
+
+        let bytes = Installer::decompress(raw_bytes, compression)?;
+        write_file(&dest, &bytes)?;
+        apply_mode(&dest, self.mode)?;
+
+        self.installer.advance_bytes(raw_bytes.len() as u64);
+        Ok(())
+    }
+}
+
+pub struct DirOp<'i> {
+    installer: &'i mut Installer,
+    source: Source,
+    dst: String,
+    status: Option<String>,
+    log: Option<String>,
+    overwrite: OverwriteMode,
+    mode: Option<u32>,
+    filter: Option<DirFilter>,
+    on_error: Option<DirErrorHandler>,
+}
+
+impl<'i> DirOp<'i> {
+    pub fn status(mut self, s: impl Into<String>) -> Self {
+        self.status = Some(s.into());
+        self
+    }
+    pub fn log(mut self, s: impl Into<String>) -> Self {
+        self.log = Some(s.into());
+        self
+    }
+    pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
+        self.overwrite = mode;
+        self
+    }
+    /// Unix file permissions applied to each installed file. No-op on Windows.
+    pub fn mode(mut self, mode: u32) -> Self {
+        self.mode = Some(mode);
+        self
+    }
+    /// Filter closure: receives relative path within the directory; return
+    /// `true` to install the file.
+    pub fn filter<F: Fn(&str) -> bool + 'static>(mut self, f: F) -> Self {
+        self.filter = Some(Box::new(f));
+        self
+    }
+    /// Per-file error handler: receives the relative path and error, returns
+    /// [`ErrorAction::Skip`] to continue or [`ErrorAction::Abort`] to propagate.
+    pub fn on_error<F: Fn(&str, &anyhow::Error) -> ErrorAction + 'static>(mut self, f: F) -> Self {
+        self.on_error = Some(Box::new(f));
+        self
+    }
+    pub fn install(self) -> Result<()> {
+        self.installer.emit_status(&self.status);
+        self.installer.emit_log(&self.log);
+
+        let children = find_dir(self.installer.entries, self.source.0)?;
+        let dest = self.installer.resolve_out_path(&self.dst)?;
+        std::fs::create_dir_all(&dest)
+            .with_context(|| format!("failed to create directory: {}", dest.display()))?;
+
+        install_children(
+            children,
+            &dest,
+            "",
+            self.installer,
+            self.overwrite,
+            self.mode,
+            self.filter.as_deref(),
+            self.on_error.as_deref(),
+        )
+    }
+}
+
+pub struct UninstallerOp<'i> {
+    installer: &'i mut Installer,
+    dst: String,
+    status: Option<String>,
+    log: Option<String>,
+    overwrite: OverwriteMode,
+}
+
+impl<'i> UninstallerOp<'i> {
+    pub fn status(mut self, s: impl Into<String>) -> Self {
+        self.status = Some(s.into());
+        self
+    }
+    pub fn log(mut self, s: impl Into<String>) -> Self {
+        self.log = Some(s.into());
+        self
+    }
+    pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
+        self.overwrite = mode;
+        self
+    }
+    pub fn install(self) -> Result<()> {
+        self.installer.emit_status(&self.status);
+        self.installer.emit_log(&self.log);
+
+        let dest = self.installer.resolve_out_path(&self.dst)?;
+
+        match self.overwrite {
+            OverwriteMode::Overwrite => {}
+            OverwriteMode::Skip => {
+                if dest.exists() {
+                    self.installer
+                        .advance_bytes(self.installer.uninstaller_data.len() as u64);
+                    return Ok(());
+                }
+            }
+            OverwriteMode::Error => {
+                if dest.exists() {
+                    return Err(anyhow!("destination already exists: {}", dest.display()));
+                }
+            }
+            OverwriteMode::Backup => {
+                if dest.exists() {
+                    backup_path(&dest)?;
+                }
+            }
+        }
+
+        let data = Installer::decompress(
+            self.installer.uninstaller_data,
+            self.installer.uninstaller_compression,
+        )?;
+        write_file(&dest, &data)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
+                .with_context(|| format!("failed to set permissions on: {}", dest.display()))?;
+        }
+        self.installer
+            .advance_bytes(self.installer.uninstaller_data.len() as u64);
+        Ok(())
+    }
+}
+
+pub struct MkdirOp<'i> {
+    installer: &'i mut Installer,
+    dst: String,
+    status: Option<String>,
+    log: Option<String>,
+}
+
+impl<'i> MkdirOp<'i> {
+    pub fn status(mut self, s: impl Into<String>) -> Self {
+        self.status = Some(s.into());
+        self
+    }
+    pub fn log(mut self, s: impl Into<String>) -> Self {
+        self.log = Some(s.into());
+        self
+    }
+    pub fn install(self) -> Result<()> {
+        self.installer.emit_status(&self.status);
+        self.installer.emit_log(&self.log);
+        let path = self.installer.resolve_out_path(&self.dst)?;
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("failed to create directory: {}", path.display()))
+    }
+}
+
+pub struct RemoveOp<'i> {
+    installer: &'i mut Installer,
+    path: String,
+    status: Option<String>,
+    log: Option<String>,
+}
+
+impl<'i> RemoveOp<'i> {
+    pub fn status(mut self, s: impl Into<String>) -> Self {
+        self.status = Some(s.into());
+        self
+    }
+    pub fn log(mut self, s: impl Into<String>) -> Self {
+        self.log = Some(s.into());
+        self
+    }
+    pub fn install(self) -> Result<()> {
+        self.installer.emit_status(&self.status);
+        self.installer.emit_log(&self.log);
+        let p = self.installer.resolve_out_path(&self.path)?;
+        if !p.exists() {
+            return Ok(());
+        }
+        if p.is_dir() {
+            std::fs::remove_dir_all(&p)
+                .with_context(|| format!("failed to remove directory: {}", p.display()))
+        } else {
+            std::fs::remove_file(&p)
+                .with_context(|| format!("failed to remove file: {}", p.display()))
+        }
+    }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+fn sum_embedded_bytes(entries: &[EmbeddedEntry]) -> u64 {
+    let mut total = 0u64;
+    for e in entries {
+        match e {
+            EmbeddedEntry::File { data, .. } => total += data.len() as u64,
+            EmbeddedEntry::Dir { children, .. } => total += sum_children_bytes(children),
+        }
+    }
+    total
+}
+
+fn sum_children_bytes(children: &[DirChild]) -> u64 {
+    let mut total = 0u64;
+    for c in children {
+        match &c.kind {
+            DirChildKind::File { data, .. } => total += data.len() as u64,
+            DirChildKind::Dir { children } => total += sum_children_bytes(children),
+        }
+    }
+    total
+}
+
+fn find_file(
+    entries: &'static [EmbeddedEntry],
+    hash: u64,
+) -> Result<(&'static [u8], &'static str)> {
+    for entry in entries {
+        if let EmbeddedEntry::File {
+            source_path_hash,
+            data,
+            compression,
+        } = entry
+        {
+            if *source_path_hash == hash {
+                return Ok((data, compression));
+            }
+        }
+    }
+    Err(anyhow!(
+        "file not embedded in installer (hash: {hash:#018x})"
+    ))
+}
+
+fn find_dir(entries: &'static [EmbeddedEntry], hash: u64) -> Result<&'static [DirChild]> {
+    for entry in entries {
+        if let EmbeddedEntry::Dir {
+            source_path_hash,
+            children,
+        } = entry
+        {
+            if *source_path_hash == hash {
+                return Ok(children);
+            }
+        }
+    }
+    Err(anyhow!(
+        "directory not embedded in installer (hash: {hash:#018x})"
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn install_children(
+    children: &[DirChild],
+    dest: &Path,
+    rel_prefix: &str,
+    installer: &Installer,
+    overwrite: OverwriteMode,
+    mode: Option<u32>,
+    filter: Option<&(dyn Fn(&str) -> bool + 'static)>,
+    on_error: Option<&(dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static)>,
+) -> Result<()> {
+    for child in children {
+        let target = dest.join(child.name);
+        let rel = if rel_prefix.is_empty() {
+            child.name.to_string()
+        } else {
+            format!("{rel_prefix}/{}", child.name)
+        };
+
+        match &child.kind {
+            DirChildKind::File { data, compression } => {
+                if let Some(f) = filter {
+                    if !f(&rel) {
+                        continue;
+                    }
+                }
+                let res = install_one_file(data, compression, &target, overwrite, mode, installer);
+                if let Err(e) = res {
+                    match on_error {
+                        Some(h) => match h(&rel, &e) {
+                            ErrorAction::Skip => continue,
+                            ErrorAction::Abort => return Err(e),
+                        },
+                        None => return Err(e),
+                    }
+                }
+            }
+            DirChildKind::Dir { children } => {
+                std::fs::create_dir_all(&target)
+                    .with_context(|| format!("failed to create dir: {}", target.display()))?;
+                install_children(
+                    children, &target, &rel, installer, overwrite, mode, filter, on_error,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn install_one_file(
+    data: &[u8],
+    compression: &str,
+    dest: &Path,
+    overwrite: OverwriteMode,
+    mode: Option<u32>,
+    installer: &Installer,
+) -> Result<()> {
+    match overwrite {
+        OverwriteMode::Overwrite => {}
+        OverwriteMode::Skip => {
+            if dest.exists() {
+                installer.advance_bytes(data.len() as u64);
+                return Ok(());
+            }
+        }
+        OverwriteMode::Error => {
+            if dest.exists() {
+                return Err(anyhow!("destination already exists: {}", dest.display()));
+            }
+        }
+        OverwriteMode::Backup => {
+            if dest.exists() {
+                backup_path(dest)?;
+            }
+        }
+    }
+
+    let bytes = Installer::decompress(data, compression)?;
+    write_file(dest, &bytes)?;
+    apply_mode(dest, mode)?;
+    installer.advance_bytes(data.len() as u64);
+    Ok(())
+}
+
+fn backup_path(path: &Path) -> Result<()> {
+    let backup = path.with_extension(match path.extension() {
+        Some(ext) => format!("{}.bak", ext.to_string_lossy()),
+        None => "bak".to_string(),
+    });
+    if backup.exists() {
+        if backup.is_dir() {
+            std::fs::remove_dir_all(&backup)
+                .with_context(|| format!("failed to remove old backup: {}", backup.display()))?;
+        } else {
+            std::fs::remove_file(&backup)
+                .with_context(|| format!("failed to remove old backup: {}", backup.display()))?;
+        }
+    }
+    std::fs::rename(path, &backup)
+        .with_context(|| format!("failed to back up: {}", path.display()))?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn apply_mode(path: &Path, mode: Option<u32>) -> Result<()> {
+    if let Some(m) = mode {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(m))
+            .with_context(|| format!("failed to set permissions on: {}", path.display()))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn apply_mode(_path: &Path, _mode: Option<u32>) -> Result<()> {
+    Ok(())
+}
+
+fn write_file(dest: &Path, data: &[u8]) -> Result<()> {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create parent dir for: {}", dest.display()))?;
+    }
+    std::fs::write(dest, data).with_context(|| format!("failed to write: {}", dest.display()))
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── helpers ──────────────────────────────────────────────────────────────
 
     fn leak_entries(entries: Vec<EmbeddedEntry>) -> &'static [EmbeddedEntry] {
         Box::leak(entries.into_boxed_slice())
@@ -453,7 +992,12 @@ mod tests {
         }
     }
 
-    // ── source_path_hash_const ───────────────────────────────────────────────────────
+    fn src(path: &str) -> Source {
+        let norm = path.replace('\\', "/");
+        Source(source_path_hash_const(&norm))
+    }
+
+    // ── source_path_hash_const ───────────────────────────────────────────────
 
     #[test]
     fn source_path_hash_const_is_stable() {
@@ -493,33 +1037,33 @@ mod tests {
         assert_eq!(source_path_hash_const("hello"), expected);
     }
 
-    // ── file! macro ───────────────────────────────────────────────────────────
+    // ── file() builder ───────────────────────────────────────────────────────
 
     #[test]
-    fn file_macro_writes_content() {
+    fn file_writes_content() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![file_entry("vendor/lib.so", b"ELF")], tmp.path());
-        file!(i, "vendor/lib.so", "lib.so").unwrap();
+        let mut i = make_installer(vec![file_entry("vendor/lib.so", b"ELF")], tmp.path());
+        i.file(src("vendor/lib.so"), "lib.so").install().unwrap();
         assert_eq!(std::fs::read(tmp.path().join("lib.so")).unwrap(), b"ELF");
     }
 
     #[test]
-    fn file_macro_creates_parent_dirs() {
+    fn file_creates_parent_dirs() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![file_entry("data.txt", b"x")], tmp.path());
-        file!(i, "data.txt", "a/b/out.txt").unwrap();
+        let mut i = make_installer(vec![file_entry("data.txt", b"x")], tmp.path());
+        i.file(src("data.txt"), "a/b/out.txt").install().unwrap();
         assert!(tmp.path().join("a/b/out.txt").exists());
     }
 
     #[test]
-    fn file_macro_error_when_not_embedded() {
+    fn file_errors_when_not_embedded() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![], tmp.path());
-        assert!(file!(i, "missing.txt", "out.txt").is_err());
+        let mut i = make_installer(vec![], tmp.path());
+        assert!(i.file(src("missing.txt"), "out.txt").install().is_err());
     }
 
     #[test]
-    fn file_macro_decompresses_on_write() {
+    fn file_decompresses_on_write() {
         let tmp = tempfile::TempDir::new().unwrap();
         let original = b"compressed content";
         let compressed = compress_gzip(original);
@@ -529,15 +1073,55 @@ mod tests {
             data,
             compression: "gzip",
         };
-        let i = make_installer(vec![entry], tmp.path());
-        file!(i, "comp.gz", "out.txt").unwrap();
+        let mut i = make_installer(vec![entry], tmp.path());
+        i.file(src("comp.gz"), "out.txt").install().unwrap();
         assert_eq!(std::fs::read(tmp.path().join("out.txt")).unwrap(), original);
     }
 
-    // ── dir! macro ────────────────────────────────────────────────────────────
+    #[test]
+    fn file_overwrite_skip_leaves_existing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("out.txt"), b"OLD").unwrap();
+        let mut i = make_installer(vec![file_entry("x.txt", b"NEW")], tmp.path());
+        i.file(src("x.txt"), "out.txt")
+            .overwrite(OverwriteMode::Skip)
+            .install()
+            .unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out.txt")).unwrap(), b"OLD");
+    }
 
     #[test]
-    fn dir_macro_installs_tree() {
+    fn file_overwrite_error_fails_if_exists() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("out.txt"), b"OLD").unwrap();
+        let mut i = make_installer(vec![file_entry("x.txt", b"NEW")], tmp.path());
+        let r = i
+            .file(src("x.txt"), "out.txt")
+            .overwrite(OverwriteMode::Error)
+            .install();
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn file_overwrite_backup_renames_existing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("out.txt"), b"OLD").unwrap();
+        let mut i = make_installer(vec![file_entry("x.txt", b"NEW")], tmp.path());
+        i.file(src("x.txt"), "out.txt")
+            .overwrite(OverwriteMode::Backup)
+            .install()
+            .unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("out.txt")).unwrap(), b"NEW");
+        assert_eq!(
+            std::fs::read(tmp.path().join("out.txt.bak")).unwrap(),
+            b"OLD"
+        );
+    }
+
+    // ── dir() builder ────────────────────────────────────────────────────────
+
+    #[test]
+    fn dir_installs_tree() {
         let tmp = tempfile::TempDir::new().unwrap();
         let entries = vec![dir_entry(
             "pkg",
@@ -546,8 +1130,8 @@ mod tests {
                 child_dir("bin", vec![child_file("app", b"binary")]),
             ],
         )];
-        let i = make_installer(entries, tmp.path());
-        dir!(i, "pkg", "out").unwrap();
+        let mut i = make_installer(entries, tmp.path());
+        i.dir(src("pkg"), "out").install().unwrap();
         assert_eq!(
             std::fs::read(tmp.path().join("out/readme.txt")).unwrap(),
             b"readme"
@@ -559,15 +1143,52 @@ mod tests {
     }
 
     #[test]
-    fn dir_macro_installs_flat_directory() {
+    fn dir_filter_excludes_files() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let entries = vec![dir_entry("assets", vec![child_file("logo.png", b"PNG")])];
-        let i = make_installer(entries, tmp.path());
-        dir!(i, "assets", "out").unwrap();
-        assert_eq!(
-            std::fs::read(tmp.path().join("out/logo.png")).unwrap(),
-            b"PNG"
-        );
+        let entries = vec![dir_entry(
+            "pkg",
+            vec![child_file("keep.txt", b"K"), child_file("drop.txt", b"D")],
+        )];
+        let mut i = make_installer(entries, tmp.path());
+        i.dir(src("pkg"), "out")
+            .filter(|rel| !rel.starts_with("drop"))
+            .install()
+            .unwrap();
+        assert!(tmp.path().join("out/keep.txt").exists());
+        assert!(!tmp.path().join("out/drop.txt").exists());
+    }
+
+    #[test]
+    fn dir_on_error_skip_continues() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        // Second file uses bogus compression to force an error.
+        let bad: &'static [u8] = b"garbage";
+        let children = vec![
+            child_file("good.txt", b"OK"),
+            DirChild {
+                name: Box::leak("bad.bin".to_string().into_boxed_str()),
+                kind: DirChildKind::File {
+                    data: bad,
+                    compression: "zstd", // unsupported → decompress error
+                },
+            },
+            child_file("tail.txt", b"T"),
+        ];
+        let entries = vec![dir_entry("pkg", children)];
+        let mut i = make_installer(entries, tmp.path());
+        let skipped = std::sync::atomic::AtomicBool::new(false);
+        let skipped_ref: &'static std::sync::atomic::AtomicBool = Box::leak(Box::new(skipped));
+        i.dir(src("pkg"), "out")
+            .on_error(|_rel, _err| {
+                skipped_ref.store(true, std::sync::atomic::Ordering::Relaxed);
+                ErrorAction::Skip
+            })
+            .install()
+            .unwrap();
+        assert!(skipped_ref.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(tmp.path().join("out/good.txt").exists());
+        assert!(tmp.path().join("out/tail.txt").exists());
+        assert!(!tmp.path().join("out/bad.bin").exists());
     }
 
     // ── decompress ───────────────────────────────────────────────────────────
@@ -608,38 +1229,38 @@ mod tests {
         assert!(err.to_string().contains("unsupported compression"));
     }
 
-    // ── Installer::mkdir() ───────────────────────────────────────────────────
+    // ── mkdir() ──────────────────────────────────────────────────────────────
 
     #[test]
     fn mkdir_creates_nested_directories() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![], tmp.path());
-        i.mkdir("a/b/c/d").unwrap();
+        let mut i = make_installer(vec![], tmp.path());
+        i.mkdir("a/b/c/d").install().unwrap();
         assert!(tmp.path().join("a/b/c/d").is_dir());
     }
 
     #[test]
     fn mkdir_is_idempotent() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![], tmp.path());
-        i.mkdir("exists").unwrap();
-        i.mkdir("exists").unwrap();
+        let mut i = make_installer(vec![], tmp.path());
+        i.mkdir("exists").install().unwrap();
+        i.mkdir("exists").install().unwrap();
     }
 
     #[test]
     fn mkdir_requires_out_dir() {
-        let i = Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "none");
-        assert!(i.mkdir("foo").is_err());
+        let mut i = Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "none");
+        assert!(i.mkdir("foo").install().is_err());
     }
 
-    // ── Installer::remove() ──────────────────────────────────────────────────
+    // ── remove() ─────────────────────────────────────────────────────────────
 
     #[test]
     fn remove_deletes_file() {
         let tmp = tempfile::TempDir::new().unwrap();
         std::fs::write(tmp.path().join("victim.txt"), b"x").unwrap();
-        let i = make_installer(vec![], tmp.path());
-        i.remove("victim.txt").unwrap();
+        let mut i = make_installer(vec![], tmp.path());
+        i.remove("victim.txt").install().unwrap();
         assert!(!tmp.path().join("victim.txt").exists());
     }
 
@@ -648,19 +1269,19 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         std::fs::create_dir_all(tmp.path().join("tree/leaf")).unwrap();
         std::fs::write(tmp.path().join("tree/leaf/f.txt"), b"x").unwrap();
-        let i = make_installer(vec![], tmp.path());
-        i.remove("tree").unwrap();
+        let mut i = make_installer(vec![], tmp.path());
+        i.remove("tree").install().unwrap();
         assert!(!tmp.path().join("tree").exists());
     }
 
     #[test]
     fn remove_noop_when_nonexistent() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let i = make_installer(vec![], tmp.path());
-        i.remove("does_not_exist.txt").unwrap();
+        let mut i = make_installer(vec![], tmp.path());
+        i.remove("does_not_exist.txt").install().unwrap();
     }
 
-    // ── Installer::exists() ──────────────────────────────────────────────────
+    // ── exists() ─────────────────────────────────────────────────────────────
 
     #[test]
     fn exists_true_for_file() {
@@ -684,12 +1305,72 @@ mod tests {
         let i = make_installer(vec![], tmp.path());
         assert!(i.exists("mydir").unwrap());
     }
-}
 
-fn write_file(dest: &Path, data: &[u8]) -> Result<()> {
-    if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create parent dir for: {}", dest.display()))?;
+    // ── progress ─────────────────────────────────────────────────────────────
+
+    struct TestSink {
+        statuses: Mutex<Vec<String>>,
+        progresses: Mutex<Vec<f64>>,
+        logs: Mutex<Vec<String>>,
     }
-    std::fs::write(dest, data).with_context(|| format!("failed to write: {}", dest.display()))
+
+    impl ProgressSink for TestSink {
+        fn set_status(&self, s: &str) {
+            self.statuses.lock().unwrap().push(s.to_string());
+        }
+        fn set_progress(&self, f: f64) {
+            self.progresses.lock().unwrap().push(f);
+        }
+        fn log(&self, m: &str) {
+            self.logs.lock().unwrap().push(m.to_string());
+        }
+    }
+
+    #[test]
+    fn file_install_reports_progress_and_status() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut i = make_installer(vec![file_entry("a.txt", b"HELLO")], tmp.path());
+        let sink = std::sync::Arc::new(TestSink {
+            statuses: Mutex::new(Vec::new()),
+            progresses: Mutex::new(Vec::new()),
+            logs: Mutex::new(Vec::new()),
+        });
+        struct Forward(std::sync::Arc<TestSink>);
+        impl ProgressSink for Forward {
+            fn set_status(&self, s: &str) {
+                self.0.set_status(s)
+            }
+            fn set_progress(&self, f: f64) {
+                self.0.set_progress(f)
+            }
+            fn log(&self, m: &str) {
+                self.0.log(m)
+            }
+        }
+        i.set_progress_sink(Box::new(Forward(sink.clone())));
+        i.set_total_bytes(5);
+        i.file(src("a.txt"), "out.txt")
+            .status("installing")
+            .log("copying a.txt")
+            .install()
+            .unwrap();
+
+        assert_eq!(sink.statuses.lock().unwrap().as_slice(), &["installing"]);
+        assert_eq!(sink.logs.lock().unwrap().as_slice(), &["copying a.txt"]);
+        let progs = sink.progresses.lock().unwrap();
+        assert_eq!(progs.len(), 1);
+        assert!((progs[0] - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn bytes_of_sums_file_and_dir() {
+        let entries = vec![
+            file_entry("a.txt", b"ABC"),
+            dir_entry("d", vec![child_file("x", b"12"), child_file("y", b"34567")]),
+        ];
+        let i = Installer::new(leak_entries(entries), leak_bytes(vec![]), "");
+        assert_eq!(i.bytes_of(&[src("a.txt")]), 3);
+        assert_eq!(i.bytes_of(&[src("d")]), 7);
+        assert_eq!(i.bytes_of(&[src("a.txt"), src("d")]), 10);
+    }
 }

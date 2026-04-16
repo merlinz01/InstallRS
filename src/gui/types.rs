@@ -93,6 +93,24 @@ pub enum GuiMessage {
     Finished(Result<()>),
 }
 
+/// A [`crate::ProgressSink`] implementation that forwards events over the
+/// wizard's GUI message channel.
+struct ChannelSink {
+    tx: std::sync::mpsc::Sender<GuiMessage>,
+}
+
+impl crate::ProgressSink for ChannelSink {
+    fn set_status(&self, status: &str) {
+        let _ = self.tx.send(GuiMessage::SetStatus(status.to_string()));
+    }
+    fn set_progress(&self, fraction: f64) {
+        let _ = self.tx.send(GuiMessage::SetProgress(fraction));
+    }
+    fn log(&self, message: &str) {
+        let _ = self.tx.send(GuiMessage::Log(message.to_string()));
+    }
+}
+
 /// Context passed to the install closure, providing thread-safe GUI updates
 /// and access to the `Installer`.
 pub struct GuiContext {
@@ -137,11 +155,23 @@ impl GuiContext {
         self.install_dir.lock().unwrap().clone()
     }
 
-    /// Get a mutable reference to the `Installer` for calling `file!()`, `dir!()`, etc.
+    /// Get a mutable reference to the `Installer` for calling
+    /// [`Installer::file`], [`Installer::dir`], etc.
     ///
     /// The returned guard holds a mutex lock — avoid holding it across GUI calls.
     pub fn installer(&self) -> std::sync::MutexGuard<'_, Installer> {
         self.installer.lock().unwrap()
+    }
+
+    /// Build a [`crate::ProgressSink`] that forwards to this GUI context.
+    ///
+    /// Attach it via `ctx.installer().set_progress_sink(ctx.progress_sink())`
+    /// (or rely on the wizard, which does this automatically before invoking
+    /// the install-page callback).
+    pub fn progress_sink(&self) -> Box<dyn crate::ProgressSink> {
+        Box::new(ChannelSink {
+            tx: self.tx.clone(),
+        })
     }
 
     /// Check if the user has requested cancellation.

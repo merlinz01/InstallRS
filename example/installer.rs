@@ -54,23 +54,22 @@ pub fn install(i: &mut Installer) -> Result<()> {
         })
         .install_page(|ctx| {
             let mut i = ctx.installer();
-            ctx.set_status(&t!("installer.install.status_installing"));
-            ctx.set_progress(0.0);
 
             let out_dir = ctx.install_dir();
             i.set_out_dir(&out_dir);
 
-            ctx.log(&t!("installer.install.log_testdir"));
-            installrs::dir!(i, "testdir", "testdir")?;
-            ctx.set_progress(0.33);
+            i.dir(installrs::source!("testdir"), "testdir")
+                .status(t!("installer.install.status_installing"))
+                .log(t!("installer.install.log_testdir"))
+                .install()?;
 
-            ctx.log(&t!("installer.install.log_testfile"));
-            installrs::file!(i, "test.txt", "testfile.txt")?;
-            ctx.set_progress(0.66);
+            i.file(installrs::source!("test.txt"), "testfile.txt")
+                .log(t!("installer.install.log_testfile"))
+                .install()?;
 
-            ctx.log(&t!("installer.install.log_uninstaller"));
-            i.uninstaller("uninstall.exe")?;
-            ctx.set_progress(1.0);
+            i.uninstaller("uninstall.exe")
+                .log(t!("installer.install.log_uninstaller"))
+                .install()?;
 
             ctx.set_status(&t!("installer.install.status_complete"));
             Ok(())
@@ -100,13 +99,12 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
             &t!("uninstaller.welcome.message"),
         )
         .install_page(|ctx| {
-            let i = ctx.installer();
-            ctx.set_status(&t!("uninstaller.status_removing"));
-            ctx.set_progress(0.0);
+            let mut i = ctx.installer();
 
-            ctx.log(&t!("uninstaller.log_removing"));
-            i.remove("C:/InstallRS test")?;
-            ctx.set_progress(1.0);
+            i.remove("C:/InstallRS test")
+                .status(t!("uninstaller.status_removing"))
+                .log(t!("uninstaller.log_removing"))
+                .install()?;
 
             ctx.set_status(&t!("uninstaller.status_complete"));
             Ok(())

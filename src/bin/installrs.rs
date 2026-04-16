@@ -253,44 +253,32 @@ mod tests {
         assert!(!r.has_uninstall_fn);
     }
 
-    // ── scanner: file!/dir! macro detection ──────────────────────────────────
+    // ── scanner: source! macro detection ─────────────────────────────────────
 
     #[test]
-    fn scanner_detects_file_macro() {
+    fn scanner_detects_source_macro() {
         let r = scan_str(
-            r#"fn install(i: &mut T) { installrs::file!(i, "cfg.toml", "dst").unwrap(); }"#,
+            r#"fn install(i: &mut T) { i.file(installrs::source!("cfg.toml"), "dst").install().unwrap(); }"#,
         );
-        assert!(r.install_files.contains(&"cfg.toml".to_string()));
-        assert!(r.install_dirs.is_empty());
+        assert!(r.install_sources.contains(&"cfg.toml".to_string()));
     }
 
     #[test]
-    fn scanner_detects_dir_macro() {
-        let r =
-            scan_str(r#"fn install(i: &mut T) { installrs::dir!(i, "assets", "out").unwrap(); }"#);
-        assert!(r.install_dirs.contains(&"assets".to_string()));
-        assert!(r.install_files.is_empty());
+    fn scanner_detects_unqualified_source_macro() {
+        let r = scan_str(r#"fn install(i: &mut T) { i.file(source!("data.txt"), "dst"); }"#);
+        assert!(r.install_sources.contains(&"data.txt".to_string()));
     }
 
     #[test]
-    fn scanner_detects_unqualified_file_macro() {
-        let r = scan_str(r#"fn install(i: &mut T) { file!(i, "data.txt", "dst")?; }"#);
-        assert!(r.install_files.contains(&"data.txt".to_string()));
-    }
-
-    #[test]
-    fn scanner_detects_unqualified_dir_macro() {
-        let r = scan_str(r#"fn install(i: &mut T) { dir!(i, "res", "dst")?; }"#);
-        assert!(r.install_dirs.contains(&"res".to_string()));
-    }
-
-    #[test]
-    fn scanner_no_duplicate_files() {
+    fn scanner_no_duplicate_sources() {
         let r = scan_str(
-            r#"fn install(i: &mut T) { file!(i, "x.txt", "a")?; file!(i, "x.txt", "b")?; }"#,
+            r#"fn install(i: &mut T) {
+                i.file(source!("x.txt"), "a");
+                i.file(source!("x.txt"), "b");
+            }"#,
         );
         assert_eq!(
-            r.install_files
+            r.install_sources
                 .iter()
                 .filter(|p| p.as_str() == "x.txt")
                 .count(),
@@ -299,61 +287,52 @@ mod tests {
     }
 
     #[test]
-    fn scanner_no_duplicate_dirs() {
-        let r = scan_str(r#"fn install(i: &mut T) { dir!(i, "d", "a")?; dir!(i, "d", "b")?; }"#);
-        assert_eq!(
-            r.install_dirs.iter().filter(|p| p.as_str() == "d").count(),
-            1
+    fn scanner_source_nested_path() {
+        let r =
+            scan_str(r#"fn install(i: &mut T) { i.file(source!("vendor/lib.so"), "lib.so"); }"#);
+        assert!(
+            r.install_sources.contains(&"vendor/lib.so".to_string()),
+            "got: {:?}",
+            r.install_sources
         );
     }
 
     #[test]
-    fn scanner_file_macro_nested_path() {
-        let r = scan_str(r#"fn install(i: &mut T) { file!(i, "vendor/lib.so", "lib.so")?; }"#);
+    fn scanner_source_in_dir_call() {
+        // Builder determines file-vs-dir from filesystem; scanner just collects paths.
+        let r = scan_str(r#"fn install(i: &mut T) { i.dir(source!("assets/icons"), "icons"); }"#);
         assert!(
-            r.install_files.contains(&"vendor/lib.so".to_string()),
+            r.install_sources.contains(&"assets/icons".to_string()),
             "got: {:?}",
-            r.install_files
-        );
-    }
-
-    #[test]
-    fn scanner_dir_macro_nested_path() {
-        let r = scan_str(r#"fn install(i: &mut T) { dir!(i, "assets/icons", "icons")?; }"#);
-        assert!(
-            r.install_dirs.contains(&"assets/icons".to_string()),
-            "got: {:?}",
-            r.install_dirs
+            r.install_sources
         );
     }
 
     // ── scanner: function-scoped macro detection ─────────────────────────────
 
     #[test]
-    fn scanner_file_in_uninstall_goes_to_uninstall() {
-        let r = scan_str(r#"fn uninstall(i: &mut T) { file!(i, "cleanup.sh", "dst")?; }"#);
-        assert!(r.uninstall_files.contains(&"cleanup.sh".to_string()));
-        assert!(r.install_files.is_empty());
+    fn scanner_source_in_uninstall_goes_to_uninstall() {
+        let r = scan_str(r#"fn uninstall(i: &mut T) { i.file(source!("cleanup.sh"), "dst"); }"#);
+        assert!(r.uninstall_sources.contains(&"cleanup.sh".to_string()));
+        assert!(r.install_sources.is_empty());
     }
 
     #[test]
-    fn scanner_dir_in_uninstall_goes_to_uninstall() {
-        let r = scan_str(r#"fn uninstall(i: &mut T) { dir!(i, "backups", "dst")?; }"#);
-        assert!(r.uninstall_dirs.contains(&"backups".to_string()));
-        assert!(r.install_dirs.is_empty());
+    fn scanner_source_outside_install_uninstall_goes_to_both() {
+        let r = scan_str(r#"fn helper(i: &mut T) { i.file(source!("shared.dat"), "dst"); }"#);
+        assert!(r.install_sources.contains(&"shared.dat".to_string()));
+        assert!(r.uninstall_sources.contains(&"shared.dat".to_string()));
     }
 
     #[test]
-    fn scanner_file_outside_install_uninstall_goes_to_both() {
-        let r = scan_str(r#"fn helper(i: &mut T) { file!(i, "shared.dat", "dst")?; }"#);
-        assert!(r.install_files.contains(&"shared.dat".to_string()));
-        assert!(r.uninstall_files.contains(&"shared.dat".to_string()));
-    }
-
-    #[test]
-    fn scanner_dir_outside_install_uninstall_goes_to_both() {
-        let r = scan_str(r#"fn helper(i: &mut T) { dir!(i, "common", "dst")?; }"#);
-        assert!(r.install_dirs.contains(&"common".to_string()));
-        assert!(r.uninstall_dirs.contains(&"common".to_string()));
+    fn scanner_ignores_non_source_macros() {
+        let r = scan_str(
+            r#"fn install(i: &mut T) {
+                println!("{}", "nope.txt");
+                format!("also-ignored.txt");
+                i.file(source!("real.txt"), "dst");
+            }"#,
+        );
+        assert_eq!(r.install_sources, vec!["real.txt".to_string()]);
     }
 }

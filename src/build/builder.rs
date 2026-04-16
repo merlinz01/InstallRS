@@ -152,44 +152,23 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         return Err(anyhow!("source must define a public `uninstall` function"));
     }
 
-    log::info!("Install files ({}):", scan.install_files.len());
-    for f in &scan.install_files {
-        log::info!("  {f}");
+    log::info!("Install sources ({}):", scan.install_sources.len());
+    for s in &scan.install_sources {
+        log::info!("  {s}");
     }
-    log::info!("Install directories ({}):", scan.install_dirs.len());
-    for d in &scan.install_dirs {
-        log::info!("  {d}");
-    }
-    log::info!("Uninstall files ({}):", scan.uninstall_files.len());
-    for f in &scan.uninstall_files {
-        log::info!("  {f}");
-    }
-    log::info!("Uninstall directories ({}):", scan.uninstall_dirs.len());
-    for d in &scan.uninstall_dirs {
-        log::info!("  {d}");
+    log::info!("Uninstall sources ({}):", scan.uninstall_sources.len());
+    for s in &scan.uninstall_sources {
+        log::info!("  {s}");
     }
 
     // ── Gather and compress files for installer ──────────────────────────────
     let mut install_gathered: Vec<GatheredFile> = Vec::new();
     let mut hash_cache: HashMap<String, String> = HashMap::new();
 
-    for file_path in &scan.install_files {
-        let abs = params.target_dir.join(file_path);
-        gather_file(
-            file_path,
-            &abs,
-            &install_files_dir,
-            &params.compression,
-            &params.ignore_patterns,
-            &mut install_gathered,
-            &mut hash_cache,
-        )?;
-    }
-    for dir_path in &scan.install_dirs {
-        let abs = params.target_dir.join(dir_path);
-        gather_dir(
-            dir_path,
-            &abs,
+    for source_path in &scan.install_sources {
+        gather_source(
+            source_path,
+            &params.target_dir,
             &install_files_dir,
             &params.compression,
             &params.ignore_patterns,
@@ -202,23 +181,10 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     // ── Gather and compress files for uninstaller ────────────────────────────
     let mut uninstall_gathered: Vec<GatheredFile> = Vec::new();
 
-    for file_path in &scan.uninstall_files {
-        let abs = params.target_dir.join(file_path);
-        gather_file(
-            file_path,
-            &abs,
-            &uninstall_files_dir,
-            &params.compression,
-            &params.ignore_patterns,
-            &mut uninstall_gathered,
-            &mut hash_cache,
-        )?;
-    }
-    for dir_path in &scan.uninstall_dirs {
-        let abs = params.target_dir.join(dir_path);
-        gather_dir(
-            dir_path,
-            &abs,
+    for source_path in &scan.uninstall_sources {
+        gather_source(
+            source_path,
+            &params.target_dir,
             &uninstall_files_dir,
             &params.compression,
             &params.ignore_patterns,
@@ -660,6 +626,43 @@ fn merge_win_resource_config(
             }
             merged
         },
+    }
+}
+
+/// Gather a single `source!()` path — dispatches to `gather_file` or
+/// `gather_dir` based on filesystem metadata.
+fn gather_source(
+    source_path: &str,
+    target_dir: &Path,
+    files_dir: &Path,
+    compression: &str,
+    ignore: &[String],
+    gathered: &mut Vec<GatheredFile>,
+    hash_cache: &mut HashMap<String, String>,
+) -> Result<()> {
+    let abs = target_dir.join(source_path);
+    let stat =
+        std::fs::metadata(&abs).with_context(|| format!("failed to stat: {}", abs.display()))?;
+    if stat.is_dir() {
+        gather_dir(
+            source_path,
+            &abs,
+            files_dir,
+            compression,
+            ignore,
+            gathered,
+            hash_cache,
+        )
+    } else {
+        gather_file(
+            source_path,
+            &abs,
+            files_dir,
+            compression,
+            ignore,
+            gathered,
+            hash_cache,
+        )
     }
 }
 

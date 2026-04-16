@@ -266,7 +266,17 @@ pub fn run(
                             install_dir_bg,
                             cancelled_bg,
                         );
+                        // Auto-attach a progress sink so Installer ops emit
+                        // status/progress/log events to the GUI.
+                        {
+                            let mut inst = ctx.installer();
+                            inst.set_progress_sink(ctx.progress_sink());
+                            inst.reset_progress();
+                        }
                         let result = callback(&mut ctx);
+                        // Detach the sink: once the install is done, further
+                        // ops (if any) shouldn't push to a dead GUI channel.
+                        ctx.installer().clear_progress_sink();
                         let _ = tx_bg.send(GuiMessage::Finished(result));
                     });
 
@@ -520,9 +530,9 @@ pub fn run(
                             install_running_timer
                                 .store(false, std::sync::atomic::Ordering::Relaxed);
                             let is_ok = result.is_ok();
-                            *install_result_timer.lock().unwrap() = Some(result);
 
                             if is_ok {
+                                *install_result_timer.lock().unwrap() = Some(result);
                                 // Advance to the next page (finish page).
                                 let pages_guard = pages_timer.lock().unwrap();
                                 let idx = *current_timer.lock().unwrap();

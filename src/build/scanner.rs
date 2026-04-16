@@ -4,20 +4,20 @@ use anyhow::{Context, Result};
 use syn::visit::Visit;
 
 pub struct ScanResult {
-    pub install_files: Vec<String>,
-    pub install_dirs: Vec<String>,
-    pub uninstall_files: Vec<String>,
-    pub uninstall_dirs: Vec<String>,
+    /// Source paths referenced via `source!(...)` inside `fn install`, or at
+    /// top-level (which counts for both scopes).
+    pub install_sources: Vec<String>,
+    /// Source paths referenced via `source!(...)` inside `fn uninstall`, or at
+    /// top-level.
+    pub uninstall_sources: Vec<String>,
     pub has_install_fn: bool,
     pub has_uninstall_fn: bool,
 }
 
 pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
     let mut result = ScanResult {
-        install_files: Vec::new(),
-        install_dirs: Vec::new(),
-        uninstall_files: Vec::new(),
-        uninstall_dirs: Vec::new(),
+        install_sources: Vec::new(),
+        uninstall_sources: Vec::new(),
         has_install_fn: false,
         has_uninstall_fn: false,
     };
@@ -41,10 +41,8 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
         };
 
         let mut visitor = SourceVisitor {
-            install_files: &mut result.install_files,
-            install_dirs: &mut result.install_dirs,
-            uninstall_files: &mut result.uninstall_files,
-            uninstall_dirs: &mut result.uninstall_dirs,
+            install_sources: &mut result.install_sources,
+            uninstall_sources: &mut result.uninstall_sources,
             has_install_fn: &mut result.has_install_fn,
             has_uninstall_fn: &mut result.has_uninstall_fn,
             current_fn: None,
@@ -56,58 +54,33 @@ pub fn scan_source_dir(src_dir: &Path) -> Result<ScanResult> {
 }
 
 struct SourceVisitor<'a> {
-    install_files: &'a mut Vec<String>,
-    install_dirs: &'a mut Vec<String>,
-    uninstall_files: &'a mut Vec<String>,
-    uninstall_dirs: &'a mut Vec<String>,
+    install_sources: &'a mut Vec<String>,
+    uninstall_sources: &'a mut Vec<String>,
     has_install_fn: &'a mut bool,
     has_uninstall_fn: &'a mut bool,
     current_fn: Option<String>,
 }
 
 impl SourceVisitor<'_> {
-    fn push_file(&mut self, path: String) {
+    fn push(&mut self, path: String) {
         match self.current_fn.as_deref() {
             Some("install") => {
-                if !self.install_files.contains(&path) {
-                    self.install_files.push(path);
+                if !self.install_sources.contains(&path) {
+                    self.install_sources.push(path);
                 }
             }
             Some("uninstall") => {
-                if !self.uninstall_files.contains(&path) {
-                    self.uninstall_files.push(path);
+                if !self.uninstall_sources.contains(&path) {
+                    self.uninstall_sources.push(path);
                 }
             }
             _ => {
-                // Outside install/uninstall — add to both
-                if !self.install_files.contains(&path) {
-                    self.install_files.push(path.clone());
+                // Outside install/uninstall — add to both scopes
+                if !self.install_sources.contains(&path) {
+                    self.install_sources.push(path.clone());
                 }
-                if !self.uninstall_files.contains(&path) {
-                    self.uninstall_files.push(path);
-                }
-            }
-        }
-    }
-
-    fn push_dir(&mut self, path: String) {
-        match self.current_fn.as_deref() {
-            Some("install") => {
-                if !self.install_dirs.contains(&path) {
-                    self.install_dirs.push(path);
-                }
-            }
-            Some("uninstall") => {
-                if !self.uninstall_dirs.contains(&path) {
-                    self.uninstall_dirs.push(path);
-                }
-            }
-            _ => {
-                if !self.install_dirs.contains(&path) {
-                    self.install_dirs.push(path.clone());
-                }
-                if !self.uninstall_dirs.contains(&path) {
-                    self.uninstall_dirs.push(path);
+                if !self.uninstall_sources.contains(&path) {
+                    self.uninstall_sources.push(path);
                 }
             }
         }
@@ -128,38 +101,27 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
         self.current_fn = prev;
     }
 
-    fn visit_expr_macro(&mut self, node: &'ast syn::ExprMacro) {
+    fn visit_macro(&mut self, node: &'ast syn::Macro) {
         let name = node
-            .mac
             .path
             .segments
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
 
-        match name.as_str() {
-            "file" => {
-                if let Some(s) = macro_second_str_arg(&node.mac) {
-                    self.push_file(s);
-                }
+        if name == "source" {
+            if let Some(s) = macro_single_str_arg(node) {
+                self.push(s);
             }
-            "dir" => {
-                if let Some(s) = macro_second_str_arg(&node.mac) {
-                    self.push_dir(s);
-                }
-            }
-            _ => {}
         }
 
-        syn::visit::visit_expr_macro(self, node);
+        syn::visit::visit_macro(self, node);
     }
 }
 
-/// Extract the second string literal from a comma-separated macro argument list.
-/// Used to pull the source path from `file!(installer, "path", dest)`.
-/// Extract the second string literal from a `file!(expr, "path", expr)` or
-/// `dir!(expr, "path", expr)` macro invocation.
-fn macro_second_str_arg(mac: &syn::Macro) -> Option<String> {
+/// Extract the single string literal argument from a `source!("path")`
+/// macro invocation.
+fn macro_single_str_arg(mac: &syn::Macro) -> Option<String> {
     let args = mac
         .parse_body_with(syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated)
         .ok()?;
@@ -167,7 +129,7 @@ fn macro_second_str_arg(mac: &syn::Macro) -> Option<String> {
     if let Some(syn::Expr::Lit(syn::ExprLit {
         lit: syn::Lit::Str(s),
         ..
-    })) = args.iter().nth(1)
+    })) = args.first()
     {
         Some(s.value())
     } else {

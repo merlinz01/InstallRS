@@ -6,11 +6,35 @@ use crate::Installer;
 /// Callback type for the install page closure.
 pub type InstallCallback = Box<dyn FnOnce(&mut GuiContext) -> Result<()> + Send + 'static>;
 
+/// Callback that runs after a page becomes visible.
+pub type OnEnterCallback = Box<dyn Fn(&mut PageContext) -> Result<()> + 'static>;
+
+/// Callback that runs before navigating away from a page. Returning `Ok(false)`
+/// cancels the navigation.
+pub type OnBeforeLeaveCallback = Box<dyn Fn(&mut PageContext) -> Result<bool> + 'static>;
+
 /// Configuration for the wizard-style installer GUI.
 pub struct WizardConfig {
     pub title: String,
-    pub pages: Vec<WizardPage>,
+    pub pages: Vec<ConfiguredPage>,
     pub buttons: ButtonLabels,
+}
+
+/// A wizard page with optional navigation callbacks.
+pub struct ConfiguredPage {
+    pub page: WizardPage,
+    pub on_enter: Option<OnEnterCallback>,
+    pub on_before_leave: Option<OnBeforeLeaveCallback>,
+}
+
+impl ConfiguredPage {
+    pub fn new(page: WizardPage) -> Self {
+        Self {
+            page,
+            on_enter: None,
+            on_before_leave: None,
+        }
+    }
 }
 
 /// Labels for the wizard navigation buttons. Customize via
@@ -38,7 +62,10 @@ impl Default for ButtonLabels {
 
 /// A single page in the wizard flow.
 pub enum WizardPage {
-    Welcome { title: String, message: String },
+    Welcome {
+        title: String,
+        message: String,
+    },
     License {
         heading: String,
         text: String,
@@ -49,8 +76,13 @@ pub enum WizardPage {
         label: String,
         default: String,
     },
-    Install { callback: InstallCallback },
-    Finish { title: String, message: String },
+    Install {
+        callback: InstallCallback,
+    },
+    Finish {
+        title: String,
+        message: String,
+    },
 }
 
 /// Messages sent from the background install thread to the GUI thread.
@@ -110,6 +142,48 @@ impl GuiContext {
     /// The returned guard holds a mutex lock — avoid holding it across GUI calls.
     pub fn installer(&self) -> std::sync::MutexGuard<'_, Installer> {
         self.installer.lock().unwrap()
+    }
+
+    /// Check if the user has requested cancellation.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+/// Context passed to page `on_enter` / `on_before_leave` callbacks. Unlike
+/// [`GuiContext`], these callbacks run synchronously on the GUI thread.
+pub struct PageContext {
+    installer: Arc<Mutex<Installer>>,
+    install_dir: Arc<Mutex<String>>,
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl PageContext {
+    pub fn new(
+        installer: Arc<Mutex<Installer>>,
+        install_dir: Arc<Mutex<String>>,
+        cancelled: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        Self {
+            installer,
+            install_dir,
+            cancelled,
+        }
+    }
+
+    /// Get a mutable reference to the `Installer`.
+    pub fn installer(&self) -> std::sync::MutexGuard<'_, Installer> {
+        self.installer.lock().unwrap()
+    }
+
+    /// Get the currently selected install directory.
+    pub fn install_dir(&self) -> String {
+        self.install_dir.lock().unwrap().clone()
+    }
+
+    /// Override the install directory.
+    pub fn set_install_dir(&self, dir: &str) {
+        *self.install_dir.lock().unwrap() = dir.to_string();
     }
 
     /// Check if the user has requested cancellation.

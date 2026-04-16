@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc, Mutex};
 
-use super::types::{GuiMessage, WizardConfig, WizardPage};
+use super::types::{ConfiguredPage, GuiMessage, WizardConfig, WizardPage};
 use crate::Installer;
 
 /// Run the wizard GUI on the main thread, spawning the install callback on a
@@ -28,19 +28,29 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     let (tx, rx) = mpsc::channel::<GuiMessage>();
 
     // Extract the install callback from the config pages.
-    let mut pages_without_callback: Vec<WizardPage> = Vec::new();
+    let mut pages_without_callback: Vec<ConfiguredPage> = Vec::new();
     let mut install_callback = None;
-    for page in config.pages {
-        match page {
+    for configured in config.pages {
+        let ConfiguredPage {
+            page,
+            on_enter,
+            on_before_leave,
+        } = configured;
+        let page = match page {
             WizardPage::Install { callback } => {
                 install_callback = Some(callback);
-                pages_without_callback.push(WizardPage::Install {
+                WizardPage::Install {
                     // Placeholder — the real callback is moved out.
                     callback: Box::new(|_| Ok(())),
-                });
+                }
             }
-            other => pages_without_callback.push(other),
-        }
+            other => other,
+        };
+        pages_without_callback.push(ConfiguredPage {
+            page,
+            on_enter,
+            on_before_leave,
+        });
     }
 
     let wizard_config = WizardConfig {
@@ -70,9 +80,9 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     result
 }
 
-fn find_default_dir(pages: &[WizardPage]) -> String {
-    for page in pages {
-        if let WizardPage::DirectoryPicker { default, .. } = page {
+fn find_default_dir(pages: &[ConfiguredPage]) -> String {
+    for configured in pages {
+        if let WizardPage::DirectoryPicker { default, .. } = &configured.page {
             return default.clone();
         }
     }

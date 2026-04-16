@@ -9,7 +9,10 @@ use winsafe::prelude::*;
 use super::pages::{
     DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind, WelcomePage,
 };
-use crate::gui::types::{GuiContext, GuiMessage, InstallCallback, WizardConfig, WizardPage};
+use crate::gui::types::{
+    ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
+    OnEnterCallback, PageContext, WizardConfig, WizardPage,
+};
 use crate::Installer;
 
 const WINDOW_WIDTH: i32 = 500;
@@ -18,10 +21,12 @@ const BUTTON_WIDTH: i32 = 80;
 const BUTTON_HEIGHT: i32 = 26;
 const MARGIN: i32 = 10;
 
-/// Page wrapper that holds the panel and its kind.
+/// Page wrapper that holds the panel, its kind, and navigation callbacks.
 struct Page {
     panel: gui::WindowControl,
     kind: PageKind,
+    on_enter: Option<OnEnterCallback>,
+    on_before_leave: Option<OnBeforeLeaveCallback>,
 }
 
 pub fn run(
@@ -66,7 +71,12 @@ pub fn run(
 
     // Create page panels.
     let mut pages: Vec<Page> = Vec::new();
-    for (idx, page_cfg) in config.pages.iter().enumerate() {
+    for (idx, configured) in config.pages.into_iter().enumerate() {
+        let ConfiguredPage {
+            page: page_cfg,
+            on_enter,
+            on_before_leave,
+        } = configured;
         let visible = idx == 0;
         let panel = gui::WindowControl::new(
             &wnd,
@@ -90,8 +100,8 @@ pub fn run(
         let kind = match page_cfg {
             WizardPage::Welcome { title, message } => PageKind::Welcome(WelcomePage::new(
                 &panel,
-                title,
-                message,
+                &title,
+                &message,
                 content_width,
                 content_height,
             )),
@@ -101,9 +111,9 @@ pub fn run(
                 accept_label,
             } => PageKind::License(LicensePage::new(
                 &panel,
-                heading,
-                text,
-                accept_label,
+                &heading,
+                &text,
+                &accept_label,
                 content_width,
                 content_height,
             )),
@@ -113,9 +123,9 @@ pub fn run(
                 default,
             } => PageKind::DirectoryPicker(DirectoryPickerPage::new(
                 &panel,
-                heading,
-                label,
-                default,
+                &heading,
+                &label,
+                &default,
                 content_width,
                 content_height,
             )),
@@ -124,14 +134,19 @@ pub fn run(
             }
             WizardPage::Finish { title, message } => PageKind::Finish(FinishPage::new(
                 &panel,
-                title,
-                message,
+                &title,
+                &message,
                 content_width,
                 content_height,
             )),
         };
 
-        pages.push(Page { panel, kind });
+        pages.push(Page {
+            panel,
+            kind,
+            on_enter,
+            on_before_leave,
+        });
     }
 
     // Navigation buttons.
@@ -271,21 +286,63 @@ pub fn run(
             }
         }
 
+        // Helper to build a fresh PageContext for callbacks.
+        let make_page_ctx = {
+            let installer_c = installer.clone();
+            let install_dir_c = install_dir.clone();
+            let cancelled_c = cancelled.clone();
+            Arc::new(move || {
+                PageContext::new(
+                    installer_c.clone(),
+                    install_dir_c.clone(),
+                    cancelled_c.clone(),
+                )
+            })
+        };
+
         // Wire up button clicks.
         {
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let update = update_buttons.clone();
+            let make_ctx = make_page_ctx.clone();
             btn_back.on().bn_clicked(move || {
-                let mut idx = current_c.lock().unwrap();
-                if *idx > 0 {
+                let idx = *current_c.lock().unwrap();
+                if idx == 0 {
+                    return Ok(());
+                }
+
+                // on_before_leave — cancel navigation on Ok(false) or Err.
+                {
                     let pages_guard = pages_c.lock().unwrap();
-                    pages_guard[*idx].panel.hwnd().ShowWindow(co::SW::HIDE);
-                    *idx -= 1;
-                    pages_guard[*idx].panel.hwnd().ShowWindow(co::SW::SHOW);
-                    drop(pages_guard);
-                    drop(idx);
-                    update();
+                    if let Some(ref cb) = pages_guard[idx].on_before_leave {
+                        let mut ctx = make_ctx();
+                        match cb(&mut ctx) {
+                            Ok(true) => {}
+                            Ok(false) => return Ok(()),
+                            Err(e) => {
+                                eprintln!("on_before_leave error: {e}");
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+
+                let pages_guard = pages_c.lock().unwrap();
+                pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
+                let new_idx = idx - 1;
+                pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
+                drop(pages_guard);
+                *current_c.lock().unwrap() = new_idx;
+                update();
+
+                // on_enter of the new page.
+                let pages_guard = pages_c.lock().unwrap();
+                if let Some(ref cb) = pages_guard[new_idx].on_enter {
+                    let mut ctx = make_ctx();
+                    if let Err(e) = cb(&mut ctx) {
+                        eprintln!("on_enter error: {e}");
+                    }
                 }
                 Ok(())
             });
@@ -298,16 +355,38 @@ pub fn run(
             let install_dir_c = install_dir.clone();
             let start_install_c = start_install.clone();
             let wnd_c = wnd.clone();
+            let make_ctx = make_page_ctx.clone();
 
             btn_next.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
-                let pages_guard = pages_c.lock().unwrap();
 
-                // Sync directory picker value before advancing.
-                if let PageKind::DirectoryPicker(ref dp) = pages_guard[idx].kind {
-                    let dir = dp.get_directory();
-                    *install_dir_c.lock().unwrap() = dir;
+                // Sync directory picker value before on_before_leave so the
+                // callback sees the updated install_dir.
+                {
+                    let pages_guard = pages_c.lock().unwrap();
+                    if let PageKind::DirectoryPicker(ref dp) = pages_guard[idx].kind {
+                        let dir = dp.get_directory();
+                        *install_dir_c.lock().unwrap() = dir;
+                    }
                 }
+
+                // on_before_leave — cancel navigation on Ok(false) or Err.
+                {
+                    let pages_guard = pages_c.lock().unwrap();
+                    if let Some(ref cb) = pages_guard[idx].on_before_leave {
+                        let mut ctx = make_ctx();
+                        match cb(&mut ctx) {
+                            Ok(true) => {}
+                            Ok(false) => return Ok(()),
+                            Err(e) => {
+                                eprintln!("on_before_leave error: {e}");
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+
+                let pages_guard = pages_c.lock().unwrap();
 
                 // On finish page, close the window.
                 if matches!(&pages_guard[idx].kind, PageKind::Finish(_)) {
@@ -321,16 +400,22 @@ pub fn run(
                     let next_is_install =
                         matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
-                    drop(pages_guard);
-                    {
-                        let mut idx_guard = current_c.lock().unwrap();
-                        *idx_guard += 1;
-                    }
-                    let pages_guard = pages_c.lock().unwrap();
-                    let new_idx = *current_c.lock().unwrap();
+                    let new_idx = idx + 1;
                     pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                     drop(pages_guard);
+                    *current_c.lock().unwrap() = new_idx;
                     update();
+
+                    // on_enter of the new page.
+                    {
+                        let pages_guard = pages_c.lock().unwrap();
+                        if let Some(ref cb) = pages_guard[new_idx].on_enter {
+                            let mut ctx = make_ctx();
+                            if let Err(e) = cb(&mut ctx) {
+                                eprintln!("on_enter error: {e}");
+                            }
+                        }
+                    }
 
                     if next_is_install {
                         start_install_c();
@@ -404,6 +489,7 @@ pub fn run(
             let install_running_timer = install_running.clone();
             let install_result_timer = install_result.clone();
             let update_timer = update_buttons.clone();
+            let make_ctx = make_page_ctx.clone();
 
             wnd.on().wm_timer(TIMER_ID, move || {
                 // Drain all pending messages.
@@ -442,10 +528,19 @@ pub fn run(
                                 let idx = *current_timer.lock().unwrap();
                                 if idx + 1 < page_count {
                                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
+                                    let new_idx = idx + 1;
+                                    pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                                     drop(pages_guard);
-                                    *current_timer.lock().unwrap() = idx + 1;
+                                    *current_timer.lock().unwrap() = new_idx;
+
+                                    // on_enter of the new page.
                                     let pages_guard = pages_timer.lock().unwrap();
-                                    pages_guard[idx + 1].panel.hwnd().ShowWindow(co::SW::SHOW);
+                                    if let Some(ref cb) = pages_guard[new_idx].on_enter {
+                                        let mut ctx = make_ctx();
+                                        if let Err(e) = cb(&mut ctx) {
+                                            eprintln!("on_enter error: {e}");
+                                        }
+                                    }
                                 }
                             }
 
@@ -466,17 +561,27 @@ pub fn run(
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let start_install_c = start_install.clone();
+            let make_ctx = make_page_ctx.clone();
             let focus_set = Arc::new(AtomicBool::new(false));
             wnd.on().wm_show_window(move |_| {
                 update();
                 if !focus_set.swap(true, std::sync::atomic::Ordering::Relaxed) {
                     let _ = btn_next_c.hwnd().SetFocus();
 
-                    // If the first page is the install page, auto-start.
                     let pages_guard = pages_c.lock().unwrap();
                     let idx = *current_c.lock().unwrap();
                     let is_install = matches!(&pages_guard[idx].kind, PageKind::Install(_));
+
+                    // on_enter of the initial page.
+                    if let Some(ref cb) = pages_guard[idx].on_enter {
+                        let mut ctx = make_ctx();
+                        if let Err(e) = cb(&mut ctx) {
+                            eprintln!("on_enter error: {e}");
+                        }
+                    }
                     drop(pages_guard);
+
+                    // If the first page is the install page, auto-start.
                     if is_install {
                         start_install_c();
                     }

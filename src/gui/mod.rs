@@ -4,7 +4,8 @@ mod types;
 mod win32;
 
 pub use types::{
-    ButtonLabels, GuiContext, GuiMessage, InstallCallback, WizardConfig, WizardPage,
+    ButtonLabels, ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
+    OnEnterCallback, PageContext, WizardConfig, WizardPage,
 };
 
 use anyhow::Result;
@@ -74,10 +75,12 @@ impl InstallerGui {
 
     /// Add a welcome page with a title and description message.
     pub fn welcome(mut self, title: &str, message: &str) -> Self {
-        self.config.pages.push(WizardPage::Welcome {
-            title: title.to_string(),
-            message: message.to_string(),
-        });
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Welcome {
+                title: title.to_string(),
+                message: message.to_string(),
+            }));
         self
     }
 
@@ -86,11 +89,13 @@ impl InstallerGui {
     /// `heading` is the title displayed above the license text, and `accept_label`
     /// is the label on the acceptance checkbox (both translatable by the caller).
     pub fn license(mut self, heading: &str, text: &str, accept_label: &str) -> Self {
-        self.config.pages.push(WizardPage::License {
-            heading: heading.to_string(),
-            text: text.to_string(),
-            accept_label: accept_label.to_string(),
-        });
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::License {
+                heading: heading.to_string(),
+                text: text.to_string(),
+                accept_label: accept_label.to_string(),
+            }));
         self
     }
 
@@ -100,11 +105,13 @@ impl InstallerGui {
     /// prompt next to the path input (e.g. "Install to:"), and `default` is
     /// the initial path.
     pub fn directory_picker(mut self, heading: &str, label: &str, default: &str) -> Self {
-        self.config.pages.push(WizardPage::DirectoryPicker {
-            heading: heading.to_string(),
-            label: label.to_string(),
-            default: default.to_string(),
-        });
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::DirectoryPicker {
+                heading: heading.to_string(),
+                label: label.to_string(),
+                default: default.to_string(),
+            }));
         self
     }
 
@@ -116,18 +123,49 @@ impl InstallerGui {
         mut self,
         callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
     ) -> Self {
-        self.config.pages.push(WizardPage::Install {
-            callback: Box::new(callback),
-        });
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Install {
+                callback: Box::new(callback),
+            }));
         self
     }
 
     /// Add a finish page shown after installation completes.
     pub fn finish_page(mut self, title: &str, message: &str) -> Self {
-        self.config.pages.push(WizardPage::Finish {
-            title: title.to_string(),
-            message: message.to_string(),
-        });
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Finish {
+                title: title.to_string(),
+                message: message.to_string(),
+            }));
+        self
+    }
+
+    /// Attach an `on_enter` callback to the most recently added page.
+    ///
+    /// The callback runs on the GUI thread after the page becomes visible.
+    pub fn on_enter<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&mut PageContext) -> Result<()> + 'static,
+    {
+        if let Some(last) = self.config.pages.last_mut() {
+            last.on_enter = Some(Box::new(f));
+        }
+        self
+    }
+
+    /// Attach an `on_before_leave` callback to the most recently added page.
+    ///
+    /// Returning `Ok(false)` cancels the navigation and keeps the page visible.
+    /// Returning `Err(_)` also cancels navigation.
+    pub fn on_before_leave<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&mut PageContext) -> Result<bool> + 'static,
+    {
+        if let Some(last) = self.config.pages.last_mut() {
+            last.on_before_leave = Some(Box::new(f));
+        }
         self
     }
 

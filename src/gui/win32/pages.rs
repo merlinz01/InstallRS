@@ -4,6 +4,9 @@ use winsafe::msg::wm;
 use winsafe::prelude::*;
 use winsafe::{HBRUSH, HFONT, SIZE};
 
+/// Internal padding between the panel edge and its controls.
+const PAD: i32 = 20;
+
 /// Handle WM_CTLCOLORSTATIC on a parent panel to make all static (label)
 /// controls draw with a transparent background.
 fn setup_transparent_labels(parent: &gui::WindowControl) {
@@ -44,8 +47,8 @@ impl WelcomePage {
             parent,
             gui::LabelOpts {
                 text: title,
-                position: gui::dpi(10, 20),
-                size: gui::dpi(width - 20, 30),
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -55,8 +58,8 @@ impl WelcomePage {
             parent,
             gui::LabelOpts {
                 text: message,
-                position: gui::dpi(10, 60),
-                size: gui::dpi(width - 20, 200),
+                position: gui::dpi(PAD, PAD + 40),
+                size: gui::dpi(width - 2 * PAD, 200),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
                 ..Default::default()
             },
@@ -113,13 +116,13 @@ impl LicensePage {
         // Win32 Edit controls require \r\n line endings.
         let text = &text.replace("\r\n", "\n").replace('\n', "\r\n");
 
-        let edit_height = height - 60;
-        let (ew, eh) = gui::dpi(width - 20, edit_height);
+        let edit_height = height - 2 * PAD - 30;
+        let (ew, eh) = gui::dpi(width - 2 * PAD, edit_height);
         let text_edit = gui::Edit::new(
             parent,
             gui::EditOpts {
                 text,
-                position: gui::dpi(10, 10),
+                position: gui::dpi(PAD, PAD),
                 width: ew,
                 height: eh,
                 control_style: co::ES::MULTILINE
@@ -140,8 +143,8 @@ impl LicensePage {
             parent,
             gui::CheckBoxOpts {
                 text: "I accept the license agreement",
-                position: gui::dpi(10, edit_height + 20),
-                size: gui::dpi(width - 20, 20),
+                position: gui::dpi(PAD, PAD + edit_height + 10),
+                size: gui::dpi(width - 2 * PAD, 20),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::Repos),
                 ..Default::default()
             },
@@ -185,21 +188,21 @@ impl DirectoryPickerPage {
             parent,
             gui::LabelOpts {
                 text: "Install to:",
-                position: gui::dpi(10, 20),
-                size: gui::dpi(width - 20, 20),
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 20),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
 
         let browse_width = 80;
-        let edit_width = width - 20 - browse_width - 10;
+        let edit_width = width - 2 * PAD - browse_width - 10;
         let (ew, eh) = gui::dpi(edit_width, 24);
         let dir_edit = gui::Edit::new(
             parent,
             gui::EditOpts {
                 text: default,
-                position: gui::dpi(10, 50),
+                position: gui::dpi(PAD, PAD + 30),
                 width: ew,
                 height: eh,
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
@@ -212,7 +215,7 @@ impl DirectoryPickerPage {
             parent,
             gui::ButtonOpts {
                 text: "Browse...",
-                position: gui::dpi(10 + edit_width + 10, 49),
+                position: gui::dpi(PAD + edit_width + 10, PAD + 29),
                 width: bw,
                 height: bh,
                 resize_behavior: (gui::Horz::Repos, gui::Vert::None),
@@ -275,8 +278,8 @@ impl InstallPage {
             parent,
             gui::LabelOpts {
                 text: "Waiting to start...",
-                position: gui::dpi(10, 20),
-                size: gui::dpi(width - 20, 20),
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 20),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -285,18 +288,18 @@ impl InstallPage {
         let progress_bar = gui::ProgressBar::new(
             parent,
             gui::ProgressBarOpts {
-                position: gui::dpi(10, 50),
-                size: gui::dpi(width - 20, 22),
+                position: gui::dpi(PAD, PAD + 30),
+                size: gui::dpi(width - 2 * PAD, 22),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
 
-        let (lw, lh) = gui::dpi(width - 20, height - 100);
+        let (lw, lh) = gui::dpi(width - 2 * PAD, height - 100 - PAD);
         let log_edit = gui::Edit::new(
             parent,
             gui::EditOpts {
-                position: gui::dpi(10, 82),
+                position: gui::dpi(PAD, PAD + 62),
                 width: lw,
                 height: lh,
                 control_style: co::ES::MULTILINE
@@ -356,8 +359,8 @@ impl FinishPage {
             parent,
             gui::LabelOpts {
                 text: title,
-                position: gui::dpi(10, 20),
-                size: gui::dpi(width - 20, 30),
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -367,8 +370,8 @@ impl FinishPage {
             parent,
             gui::LabelOpts {
                 text: message,
-                position: gui::dpi(10, 60),
-                size: gui::dpi(width - 20, 200),
+                position: gui::dpi(PAD, PAD + 40),
+                size: gui::dpi(width - 2 * PAD, 200),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
                 ..Default::default()
             },

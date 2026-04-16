@@ -58,10 +58,11 @@ pub fn run(
         ..Default::default()
     });
 
-    // Content area dimensions (above the button bar).
-    let content_width = WINDOW_WIDTH - 2 * MARGIN;
+    // Content area dimensions (above the button bar). The panel itself is flush
+    // with the top and sides of the window; pages add their own internal padding.
+    let content_width = WINDOW_WIDTH;
     let button_bar_height = BUTTON_HEIGHT + 2 * MARGIN;
-    let content_height = WINDOW_HEIGHT - button_bar_height - 2 * MARGIN;
+    let content_height = WINDOW_HEIGHT - button_bar_height;
 
     // Create page panels.
     let mut pages: Vec<Page> = Vec::new();
@@ -70,7 +71,7 @@ pub fn run(
         let panel = gui::WindowControl::new(
             &wnd,
             gui::WindowControlOpts {
-                position: gui::dpi(MARGIN, MARGIN),
+                position: gui::dpi(0, 0),
                 size: gui::dpi(content_width, content_height),
                 style: co::WS::CHILD
                     | co::WS::CLIPCHILDREN

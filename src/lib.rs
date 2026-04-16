@@ -392,9 +392,6 @@ impl Installer {
     /// relaunches from there (with `--self-delete`) so the original file can
     /// be removed during uninstallation. After `uninstall_main` returns, a
     /// PowerShell process cleans up the temp copy.
-    ///
-    /// This method is only available on Windows. On Unix, use `i.remove()` to
-    /// delete the uninstaller as part of your normal cleanup.
     #[cfg(target_os = "windows")]
     pub fn enable_self_delete(&mut self) {
         if std::env::args().any(|a| a == "--self-delete") {
@@ -463,14 +460,34 @@ impl Installer {
         if self.self_delete {
             if let Ok(exe) = std::env::current_exe() {
                 if let Some(dir) = exe.parent() {
-                    let dir = dir.to_string_lossy().into_owned();
+                    use std::os::windows::process::CommandExt;
+                    use std::process::Stdio;
+                    // CREATE_NO_WINDOW: no console window flashes. Note this is
+                    // mutually exclusive with DETACHED_PROCESS — using both
+                    // causes CreateProcess to fail. Null stdio handles below
+                    // are enough to let the parent exit cleanly.
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
+                    let dir_str = dir.to_string_lossy().into_owned();
+                    // PowerShell's cwd must NOT be the directory we're trying
+                    // to delete — Windows refuses to remove a directory that
+                    // is any process's current directory. The parent of our
+                    // temp dir is the system temp dir, which is always safe.
+                    let ps_cwd = std::env::temp_dir();
                     let _ = std::process::Command::new("powershell")
                         .args([
                             "-ExecutionPolicy",
                             "Bypass",
                             "-Command",
-                            &format!("Start-Sleep 5; Remove-Item -Path '{}' -Recurse -Force", dir),
+                            &format!(
+                                "Start-Sleep 5; Remove-Item -Path '{}' -Recurse -Force",
+                                dir_str
+                            ),
                         ])
+                        .current_dir(&ps_cwd)
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .creation_flags(CREATE_NO_WINDOW)
                         .spawn();
                 }
             }

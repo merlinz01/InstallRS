@@ -425,7 +425,14 @@ impl Installer {
         let mut args: Vec<String> = std::env::args().skip(1).collect();
         args.push("--self-delete".to_string());
 
-        match std::process::Command::new(&tmp_exe).args(&args).spawn() {
+        // Run the temp copy from the temp dir so the install directory isn't
+        // locked as the child's cwd (Windows refuses to delete a directory
+        // that any process has open as its current directory).
+        match std::process::Command::new(&tmp_exe)
+            .args(&args)
+            .current_dir(&tmp_dir)
+            .spawn()
+        {
             Ok(_) => {}
             Err(e) => {
                 eprintln!("Error spawning temp uninstaller: {e}");

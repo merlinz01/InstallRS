@@ -1,42 +1,56 @@
 use anyhow::Result;
 use installrs::Installer;
+use rust_i18n::t;
+
+// Load translations from any .yml files in this directory, with English as the fallback language.
+rust_i18n::i18n!(".", fallback = "en");
+
+/// Detect and apply the system locale, falling back to English.
+fn init_locale() {
+    let locale = sys_locale::get_locale().unwrap_or_else(|| "en".to_string());
+    // Use just the language prefix (e.g. "de-DE" → "de").
+    let lang = locale.split('-').next().unwrap_or("en");
+    rust_i18n::set_locale(lang);
+}
 
 pub fn install(i: &mut Installer) -> Result<()> {
     use installrs::gui::*;
 
+    init_locale();
+
     InstallerGui::wizard()
-        .title("InstallRS Example")
+        .title(&t!("installer.title"))
         .welcome(
-            "Welcome to the InstallRS Example!",
-            "This installer will copy a few test files to your system.\n\nClick Next to continue.",
+            &t!("installer.welcome.title"),
+            &t!("installer.welcome.message"),
         )
         .license(include_str!("../LICENSE.txt"))
         .directory_picker("C:/InstallRS test")
         .install_page(|ctx| {
-            ctx.set_status("Installing files...");
+            ctx.set_status(&t!("installer.install.status_installing"));
             ctx.set_progress(0.0);
 
             let out_dir = ctx.install_dir();
             ctx.installer().set_out_dir(&out_dir);
 
-            ctx.log("Installing test directory...");
+            ctx.log(&t!("installer.install.log_testdir"));
             installrs::dir!(ctx.installer(), "testdir", "testdir")?;
             ctx.set_progress(0.33);
 
-            ctx.log("Installing test file...");
+            ctx.log(&t!("installer.install.log_testfile"));
             installrs::file!(ctx.installer(), "test.txt", "testfile.txt")?;
             ctx.set_progress(0.66);
 
-            ctx.log("Writing uninstaller...");
+            ctx.log(&t!("installer.install.log_uninstaller"));
             ctx.installer().uninstaller("uninstall.exe")?;
             ctx.set_progress(1.0);
 
-            ctx.set_status("Installation complete!");
+            ctx.set_status(&t!("installer.install.status_complete"));
             Ok(())
         })
         .finish_page(
-            "Installation Complete!",
-            "All files have been installed successfully.\n\nClick Finish to exit.",
+            &t!("installer.finish.title"),
+            &t!("installer.finish.message"),
         )
         .run(i)?;
 
@@ -46,29 +60,31 @@ pub fn install(i: &mut Installer) -> Result<()> {
 pub fn uninstall(i: &mut Installer) -> Result<()> {
     use installrs::gui::*;
 
+    init_locale();
+
     #[cfg(windows)]
     i.enable_self_delete();
 
     InstallerGui::wizard()
-        .title("InstallRS Example — Uninstall")
+        .title(&t!("uninstaller.title"))
         .welcome(
-            "Uninstall InstallRS Example",
-            "This will remove InstallRS Example from your system.\n\nClick Next to continue.",
+            &t!("uninstaller.welcome.title"),
+            &t!("uninstaller.welcome.message"),
         )
         .install_page(|ctx| {
-            ctx.set_status("Removing files...");
+            ctx.set_status(&t!("uninstaller.status_removing"));
             ctx.set_progress(0.0);
 
-            ctx.log("Removing install directory...");
+            ctx.log(&t!("uninstaller.log_removing"));
             ctx.installer().remove("C:/InstallRS test")?;
             ctx.set_progress(1.0);
 
-            ctx.set_status("Uninstallation complete!");
+            ctx.set_status(&t!("uninstaller.status_complete"));
             Ok(())
         })
         .finish_page(
-            "Uninstallation Complete!",
-            "All files have been removed successfully.\n\nClick Finish to exit.",
+            &t!("uninstaller.finish.title"),
+            &t!("uninstaller.finish.message"),
         )
         .run(i)?;
 

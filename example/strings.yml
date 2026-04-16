@@ -1,0 +1,91 @@
+_version: 2
+
+installer.title:
+  en: "InstallRS Example"
+  de: "InstallRS-Beispiel"
+  es: "Ejemplo de InstallRS"
+
+installer.welcome.title:
+  en: "Welcome to the InstallRS Example!"
+  de: "Willkommen beim InstallRS-Beispiel!"
+  es: "¡Bienvenido al ejemplo de InstallRS!"
+
+installer.welcome.message:
+  en: "This installer will copy a few test files to your system.\n\nClick Next to continue."
+  de: "Dieser Installer kopiert einige Testdateien auf Ihr System.\n\nKlicken Sie auf „Weiter“, um fortzufahren."
+  es: "Este instalador copiará algunos archivos de prueba en su sistema.\n\nHaga clic en «Siguiente» para continuar."
+
+installer.install.status_installing:
+  en: "Installing files..."
+  de: "Dateien werden installiert..."
+  es: "Instalando archivos..."
+
+installer.install.status_complete:
+  en: "Installation complete!"
+  de: "Installation abgeschlossen!"
+  es: "¡Instalación completada!"
+
+installer.install.log_testdir:
+  en: "Installing test directory..."
+  de: "Testverzeichnis wird installiert..."
+  es: "Instalando directorio de prueba..."
+
+installer.install.log_testfile:
+  en: "Installing test file..."
+  de: "Testdatei wird installiert..."
+  es: "Instalando archivo de prueba..."
+
+installer.install.log_uninstaller:
+  en: "Writing uninstaller..."
+  de: "Deinstallationsprogramm wird geschrieben..."
+  es: "Escribiendo el desinstalador..."
+
+installer.finish.title:
+  en: "Installation Complete!"
+  de: "Installation abgeschlossen!"
+  es: "¡Instalación completada!"
+
+installer.finish.message:
+  en: "All files have been installed successfully.\n\nClick Finish to exit."
+  de: "Alle Dateien wurden erfolgreich installiert.\n\nKlicken Sie auf „Fertigstellen“, um zu beenden."
+  es: "Todos los archivos se han instalado correctamente.\n\nHaga clic en «Finalizar» para salir."
+
+uninstaller.title:
+  en: "InstallRS Example — Uninstall"
+  de: "InstallRS-Beispiel — Deinstallation"
+  es: "Ejemplo de InstallRS — Desinstalación"
+
+uninstaller.welcome.title:
+  en: "Uninstall InstallRS Example"
+  de: "InstallRS-Beispiel deinstallieren"
+  es: "Desinstalar el ejemplo de InstallRS"
+
+uninstaller.welcome.message:
+  en: "This will remove InstallRS Example from your system.\n\nClick Next to continue."
+  de: "Dadurch wird das InstallRS-Beispiel von Ihrem System entfernt.\n\nKlicken Sie auf „Weiter“, um fortzufahren."
+  es: "Esto eliminará el ejemplo de InstallRS de su sistema.\n\nHaga clic en «Siguiente» para continuar."
+
+uninstaller.status_removing:
+  en: "Removing files..."
+  de: "Dateien werden entfernt..."
+  es: "Eliminando archivos..."
+
+uninstaller.status_complete:
+  en: "Uninstallation complete!"
+  de: "Deinstallation abgeschlossen!"
+  es: "¡Desinstalación completada!"
+
+uninstaller.log_removing:
+  en: "Removing install directory..."
+  de: "Installationsverzeichnis wird entfernt..."
+  es: "Eliminando directorio de instalación..."
+
+uninstaller.finish.title:
+  en: "Uninstallation Complete!"
+  de: "Deinstallation abgeschlossen!"
+  es: "¡Desinstalación completada!"
+
+uninstaller.finish.message:
+  en: "All files have been removed successfully.\n\nClick Finish to exit."
+  de: "Alle Dateien wurden erfolgreich entfernt.\n\nKlicken Sie auf „Fertigstellen“, um zu beenden."
+  es: "Todos los archivos se han eliminado correctamente.\n\nHaga clic en «Finalizar» para salir."

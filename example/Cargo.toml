@@ -10,6 +10,8 @@ path = "installer.rs"
 [dependencies]
 installrs = { path = ".." }
 anyhow = "1"
+rust-i18n = "4"
+sys-locale = "0.3"
 
 # Shared defaults for both installer and uninstaller
 [package.metadata.installrs]

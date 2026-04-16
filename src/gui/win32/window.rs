@@ -552,6 +552,22 @@ pub fn run(
                                         }
                                     }
                                 }
+                            } else {
+                                // Surface the error to the user: append it to
+                                // the install page log and show an error dialog.
+                                let err_msg = match &result {
+                                    Err(e) => format!("{e:#}"),
+                                    Ok(_) => String::new(),
+                                };
+                                {
+                                    let pages_guard = pages_timer.lock().unwrap();
+                                    let idx = *current_timer.lock().unwrap();
+                                    if let PageKind::Install(ref ip) = pages_guard[idx].kind {
+                                        ip.append_log(&format!("Error: {err_msg}"));
+                                    }
+                                }
+                                *install_result_timer.lock().unwrap() = Some(result);
+                                let _ = crate::gui::error("Installation failed", &err_msg);
                             }
 
                             update_timer();

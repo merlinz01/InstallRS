@@ -200,6 +200,8 @@ pub fn run(
             let is_first = idx == 0;
             let is_install = matches!(&pages_guard[idx].kind, PageKind::Install(_));
             let is_finish = matches!(&pages_guard[idx].kind, PageKind::Finish(_));
+            let next_is_install = idx + 1 < pages_guard.len()
+                && matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
             let running = install_running_c.load(std::sync::atomic::Ordering::Relaxed);
 
             btn_back_c
@@ -207,19 +209,56 @@ pub fn run(
                 .EnableWindow(!is_first && !is_install && !is_finish);
             let _ = if is_finish {
                 btn_next_c.hwnd().SetWindowText(&label_finish)
-            } else if is_install {
+            } else if next_is_install || is_install {
                 btn_next_c.hwnd().SetWindowText(&label_install)
             } else {
                 btn_next_c.hwnd().SetWindowText(&label_next)
             };
             btn_next_c
                 .hwnd()
-                .EnableWindow(!running && can_advance(&pages_guard[idx]));
+                .EnableWindow(!running && !is_install && can_advance(&pages_guard[idx]));
             btn_cancel_c.hwnd().EnableWindow(!is_finish);
         };
 
         // Store the closure in an Arc for reuse.
         let update_buttons = Arc::new(update_buttons);
+
+        // Helper to start the install in a background thread. Idempotent — the
+        // callback is consumed on first call, so subsequent calls are a no-op.
+        let start_install: Arc<dyn Fn() + 'static> = {
+            let installer_c = installer.clone();
+            let install_dir_c = install_dir.clone();
+            let cancelled_c = cancelled.clone();
+            let tx_c = tx.clone();
+            let install_cb = install_callback.clone();
+            let install_running_c = install_running.clone();
+            let update = update_buttons.clone();
+
+            Arc::new(move || {
+                let cb = install_cb.lock().unwrap().take();
+                if let Some(callback) = cb {
+                    install_running_c.store(true, std::sync::atomic::Ordering::Relaxed);
+
+                    let installer_bg = installer_c.clone();
+                    let install_dir_bg = install_dir_c.clone();
+                    let cancelled_bg = cancelled_c.clone();
+                    let tx_bg = tx_c.clone();
+
+                    std::thread::spawn(move || {
+                        let mut ctx = GuiContext::new(
+                            tx_bg.clone(),
+                            installer_bg,
+                            install_dir_bg,
+                            cancelled_bg,
+                        );
+                        let result = callback(&mut ctx);
+                        let _ = tx_bg.send(GuiMessage::Finished(result));
+                    });
+
+                    update();
+                }
+            })
+        };
 
         // Wire up license checkbox state changes to refresh button enablement.
         {
@@ -257,11 +296,7 @@ pub fn run(
             let current_c = current_page.clone();
             let update = update_buttons.clone();
             let install_dir_c = install_dir.clone();
-            let installer_c = installer.clone();
-            let cancelled_c = cancelled.clone();
-            let tx_c = tx.clone();
-            let install_cb = install_callback.clone();
-            let install_running_c = install_running.clone();
+            let start_install_c = start_install.clone();
             let wnd_c = wnd.clone();
 
             btn_next.on().bn_clicked(move || {
@@ -281,36 +316,10 @@ pub fn run(
                     return Ok(());
                 }
 
-                // On install page, trigger the install.
-                if matches!(&pages_guard[idx].kind, PageKind::Install(_)) {
-                    let cb = install_cb.lock().unwrap().take();
-                    if let Some(callback) = cb {
-                        install_running_c.store(true, std::sync::atomic::Ordering::Relaxed);
-                        drop(pages_guard);
-
-                        let installer_bg = installer_c.clone();
-                        let install_dir_bg = install_dir_c.clone();
-                        let cancelled_bg = cancelled_c.clone();
-                        let tx_bg = tx_c.clone();
-
-                        std::thread::spawn(move || {
-                            let mut ctx = GuiContext::new(
-                                tx_bg.clone(),
-                                installer_bg,
-                                install_dir_bg,
-                                cancelled_bg,
-                            );
-                            let result = callback(&mut ctx);
-                            let _ = tx_bg.send(GuiMessage::Finished(result));
-                        });
-
-                        update();
-                        return Ok(());
-                    }
-                }
-
                 // Advance to next page.
                 if idx + 1 < page_count {
+                    let next_is_install =
+                        matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
                     drop(pages_guard);
                     {
@@ -322,6 +331,10 @@ pub fn run(
                     pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                     drop(pages_guard);
                     update();
+
+                    if next_is_install {
+                        start_install_c();
+                    }
                 }
 
                 Ok(())
@@ -450,11 +463,23 @@ pub fn run(
         {
             let update = update_buttons.clone();
             let btn_next_c = btn_next.clone();
+            let pages_c = pages.clone();
+            let current_c = current_page.clone();
+            let start_install_c = start_install.clone();
             let focus_set = Arc::new(AtomicBool::new(false));
             wnd.on().wm_show_window(move |_| {
                 update();
                 if !focus_set.swap(true, std::sync::atomic::Ordering::Relaxed) {
                     let _ = btn_next_c.hwnd().SetFocus();
+
+                    // If the first page is the install page, auto-start.
+                    let pages_guard = pages_c.lock().unwrap();
+                    let idx = *current_c.lock().unwrap();
+                    let is_install = matches!(&pages_guard[idx].kind, PageKind::Install(_));
+                    drop(pages_guard);
+                    if is_install {
+                        start_install_c();
+                    }
                 }
                 Ok(())
             });

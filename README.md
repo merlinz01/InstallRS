@@ -1,6 +1,12 @@
+<div align="center">
+
 # InstallRS
 
+![InstallRS](/installrs.svg)
+
 A Rust-based framework for building self-contained software installers.
+
+</div>
 
 Very early development stage - not ready for production use.
 

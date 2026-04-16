@@ -199,6 +199,17 @@ pub fn run(
         // Store the closure in an Arc for reuse.
         let update_buttons = Arc::new(update_buttons);
 
+        // Wire up license checkbox state changes to refresh button enablement.
+        {
+            let pages_guard = pages.lock().unwrap();
+            for page in pages_guard.iter() {
+                if let PageKind::License(ref lp) = page.kind {
+                    let update = update_buttons.clone();
+                    lp.on_accept_changed(move || update());
+                }
+            }
+        }
+
         // Wire up button clicks.
         {
             let pages_c = pages.clone();

@@ -158,6 +158,17 @@ impl LicensePage {
     pub fn is_accepted(&self) -> bool {
         self.accept_check.is_checked()
     }
+
+    /// Register a callback to run whenever the acceptance checkbox is clicked.
+    pub fn on_accept_changed<F>(&self, f: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.accept_check.on().bn_clicked(move || {
+            f();
+            Ok(())
+        });
+    }
 }
 
 // ── Directory Picker Page ───────────────────────────────────────────────────

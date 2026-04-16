@@ -10,6 +10,30 @@ pub type InstallCallback = Box<dyn FnOnce(&mut GuiContext) -> Result<()> + Send 
 pub struct WizardConfig {
     pub title: String,
     pub pages: Vec<WizardPage>,
+    pub buttons: ButtonLabels,
+}
+
+/// Labels for the wizard navigation buttons. Customize via
+/// [`InstallerGui::buttons`](crate::gui::InstallerGui::buttons) to translate
+/// or rename them.
+pub struct ButtonLabels {
+    pub back: String,
+    pub next: String,
+    pub install: String,
+    pub finish: String,
+    pub cancel: String,
+}
+
+impl Default for ButtonLabels {
+    fn default() -> Self {
+        Self {
+            back: "< Back".into(),
+            next: "Next >".into(),
+            install: "Install".into(),
+            finish: "Finish".into(),
+            cancel: "Cancel".into(),
+        }
+    }
 }
 
 /// A single page in the wizard flow.

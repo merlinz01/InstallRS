@@ -5,6 +5,31 @@ installer.title:
   de: "InstallRS-Beispiel"
   es: "Ejemplo de InstallRS"
 
+wizard.back:
+  en: "< Back"
+  de: "< Zurück"
+  es: "< Atrás"
+
+wizard.next:
+  en: "Next >"
+  de: "Weiter >"
+  es: "Siguiente >"
+
+wizard.install:
+  en: "Install"
+  de: "Installieren"
+  es: "Instalar"
+
+wizard.finish:
+  en: "Finish"
+  de: "Fertigstellen"
+  es: "Finalizar"
+
+wizard.cancel:
+  en: "Cancel"
+  de: "Abbrechen"
+  es: "Cancelar"
+
 installer.welcome.title:
   en: "Welcome to the InstallRS Example!"
   de: "Willkommen beim InstallRS-Beispiel!"

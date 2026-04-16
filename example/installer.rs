@@ -13,6 +13,17 @@ fn init_locale() {
     rust_i18n::set_locale(lang);
 }
 
+/// Translated wizard button labels.
+fn button_labels() -> installrs::gui::ButtonLabels {
+    installrs::gui::ButtonLabels {
+        back: t!("wizard.back").into(),
+        next: t!("wizard.next").into(),
+        install: t!("wizard.install").into(),
+        finish: t!("wizard.finish").into(),
+        cancel: t!("wizard.cancel").into(),
+    }
+}
+
 pub fn install(i: &mut Installer) -> Result<()> {
     use installrs::gui::*;
 
@@ -20,6 +31,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     InstallerGui::wizard()
         .title(&t!("installer.title"))
+        .buttons(button_labels())
         .welcome(
             &t!("installer.welcome.title"),
             &t!("installer.welcome.message"),
@@ -71,6 +83,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 
     InstallerGui::wizard()
         .title(&t!("uninstaller.title"))
+        .buttons(button_labels())
         .welcome(
             &t!("uninstaller.welcome.title"),
             &t!("uninstaller.welcome.message"),

@@ -132,7 +132,7 @@ pub fn run(
     let btn_back = gui::Button::new(
         &wnd,
         gui::ButtonOpts {
-            text: "< Back",
+            text: &config.buttons.back,
             position: gui::dpi(WINDOW_WIDTH - 3 * (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
@@ -144,7 +144,7 @@ pub fn run(
     let btn_next = gui::Button::new(
         &wnd,
         gui::ButtonOpts {
-            text: "Next >",
+            text: &config.buttons.next,
             position: gui::dpi(WINDOW_WIDTH - 2 * (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
@@ -157,7 +157,7 @@ pub fn run(
     let btn_cancel = gui::Button::new(
         &wnd,
         gui::ButtonOpts {
-            text: "Cancel",
+            text: &config.buttons.cancel,
             position: gui::dpi(WINDOW_WIDTH - 1 * (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
@@ -180,6 +180,9 @@ pub fn run(
         let btn_back_c = btn_back.clone();
         let btn_next_c = btn_next.clone();
         let install_running_c = install_running.clone();
+        let label_next = config.buttons.next.clone();
+        let label_install = config.buttons.install.clone();
+        let label_finish = config.buttons.finish.clone();
 
         let update_buttons = move || {
             let idx = *current_c.lock().unwrap();
@@ -193,11 +196,11 @@ pub fn run(
                 .hwnd()
                 .EnableWindow(!is_first && !is_install && !is_finish);
             let _ = if is_finish {
-                btn_next_c.hwnd().SetWindowText("Finish")
+                btn_next_c.hwnd().SetWindowText(&label_finish)
             } else if is_install {
-                btn_next_c.hwnd().SetWindowText("Install")
+                btn_next_c.hwnd().SetWindowText(&label_install)
             } else {
-                btn_next_c.hwnd().SetWindowText("Next >")
+                btn_next_c.hwnd().SetWindowText(&label_next)
             };
             btn_next_c
                 .hwnd()

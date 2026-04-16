@@ -3,7 +3,9 @@ mod types;
 #[cfg(feature = "gui-win32")]
 mod win32;
 
-pub use types::{GuiContext, GuiMessage, InstallCallback, WizardConfig, WizardPage};
+pub use types::{
+    ButtonLabels, GuiContext, GuiMessage, InstallCallback, WizardConfig, WizardPage,
+};
 
 use anyhow::Result;
 
@@ -43,6 +45,7 @@ impl InstallerGui {
             config: WizardConfig {
                 title: "Installer".to_string(),
                 pages: Vec::new(),
+                buttons: ButtonLabels::default(),
             },
         }
     }
@@ -50,6 +53,22 @@ impl InstallerGui {
     /// Set the window title.
     pub fn title(mut self, title: &str) -> Self {
         self.config.title = title.to_string();
+        self
+    }
+
+    /// Override the navigation button labels (e.g. for translation).
+    ///
+    /// Use struct update syntax to override only specific labels:
+    ///
+    /// ```rust,ignore
+    /// .buttons(ButtonLabels {
+    ///     next: "Weiter".into(),
+    ///     back: "Zurück".into(),
+    ///     ..Default::default()
+    /// })
+    /// ```
+    pub fn buttons(mut self, labels: ButtonLabels) -> Self {
+        self.config.buttons = labels;
         self
     }
 

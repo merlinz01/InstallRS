@@ -46,6 +46,7 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     let wizard_config = WizardConfig {
         title: config.title,
         pages: pages_without_callback,
+        buttons: config.buttons,
     };
 
     // Build and run the wizard window.

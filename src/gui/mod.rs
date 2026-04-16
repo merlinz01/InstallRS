@@ -63,9 +63,14 @@ impl InstallerGui {
     }
 
     /// Add a license agreement page.
-    pub fn license(mut self, text: &str) -> Self {
+    ///
+    /// `heading` is the title displayed above the license text, and `accept_label`
+    /// is the label on the acceptance checkbox (both translatable by the caller).
+    pub fn license(mut self, heading: &str, text: &str, accept_label: &str) -> Self {
         self.config.pages.push(WizardPage::License {
+            heading: heading.to_string(),
             text: text.to_string(),
+            accept_label: accept_label.to_string(),
         });
         self
     }

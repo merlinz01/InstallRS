@@ -95,9 +95,15 @@ pub fn run(
                 content_width,
                 content_height,
             )),
-            WizardPage::License { text } => PageKind::License(LicensePage::new(
-                &panel,
+            WizardPage::License {
+                heading,
                 text,
+                accept_label,
+            } => PageKind::License(LicensePage::new(
+                &panel,
+                heading,
+                text,
+                accept_label,
                 content_width,
                 content_height,
             )),

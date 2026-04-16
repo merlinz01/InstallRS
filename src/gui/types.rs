@@ -15,7 +15,11 @@ pub struct WizardConfig {
 /// A single page in the wizard flow.
 pub enum WizardPage {
     Welcome { title: String, message: String },
-    License { text: String },
+    License {
+        heading: String,
+        text: String,
+        accept_label: String,
+    },
     DirectoryPicker { default: String },
     Install { callback: InstallCallback },
     Finish { title: String, message: String },

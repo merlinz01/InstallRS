@@ -107,22 +107,71 @@ impl WelcomePage {
 // ── License Page ────────────────────────────────────────────────────────────
 
 pub struct LicensePage {
+    _heading_label: gui::Label,
     _text_edit: gui::Edit,
     accept_check: gui::CheckBox,
 }
 
 impl LicensePage {
-    pub fn new(parent: &gui::WindowControl, text: &str, width: i32, height: i32) -> Self {
+    pub fn new(
+        parent: &gui::WindowControl,
+        heading: &str,
+        text: &str,
+        accept_label: &str,
+        width: i32,
+        height: i32,
+    ) -> Self {
         // Win32 Edit controls require \r\n line endings.
         let text = &text.replace("\r\n", "\n").replace('\n', "\r\n");
 
-        let edit_height = height - 2 * PAD - 30;
+        let heading_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: heading,
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 24),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        // Bold + larger font for the heading.
+        {
+            let heading_c = heading_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    heading_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                Ok(0)
+            });
+        }
+
+        let edit_y = PAD + 24 + 10;
+        let edit_height = height - edit_y - 10 - 20 - PAD;
         let (ew, eh) = gui::dpi(width - 2 * PAD, edit_height);
         let text_edit = gui::Edit::new(
             parent,
             gui::EditOpts {
                 text,
-                position: gui::dpi(PAD, PAD),
+                position: gui::dpi(PAD, edit_y),
                 width: ew,
                 height: eh,
                 control_style: co::ES::MULTILINE
@@ -142,8 +191,8 @@ impl LicensePage {
         let accept_check = gui::CheckBox::new(
             parent,
             gui::CheckBoxOpts {
-                text: "I accept the license agreement",
-                position: gui::dpi(PAD, PAD + edit_height + 10),
+                text: accept_label,
+                position: gui::dpi(PAD, edit_y + edit_height + 10),
                 size: gui::dpi(width - 2 * PAD, 20),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::Repos),
                 ..Default::default()
@@ -153,6 +202,7 @@ impl LicensePage {
         setup_transparent_labels(parent);
 
         Self {
+            _heading_label: heading_label,
             _text_edit: text_edit,
             accept_check,
         }

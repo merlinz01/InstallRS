@@ -24,7 +24,11 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.welcome.title"),
             &t!("installer.welcome.message"),
         )
-        .license(include_str!("../LICENSE.txt"))
+        .license(
+            &t!("installer.license.heading"),
+            include_str!("../LICENSE.txt"),
+            &t!("installer.license.accept"),
+        )
         .directory_picker("C:/InstallRS test")
         .install_page(|ctx| {
             ctx.set_status(&t!("installer.install.status_installing"));

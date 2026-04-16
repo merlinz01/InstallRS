@@ -15,6 +15,16 @@ installer.welcome.message:
   de: "Dieser Installer kopiert einige Testdateien auf Ihr System.\n\nKlicken Sie auf „Weiter“, um fortzufahren."
   es: "Este instalador copiará algunos archivos de prueba en su sistema.\n\nHaga clic en «Siguiente» para continuar."
 
+installer.license.heading:
+  en: "License Agreement"
+  de: "Lizenzvereinbarung"
+  es: "Acuerdo de licencia"
+
+installer.license.accept:
+  en: "I accept the license agreement"
+  de: "Ich akzeptiere die Lizenzvereinbarung"
+  es: "Acepto el acuerdo de licencia"
+
 installer.install.status_installing:
   en: "Installing files..."
   de: "Dateien werden installiert..."

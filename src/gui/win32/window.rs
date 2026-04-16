@@ -149,6 +149,7 @@ pub fn run(
             width: bw,
             height: bh,
             resize_behavior: (gui::Horz::Repos, gui::Vert::Repos),
+            control_style: co::BS::DEFPUSHBUTTON,
             ..Default::default()
         },
     );
@@ -431,11 +432,16 @@ pub fn run(
             });
         }
 
-        // Initial button state update after the window is shown.
+        // Initial button state update and focus after the window is first shown.
         {
             let update = update_buttons.clone();
+            let btn_next_c = btn_next.clone();
+            let focus_set = Arc::new(AtomicBool::new(false));
             wnd.on().wm_show_window(move |_| {
                 update();
+                if !focus_set.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    let _ = btn_next_c.hwnd().SetFocus();
+                }
                 Ok(())
             });
         }

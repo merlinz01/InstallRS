@@ -46,6 +46,12 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.directory.label"),
             "C:/InstallRS test",
         )
+        .on_before_leave(|ctx| {
+            installrs::gui::confirm(
+                &t!("installer.confirm.title"),
+                &t!("installer.confirm.message", dir = ctx.install_dir()),
+            )
+        })
         .install_page(|ctx| {
             let mut i = ctx.installer();
             ctx.set_status(&t!("installer.install.status_installing"));

@@ -1,8 +1,10 @@
+pub mod dialog;
 mod types;
 
 #[cfg(feature = "gui-win32")]
 mod win32;
 
+pub use dialog::{confirm, error, info, warn};
 pub use types::{
     ButtonLabels, ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
     OnEnterCallback, PageContext, WizardConfig, WizardPage,

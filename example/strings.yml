@@ -60,6 +60,16 @@ installer.directory.label:
   de: "Installieren in:"
   es: "Instalar en:"
 
+installer.confirm.title:
+  en: "Confirm Installation"
+  de: "Installation bestätigen"
+  es: "Confirmar instalación"
+
+installer.confirm.message:
+  en: "Install InstallRS Example to:\n\n%{dir}\n\nContinue?"
+  de: "InstallRS-Beispiel installieren nach:\n\n%{dir}\n\nFortfahren?"
+  es: "¿Instalar el ejemplo de InstallRS en:\n\n%{dir}\n\n¿Continuar?"
+
 installer.install.status_installing:
   en: "Installing files..."
   de: "Dateien werden installiert..."

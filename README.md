@@ -19,17 +19,18 @@ We can do better in 2026.
 - Full access to Rust's standard library and third-party crates
 - Scans your source code to detect which files need to be embedded
 - Embeds those files into a self-contained executable using `include_bytes!`
-- Provides a simple API for installing and removing files on the target system
+- Fluent builder API for installing files and directories, with options for
+  overwrite behavior, Unix permissions, directory filters, and error handlers
+- Automatic byte-weighted progress tracking with pluggable sinks
 - Automatically generates both installer and uninstaller binaries
 - Supports file compression (lzma, gzip, bzip2) to reduce binary size
 - Small binaries — no runtime overhead
+- Optional native Win32 wizard GUI (welcome, license, directory picker, progress,
+  finish) with translatable button labels and page-level `on_enter` /
+  `on_before_leave` callbacks
+- Built-in native dialog helpers (`info`, `warn`, `error`, `confirm`)
 - Windows resource support: icons (PNG auto-converted to ICO), version info, manifests
 - Separate configuration for installer and uninstaller binaries
-
-## Unfeatures
-
-- No GUI (yet)
-- No advanced installation options (yet)
 
 ## Usage
 
@@ -37,18 +38,18 @@ Write a library crate with `install` and `uninstall` functions:
 
 ```rust
 use anyhow::Result;
-use installrs::Installer;
+use installrs::{source, Installer};
 
 pub fn install(i: &mut Installer) -> Result<()> {
     i.set_out_dir("C:/my_app");
-    i.dir("assets", "assets")?;
-    i.file("app.exe", "app.exe")?;
-    i.uninstaller("uninstall.exe")?;
+    i.dir(source!("assets"), "assets").install()?;
+    i.file(source!("app.exe"), "app.exe").install()?;
+    i.uninstaller("uninstall.exe").install()?;
     Ok(())
 }
 
 pub fn uninstall(i: &mut Installer) -> Result<()> {
-    i.remove("C:/my_app")?;
+    i.remove("C:/my_app").install()?;
     Ok(())
 }
 ```
@@ -61,21 +62,94 @@ installrs --target ./my-installer --output installer.exe
 
 See the `example/` directory for a working example.
 
+### Source paths and the `source!` macro
+
+Embedded files and directories are referenced by the `source!("path")` macro,
+which evaluates to a `Source` newtype at compile time. The build tool scans
+your source for `source!(...)` invocations, and embeds the corresponding file
+(or directory tree, decided by filesystem metadata at build time).
+
+Pass the result directly to `Installer::file` or `Installer::dir`:
+
+```rust
+i.file(source!("app.exe"), "app.exe").install()?;
+i.dir(source!("data"), "data").install()?;
+```
+
+### Builder options
+
+Every install operation returns a builder that terminates with `.install()`.
+Common chainable options:
+
+```rust
+i.file(source!("app.exe"), "app.exe")
+    .status("Installing application")      // pushes to the GUI status label
+    .log("Writing app.exe")                // pushes to the log area
+    .overwrite(OverwriteMode::Backup)      // Overwrite | Skip | Error | Backup
+    .mode(0o755)                           // Unix only
+    .install()?;
+
+i.dir(source!("data"), "data")
+    .filter(|rel| !rel.ends_with(".bak"))  // skip matching entries
+    .on_error(|_path, _err| ErrorAction::Skip)
+    .install()?;
+```
+
+### Progress reporting
+
+The `Installer` has a byte-weighted progress counter. By default the total is
+the sum of all embedded bytes (plus the uninstaller size if present). Override
+with `set_total_bytes(n)` or compute partial totals via `bytes_of(&[sources])`.
+
+Attach any `ProgressSink` via `set_progress_sink`; the GUI wizard attaches one
+automatically. All `.status()`, `.log()`, and progress updates flow through
+the sink.
+
 ## Installer API
 
-| Method               | Description                                                  |
-| -------------------- | ------------------------------------------------------------ |
-| `set_out_dir(dir)`   | Set the base output directory for relative destination paths |
-| `set_in_dir(dir)`    | Set the base input directory for relative source paths       |
-| `file(src, dest)`    | Install a single embedded file                               |
-| `dir(src, dest)`     | Install an embedded directory tree                           |
-| `mkdir(dir)`         | Create a directory on the target system                      |
-| `uninstaller(dest)`  | Write the uninstaller executable                             |
-| `remove(path)`       | Remove a file or directory                                   |
-| `exists(path)`       | Check whether a path exists                                  |
-| `exec_shell(cmd)`    | Run a shell command                                          |
-| `include_file(path)` | Hint to embed a file (no-op at runtime)                      |
-| `include_dir(path)`  | Hint to embed a directory (no-op at runtime)                 |
+| Method                      | Description                                                  |
+| --------------------------- | ------------------------------------------------------------ |
+| `set_out_dir(dir)`          | Set the base output directory for relative destination paths |
+| `file(src, dest)`           | Install a single embedded file (returns a `FileOp` builder)  |
+| `dir(src, dest)`            | Install an embedded directory tree (returns a `DirOp`)       |
+| `mkdir(dir)`                | Create a directory (returns a `MkdirOp` builder)             |
+| `uninstaller(dest)`         | Write the uninstaller executable (returns an `UninstallerOp`)|
+| `remove(path)`              | Remove a file or directory (returns a `RemoveOp`)            |
+| `exists(path)`              | Check whether a path exists                                  |
+| `exec_shell(cmd)`           | Run a shell command                                          |
+| `set_progress_sink(sink)`   | Attach a `ProgressSink` for status / progress / log events   |
+| `set_total_bytes(n)`        | Override the progress bar's total (default: sum of embeds)   |
+| `bytes_of(&[sources])`      | Compute the byte count for a subset of embedded sources      |
+| `reset_progress()`          | Reset `bytes_installed` to zero                              |
+| `enable_self_delete()`      | Windows: re-launch from temp so the install dir can be wiped |
+
+## GUI
+
+Enable the optional Win32 wizard by setting `gui = true` in
+`[package.metadata.installrs]`. In your `install` / `uninstall` functions,
+build the wizard with `InstallerGui::wizard()`:
+
+```rust
+use installrs::gui::*;
+
+InstallerGui::wizard()
+    .title("My App Installer")
+    .welcome("Welcome!", "Click Next to continue.")
+    .license("License Agreement", include_str!("../LICENSE"), "I accept")
+    .directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
+    .on_before_leave(|ctx| confirm("Confirm", &format!("Install to {}?", ctx.install_dir())))
+    .install_page(|ctx| {
+        let mut i = ctx.installer();
+        i.file(source!("app.exe"), "app.exe").install()?;
+        i.uninstaller("uninstall.exe").install()?;
+        Ok(())
+    })
+    .finish_page("Done!", "Click Finish to exit.")
+    .run(i)?;
+```
+
+Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
+wrap `MessageBox` with the wizard window as parent.
 
 ## Command Line Options
 

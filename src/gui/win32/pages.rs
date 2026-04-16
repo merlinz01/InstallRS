@@ -227,24 +227,74 @@ impl LicensePage {
 // ── Directory Picker Page ───────────────────────────────────────────────────
 
 pub struct DirectoryPickerPage {
+    _heading_label: gui::Label,
     _label: gui::Label,
     dir_edit: gui::Edit,
     _browse_btn: gui::Button,
 }
 
 impl DirectoryPickerPage {
-    pub fn new(parent: &gui::WindowControl, default: &str, width: i32, _height: i32) -> Self {
+    pub fn new(
+        parent: &gui::WindowControl,
+        heading: &str,
+        label_text: &str,
+        default: &str,
+        width: i32,
+        _height: i32,
+    ) -> Self {
+        let heading_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: heading,
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 24),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        // Bold + larger font for the heading.
+        {
+            let heading_c = heading_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    heading_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                Ok(0)
+            });
+        }
+
+        let label_y = PAD + 24 + 20;
         let label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                text: "Install to:",
-                position: gui::dpi(PAD, PAD),
+                text: label_text,
+                position: gui::dpi(PAD, label_y),
                 size: gui::dpi(width - 2 * PAD, 20),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
         );
 
+        let edit_y = label_y + 25;
         let browse_width = 80;
         let edit_width = width - 2 * PAD - browse_width - 10;
         let (ew, eh) = gui::dpi(edit_width, 24);
@@ -252,7 +302,7 @@ impl DirectoryPickerPage {
             parent,
             gui::EditOpts {
                 text: default,
-                position: gui::dpi(PAD, PAD + 30),
+                position: gui::dpi(PAD, edit_y),
                 width: ew,
                 height: eh,
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
@@ -265,7 +315,7 @@ impl DirectoryPickerPage {
             parent,
             gui::ButtonOpts {
                 text: "Browse...",
-                position: gui::dpi(PAD + edit_width + 10, PAD + 29),
+                position: gui::dpi(PAD + edit_width + 10, edit_y - 1),
                 width: bw,
                 height: bh,
                 resize_behavior: (gui::Horz::Repos, gui::Vert::None),
@@ -303,6 +353,7 @@ impl DirectoryPickerPage {
         setup_transparent_labels(parent);
 
         Self {
+            _heading_label: heading_label,
             _label: label,
             dir_edit,
             _browse_btn: browse_btn,

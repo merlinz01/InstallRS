@@ -72,7 +72,7 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
 
 fn find_default_dir(pages: &[WizardPage]) -> String {
     for page in pages {
-        if let WizardPage::DirectoryPicker { default } = page {
+        if let WizardPage::DirectoryPicker { default, .. } = page {
             return default.clone();
         }
     }

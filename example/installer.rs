@@ -41,7 +41,11 @@ pub fn install(i: &mut Installer) -> Result<()> {
             include_str!("../LICENSE.txt"),
             &t!("installer.license.accept"),
         )
-        .directory_picker("C:/InstallRS test")
+        .directory_picker(
+            &t!("installer.directory.heading"),
+            &t!("installer.directory.label"),
+            "C:/InstallRS test",
+        )
         .install_page(|ctx| {
             let mut i = ctx.installer();
             ctx.set_status(&t!("installer.install.status_installing"));

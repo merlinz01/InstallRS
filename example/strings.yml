@@ -50,6 +50,16 @@ installer.license.accept:
   de: "Ich akzeptiere die Lizenzvereinbarung"
   es: "Acepto el acuerdo de licencia"
 
+installer.directory.heading:
+  en: "Choose Install Location"
+  de: "Installationsort auswählen"
+  es: "Seleccionar ubicación de instalación"
+
+installer.directory.label:
+  en: "Install to:"
+  de: "Installieren in:"
+  es: "Instalar en:"
+
 installer.install.status_installing:
   en: "Installing files..."
   de: "Dateien werden installiert..."

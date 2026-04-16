@@ -44,7 +44,11 @@ pub enum WizardPage {
         text: String,
         accept_label: String,
     },
-    DirectoryPicker { default: String },
+    DirectoryPicker {
+        heading: String,
+        label: String,
+        default: String,
+    },
     Install { callback: InstallCallback },
     Finish { title: String, message: String },
 }

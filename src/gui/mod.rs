@@ -95,8 +95,14 @@ impl InstallerGui {
     }
 
     /// Add a directory picker page with a default path.
-    pub fn directory_picker(mut self, default: &str) -> Self {
+    ///
+    /// `heading` is the bold title at the top of the page, `label` is the
+    /// prompt next to the path input (e.g. "Install to:"), and `default` is
+    /// the initial path.
+    pub fn directory_picker(mut self, heading: &str, label: &str, default: &str) -> Self {
         self.config.pages.push(WizardPage::DirectoryPicker {
+            heading: heading.to_string(),
+            label: label.to_string(),
             default: default.to_string(),
         });
         self

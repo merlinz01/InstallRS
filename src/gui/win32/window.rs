@@ -107,9 +107,18 @@ pub fn run(
                 content_width,
                 content_height,
             )),
-            WizardPage::DirectoryPicker { default } => PageKind::DirectoryPicker(
-                DirectoryPickerPage::new(&panel, default, content_width, content_height),
-            ),
+            WizardPage::DirectoryPicker {
+                heading,
+                label,
+                default,
+            } => PageKind::DirectoryPicker(DirectoryPickerPage::new(
+                &panel,
+                heading,
+                label,
+                default,
+                content_width,
+                content_height,
+            )),
             WizardPage::Install { .. } => {
                 PageKind::Install(InstallPage::new(&panel, content_width, content_height))
             }

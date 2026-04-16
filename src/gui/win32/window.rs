@@ -188,6 +188,7 @@ pub fn run(
         let current_c = current_page.clone();
         let btn_back_c = btn_back.clone();
         let btn_next_c = btn_next.clone();
+        let btn_cancel_c = btn_cancel.clone();
         let install_running_c = install_running.clone();
         let label_next = config.buttons.next.clone();
         let label_install = config.buttons.install.clone();
@@ -214,6 +215,7 @@ pub fn run(
             btn_next_c
                 .hwnd()
                 .EnableWindow(!running && can_advance(&pages_guard[idx]));
+            btn_cancel_c.hwnd().EnableWindow(!is_finish);
         };
 
         // Store the closure in an Arc for reuse.

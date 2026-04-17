@@ -25,9 +25,9 @@ We can do better in 2026.
 - Automatically generates both installer and uninstaller binaries
 - Supports file compression (lzma, gzip, bzip2) to reduce binary size
 - Small binaries — no runtime overhead
-- Optional native Win32 wizard GUI (welcome, license, directory picker, progress,
+- Optional native wizard GUI (welcome, license, directory picker, progress,
   finish) with translatable button labels and page-level `on_enter` /
-  `on_before_leave` callbacks
+  `on_before_leave` callbacks — Win32 on Windows, GTK3 on Linux
 - Built-in native dialog helpers (`info`, `warn`, `error`, `confirm`)
 - Windows resource support: icons (PNG auto-converted to ICO), version info, manifests
 - Separate configuration for installer and uninstaller binaries
@@ -125,9 +125,11 @@ the sink.
 
 ## GUI
 
-Enable the optional Win32 wizard by setting `gui = true` in
-`[package.metadata.installrs]`. In your `install` / `uninstall` functions,
-build the wizard with `InstallerGui::wizard()`:
+Enable the optional wizard by setting `gui = true` in
+`[package.metadata.installrs]`. The build tool picks the backend based on
+the target triple: **Win32** on Windows (`winsafe`), **GTK3** on Linux
+(`gtk-rs`). In your `install` / `uninstall` functions, build the wizard
+with `InstallerGui::wizard()`:
 
 ```rust
 use installrs::gui::*;
@@ -149,7 +151,14 @@ InstallerGui::wizard()
 ```
 
 Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
-wrap `MessageBox` with the wizard window as parent.
+wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard
+window as parent.
+
+On Linux, target systems need GTK3 runtime libraries installed
+(`libgtk-3-0` and its dependencies — present by default on virtually all
+desktop distros). Building a Linux installer also requires GTK3 **dev**
+headers on the build host (`libgtk-3-dev` on Debian/Ubuntu,
+`gtk3-devel` on Fedora/RHEL).
 
 ## Command Line Options
 

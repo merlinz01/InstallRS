@@ -202,7 +202,12 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         .target_triple
         .as_deref()
         .is_some_and(|t| t.contains("windows"))
-        || cfg!(target_os = "windows");
+        || (params.target_triple.is_none() && cfg!(target_os = "windows"));
+    let target_is_linux = params
+        .target_triple
+        .as_deref()
+        .is_some_and(|t| t.contains("linux"))
+        || (params.target_triple.is_none() && cfg!(target_os = "linux"));
 
     let uninstall_compression = if uninstall_gathered.is_empty() {
         "none"
@@ -218,6 +223,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         params.uninstaller_win_resource.as_ref(),
         params.gui_enabled,
         target_is_windows,
+        target_is_linux,
     )?;
     compile_cargo_project(
         &uninstaller_dir,
@@ -294,6 +300,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         params.installer_win_resource.as_ref(),
         params.gui_enabled,
         target_is_windows,
+        target_is_linux,
     )?;
     compile_cargo_project(
         &installer_dir,
@@ -1141,6 +1148,7 @@ fn write_uninstaller_sources(
     win_resource: Option<&WinResourceConfig>,
     gui_enabled: bool,
     target_is_windows: bool,
+    target_is_linux: bool,
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
@@ -1152,6 +1160,8 @@ fn write_uninstaller_sources(
         features.push("gui");
         if target_is_windows {
             features.push("gui-win32");
+        } else if target_is_linux {
+            features.push("gui-gtk");
         }
     }
     let features_str = if features.is_empty() {
@@ -1164,7 +1174,8 @@ fn write_uninstaller_sources(
         )
     };
 
-    let build_deps = if win_resource.is_some() {
+    let emit_win_resource = target_is_windows && win_resource.is_some();
+    let build_deps = if emit_win_resource {
         "\n[build-dependencies]\nwinresource = \"0.1\"\n"
     } else {
         ""
@@ -1194,7 +1205,9 @@ codegen-units = 1
     );
 
     let subsystem_attr = match win_resource {
-        Some(cfg) if cfg.windows_subsystem == "windows" => "#![windows_subsystem = \"windows\"]\n",
+        Some(cfg) if target_is_windows && cfg.windows_subsystem == "windows" => {
+            "#![windows_subsystem = \"windows\"]\n"
+        }
         _ => "",
     };
 
@@ -1226,8 +1239,15 @@ fn main() {{
     write_if_changed(&uninstaller_dir.join("Cargo.toml"), &cargo_toml)?;
     write_if_changed(&uninstaller_dir.join("src").join("main.rs"), &main_rs)?;
 
-    if let Some(cfg) = win_resource {
-        write_build_rs(uninstaller_dir, cfg, gui_enabled)?;
+    if emit_win_resource {
+        if let Some(cfg) = win_resource {
+            write_build_rs(uninstaller_dir, cfg, gui_enabled)?;
+        }
+    } else {
+        let build_rs = uninstaller_dir.join("build.rs");
+        if build_rs.exists() {
+            std::fs::remove_file(&build_rs).ok();
+        }
     }
 
     Ok(())
@@ -1243,6 +1263,7 @@ fn write_installer_sources(
     win_resource: Option<&WinResourceConfig>,
     gui_enabled: bool,
     target_is_windows: bool,
+    target_is_linux: bool,
 ) -> Result<()> {
     log::debug!("Writing installer sources");
 
@@ -1254,6 +1275,8 @@ fn write_installer_sources(
         features.push("gui");
         if target_is_windows {
             features.push("gui-win32");
+        } else if target_is_linux {
+            features.push("gui-gtk");
         }
     }
     let features_str = if features.is_empty() {
@@ -1266,7 +1289,8 @@ fn write_installer_sources(
         )
     };
 
-    let build_deps = if win_resource.is_some() {
+    let emit_win_resource = target_is_windows && win_resource.is_some();
+    let build_deps = if emit_win_resource {
         "\n[build-dependencies]\nwinresource = \"0.1\"\n"
     } else {
         ""
@@ -1298,7 +1322,9 @@ codegen-units = 1
     let (statics_code, entries_code) = generate_embedded_code(gathered)?;
 
     let subsystem_attr = match win_resource {
-        Some(cfg) if cfg.windows_subsystem == "windows" => "#![windows_subsystem = \"windows\"]\n",
+        Some(cfg) if target_is_windows && cfg.windows_subsystem == "windows" => {
+            "#![windows_subsystem = \"windows\"]\n"
+        }
         _ => "",
     };
 
@@ -1319,8 +1345,15 @@ fn main() {{
     write_if_changed(&installer_dir.join("Cargo.toml"), &cargo_toml)?;
     write_if_changed(&installer_dir.join("src").join("main.rs"), &main_rs)?;
 
-    if let Some(cfg) = win_resource {
-        write_build_rs(installer_dir, cfg, gui_enabled)?;
+    if emit_win_resource {
+        if let Some(cfg) = win_resource {
+            write_build_rs(installer_dir, cfg, gui_enabled)?;
+        }
+    } else {
+        let build_rs = installer_dir.join("build.rs");
+        if build_rs.exists() {
+            std::fs::remove_file(&build_rs).ok();
+        }
     }
 
     Ok(())

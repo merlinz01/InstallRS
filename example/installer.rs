@@ -24,6 +24,18 @@ fn button_labels() -> installrs::gui::ButtonLabels {
     }
 }
 
+/// Default installation directory, e.g. "C:\Program Files\MyApp" on Windows or "/opt/myapp" on Unix.
+fn default_install_dir() -> &'static str {
+    #[cfg(windows)]
+    {
+        "C:\\Program Files\\MyApp"
+    }
+    #[cfg(not(windows))]
+    {
+        "/opt/myapp"
+    }
+}
+
 pub fn install(i: &mut Installer) -> Result<()> {
     use installrs::gui::*;
 
@@ -44,7 +56,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         .directory_picker(
             &t!("installer.directory.heading"),
             &t!("installer.directory.label"),
-            "C:/InstallRS test",
+            default_install_dir(),
         )
         .on_before_leave(|ctx| {
             installrs::gui::confirm(
@@ -67,7 +79,12 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 .log(t!("installer.install.log_testfile"))
                 .install()?;
 
+            #[cfg(windows)]
             i.uninstaller("uninstall.exe")
+                .log(t!("installer.install.log_uninstaller"))
+                .install()?;
+            #[cfg(not(windows))]
+            i.uninstaller("uninstall")
                 .log(t!("installer.install.log_uninstaller"))
                 .install()?;
 
@@ -87,6 +104,12 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     use installrs::gui::*;
 
     init_locale();
+    let install_dir = std::env::current_exe()?
+        .parent()
+        .expect("Executable must be in a directory")
+        .to_str()
+        .expect("Directory path must be valid UTF-8")
+        .to_string();
 
     #[cfg(windows)]
     i.enable_self_delete();
@@ -101,7 +124,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         .install_page(|ctx| {
             let mut i = ctx.installer();
 
-            i.remove("C:/InstallRS test")
+            i.remove(install_dir)
                 .status(t!("uninstaller.status_removing"))
                 .log(t!("uninstaller.log_removing"))
                 .install()?;

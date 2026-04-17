@@ -4,6 +4,9 @@ mod types;
 #[cfg(feature = "gui-win32")]
 mod win32;
 
+#[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+mod gtk;
+
 pub use dialog::{confirm, error, info, warn};
 pub use types::{
     ButtonLabels, ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
@@ -189,10 +192,15 @@ impl InstallerGui {
         win32::run_wizard(self.config, installer)
     }
 
-    #[cfg(all(feature = "gui", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    fn run_platform(self, installer: &mut Installer) -> Result<()> {
+        gtk::run_wizard(self.config, installer)
+    }
+
+    #[cfg(all(feature = "gui", not(any(feature = "gui-win32", feature = "gui-gtk"))))]
     fn run_platform(self, _installer: &mut Installer) -> Result<()> {
         Err(anyhow::anyhow!(
-            "No GUI backend available for this platform. Enable the `gui-win32` feature on Windows."
+            "No GUI backend available for this platform. Enable `gui-win32` on Windows or `gui-gtk` on Linux."
         ))
     }
 }

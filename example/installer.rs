@@ -46,11 +46,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // be final by then). The dialog's own title + prompt are already
     // localized via `t!` using the detected locale set by `init_locale()`.
     if !std::env::args().any(|a| a == "--headless") {
-        let choices: &[(&str, &str)] = &[
-            ("en", "English"),
-            ("es", "Español"),
-            ("de", "Deutsch"),
-        ];
+        let choices: &[(&str, &str)] = &[("en", "English"), ("es", "Español"), ("de", "Deutsch")];
         let default = rust_i18n::locale().to_string();
         if let Some(code) = installrs::gui::choose_language(
             &t!("installer.language.title"),
@@ -146,6 +142,15 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 i.file(installrs::source!("test.txt"), "testfile.txt")
                     .log(t!("installer.install.log_testfile"))
                     .install()?;
+            }
+
+            // Simulate a long-running step to demonstrate the progress bar and cancellation.
+            for step in 1..=5 {
+                ctx.set_status(&t!("installer.install.status_step", step = step));
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                if ctx.is_cancelled() {
+                    return Err(anyhow::anyhow!("install cancelled by user"));
+                }
             }
 
             #[cfg(windows)]

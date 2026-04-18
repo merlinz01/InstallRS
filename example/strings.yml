@@ -145,6 +145,11 @@ installer.install.log_testfile:
   de: "Testdatei wird installiert..."
   es: "Instalando archivo de prueba..."
 
+installer.install.status_step:
+  en: "Simulating long-running installation step (%{step})..."
+  de: "Simuliere lang andauernden Installationsschritt (%{step})..."
+  es: "Simulando un paso de instalación que tarda mucho (%{step})..."
+
 installer.install.log_uninstaller:
   en: "Writing uninstaller..."
   de: "Deinstallationsprogramm wird geschrieben..."

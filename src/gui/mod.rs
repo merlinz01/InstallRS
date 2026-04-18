@@ -198,11 +198,9 @@ impl InstallerGui {
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.
     /// Falls back to an error on unsupported platforms.
     pub fn run(self, installer: &mut Installer) -> Result<()> {
-        // Apply component CLI args (handles --list-components and exits, or
-        // applies --components / --with / --without to the selection state).
-        installer.apply_component_args()?;
-
-        // In headless mode, skip the GUI entirely
+        // In headless mode, skip the GUI entirely. Callers must have run
+        // `Installer::process_commandline` before reaching here so that
+        // `--headless` and component selections have been applied.
         if installer.headless {
             return Err(anyhow::anyhow!("GUI installer cannot run in headless mode"));
         }

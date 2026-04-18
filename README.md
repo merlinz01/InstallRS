@@ -127,7 +127,7 @@ the sink.
 | `component(id, label)`      | Register an optional component (returns `&mut Component` for chaining) |
 | `is_component_selected(id)` | Check whether a component is currently selected              |
 | `set_component_selected(id, on)` | Force a component on/off (required components ignore off) |
-| `apply_component_args()`    | Parse `--components`/`--with`/`--without`/`--list-components` from argv |
+| `process_commandline()`     | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` from argv |
 
 ## Components
 
@@ -154,15 +154,17 @@ if i.is_component_selected("docs") {
 ```
 
 The wizard renders a `components_page(...)` with one checkbox per component
-(required ones greyed-out). Headless users select via CLI flags the wizard
-parses automatically:
+(required ones greyed-out). Users can also drive the installer from the
+command line:
 
-- `--list-components` — print available components and exit
+- `--headless` — disable the GUI
+- `--list-components` — print available components and exit 0
 - `--components a,b,c` — install exactly this set (required always included)
 - `--with a,b` / `--without c` — delta from defaults
 
-For pure-headless installers (no GUI page), call `i.apply_component_args()?`
-explicitly after registering components.
+**All installers must call `i.process_commandline()?`** after registering
+components (before running the wizard or doing headless work). This parses
+argv and applies the flags above.
 
 ## GUI
 
@@ -177,6 +179,9 @@ use installrs::gui::*;
 
 // Register components up front (optional).
 i.component("docs", "Documentation");
+
+// Required: parse CLI flags (--headless, --components, etc.).
+i.process_commandline()?;
 
 InstallerGui::wizard()
     .title("My App Installer")

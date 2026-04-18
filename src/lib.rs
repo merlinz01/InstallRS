@@ -279,27 +279,36 @@ impl Installer {
         }
     }
 
-    /// Apply component-related CLI arguments from `std::env::args()`.
+    /// Parse command-line arguments and apply them to the installer state.
     ///
-    /// Recognized flags (call this *after* registering all components):
-    /// - `--list-components` — print the component table and exit with status 0
-    /// - `--components a,b,c` — install exactly this set (plus all required)
-    /// - `--with a,b` — enable these (in addition to defaults)
-    /// - `--without a,b` — disable these (requires cannot be disabled)
+    /// **All installers must call this.** Typical placement is the first
+    /// line inside the `install` / `uninstall` function, right after
+    /// registering components:
     ///
-    /// Returns an error on unknown component ids. Unrecognized flags are left
-    /// alone (they might be meaningful to the user's install callback).
+    /// ```rust,ignore
+    /// pub fn install(i: &mut Installer) -> Result<()> {
+    ///     i.component("docs", "Documentation");
+    ///     i.process_commandline()?;
+    ///     // ... wizard or headless install flow ...
+    /// }
+    /// ```
     ///
-    /// The wizard calls this automatically at the top of
-    /// [`InstallerGui::run`](crate::gui::InstallerGui::run); headless
-    /// installers should call it explicitly after registering components.
-    pub fn apply_component_args(&mut self) -> Result<()> {
+    /// Recognized flags:
+    /// - `--headless` — sets `self.headless = true`, disables GUI
+    /// - `--list-components` — print the component table and exit status 0
+    /// - `--components a,b,c` — install exactly this set (plus required)
+    /// - `--with a,b` — enable these in addition to defaults
+    /// - `--without a,b` — disable these (required cannot be disabled)
+    ///
+    /// Returns an error on unknown component ids. Unrecognized flags are
+    /// left alone (they may be meaningful to the user's install callback).
+    pub fn process_commandline(&mut self) -> Result<()> {
         let args: Vec<String> = std::env::args().collect();
-        self.apply_component_args_from(&args)
+        self.process_commandline_from(&args)
     }
 
     #[doc(hidden)]
-    pub fn apply_component_args_from(&mut self, args: &[String]) -> Result<()> {
+    pub fn process_commandline_from(&mut self, args: &[String]) -> Result<()> {
         let mut exact: Option<Vec<String>> = None;
         let mut with: Vec<String> = Vec::new();
         let mut without: Vec<String> = Vec::new();
@@ -324,6 +333,7 @@ impl Installer {
                 }
             };
             match flag {
+                "--headless" => self.headless = true,
                 "--list-components" => list = true,
                 "--components" => {
                     let v = take_val(&mut i)?;
@@ -668,8 +678,11 @@ impl Installer {
     }
 
     /// Entry point for installer binaries. Call this from `main()`.
+    ///
+    /// The user's `install_fn` is expected to call
+    /// [`Installer::process_commandline`] itself (typically right after
+    /// registering components).
     pub fn install_main(&mut self, install_fn: impl Fn(&mut Installer) -> Result<()>) {
-        self.headless = std::env::args().any(|a| a == "--headless");
         if let Err(e) = install_fn(self) {
             eprintln!("Error: {e:#}");
             std::process::exit(1);
@@ -678,7 +691,6 @@ impl Installer {
 
     /// Entry point for uninstaller binaries. Call this from `main()`.
     pub fn uninstall_main(&mut self, uninstall_fn: impl Fn(&mut Installer) -> Result<()>) {
-        self.headless = std::env::args().any(|a| a == "--headless");
         if let Err(e) = uninstall_fn(self) {
             eprintln!("Error: {e:#}");
             std::process::exit(1);
@@ -1672,7 +1684,7 @@ mod tests {
             "--components".into(),
             "a,c".into(),
         ];
-        i.apply_component_args_from(&args).unwrap();
+        i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("a"));
         assert!(!i.is_component_selected("b"));
         assert!(i.is_component_selected("c"));
@@ -1684,7 +1696,7 @@ mod tests {
         i.component("core", "Core").required(true);
         i.component("docs", "Docs");
         let args = vec!["installer".into(), "--components=docs".into()];
-        i.apply_component_args_from(&args).unwrap();
+        i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("core"));
         assert!(i.is_component_selected("docs"));
     }
@@ -1701,7 +1713,7 @@ mod tests {
             "--without".into(),
             "b".into(),
         ];
-        i.apply_component_args_from(&args).unwrap();
+        i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("a"));
         assert!(!i.is_component_selected("b"));
     }
@@ -1711,7 +1723,7 @@ mod tests {
         let mut i = make_bare_installer();
         i.component("a", "A");
         let args = vec!["installer".into(), "--with=bogus".into()];
-        assert!(i.apply_component_args_from(&args).is_err());
+        assert!(i.process_commandline_from(&args).is_err());
     }
 
     #[test]
@@ -1719,7 +1731,15 @@ mod tests {
         let mut i = make_bare_installer();
         i.component("core", "Core").required(true);
         let args = vec!["installer".into(), "--without=core".into()];
-        i.apply_component_args_from(&args).unwrap();
+        i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("core"));
+    }
+
+    #[test]
+    fn cli_headless_flag_sets_field() {
+        let mut i = make_bare_installer();
+        let args = vec!["installer".into(), "--headless".into()];
+        i.process_commandline_from(&args).unwrap();
+        assert!(i.headless);
     }
 }

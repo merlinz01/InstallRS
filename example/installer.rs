@@ -52,6 +52,9 @@ pub fn install(i: &mut Installer) -> Result<()> {
         .description(t!("installer.components.extras_desc"))
         .default(false);
 
+    // Parse CLI (--headless, --list-components, --components, etc.).
+    i.process_commandline()?;
+
     InstallerGui::wizard()
         .title(&t!("installer.title"))
         .buttons(button_labels())
@@ -128,6 +131,9 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     use installrs::gui::*;
 
     init_locale();
+
+    i.process_commandline()?;
+
     let install_dir = std::env::current_exe()?
         .parent()
         .expect("Executable must be in a directory")

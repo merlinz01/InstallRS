@@ -50,6 +50,16 @@ installer.license.accept:
   de: "Ich akzeptiere die Lizenzvereinbarung"
   es: "Acepto el acuerdo de licencia"
 
+installer.language.title:
+  en: "Language"
+  de: "Sprache"
+  es: "Idioma"
+
+installer.language.prompt:
+  en: "Please choose the language for the installation process:"
+  de: "Bitte wählen Sie die Sprache für den Installationsprozess:"
+  es: "Por favor, elija el idioma para el proceso de instalación:"
+
 installer.components.heading:
   en: "Select Components"
   de: "Komponenten auswählen"

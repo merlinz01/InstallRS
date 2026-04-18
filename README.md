@@ -210,6 +210,27 @@ Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
 wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard
 window as parent.
 
+For a pre-wizard language selector, `installrs::gui::choose_language(title,
+prompt, &[(code, display), ...], default_code) -> Result<Option<String>>`
+shows a modal dropdown and returns the selected code (or `None` if
+dismissed). Run it *before* building the wizard — page strings are
+captured eagerly, so the locale must be final by then:
+
+```rust
+init_locale();                                    // read system locale
+if let Some(code) = installrs::gui::choose_language(
+    &t!("installer.language.title"),               // already localized
+    &t!("installer.language.prompt"),
+    &[("en", "English"), ("es", "Español"), ("de", "Deutsch")],
+    Some(&rust_i18n::locale()),
+)? {
+    rust_i18n::set_locale(&code);
+}
+InstallerGui::wizard()
+    .title(&t!("installer.title"))                 // now uses chosen locale
+    // ...
+```
+
 ### Headless mode
 
 When `--headless` is passed (and applied via `i.process_commandline()`),

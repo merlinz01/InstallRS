@@ -7,7 +7,7 @@ mod win32;
 #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
 mod gtk;
 
-pub use dialog::{confirm, error, info, warn};
+pub use dialog::{choose_language, confirm, error, info, warn};
 pub use types::{
     ButtonLabels, ConfiguredPage, ExitCallback, GuiContext, GuiMessage, InstallCallback,
     OnBeforeLeaveCallback, OnEnterCallback, PageContext, StartCallback, WizardConfig, WizardPage,

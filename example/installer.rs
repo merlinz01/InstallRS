@@ -41,6 +41,27 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     init_locale();
 
+    // In GUI mode, let the user pick a language before we build the wizard
+    // (page strings are captured eagerly by the builder, so the locale must
+    // be final by then). The dialog's own title + prompt are already
+    // localized via `t!` using the detected locale set by `init_locale()`.
+    if !std::env::args().any(|a| a == "--headless") {
+        let choices: &[(&str, &str)] = &[
+            ("en", "English"),
+            ("es", "Español"),
+            ("de", "Deutsch"),
+        ];
+        let default = rust_i18n::locale().to_string();
+        if let Some(code) = installrs::gui::choose_language(
+            &t!("installer.language.title"),
+            &t!("installer.language.prompt"),
+            choices,
+            Some(&default),
+        )? {
+            rust_i18n::set_locale(&code);
+        }
+    }
+
     // Register selectable components. "core" is required; "docs" is on by
     // default; "extras" is off by default.
     i.component("core", t!("installer.components.core"))

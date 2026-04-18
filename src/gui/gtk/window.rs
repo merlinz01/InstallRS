@@ -36,6 +36,11 @@ pub fn run(
     rx: mpsc::Receiver<GuiMessage>,
     install_callback: Option<InstallCallback>,
 ) -> Result<()> {
+    // Don't let GTK call setlocale() — it warns when LANG is a short form
+    // like "es" (rather than "es_ES.UTF-8") because the C library refuses it.
+    // Our app-level i18n is string-key based (rust_i18n), so we don't need
+    // C locale configuration either way.
+    super::disable_setlocale_once();
     gtk::init().map_err(|e| anyhow::anyhow!("gtk init failed: {e}"))?;
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel);

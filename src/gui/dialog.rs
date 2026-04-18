@@ -25,6 +25,7 @@ fn show_gtk(
     buttons: gtk::ButtonsType,
 ) -> Result<gtk::ResponseType> {
     use gtk::prelude::*;
+    crate::gui::gtk::disable_setlocale_once();
     gtk::init().map_err(|e| anyhow::anyhow!("gtk init failed: {e}"))?;
     let parent = gtk::Window::list_toplevels()
         .into_iter()

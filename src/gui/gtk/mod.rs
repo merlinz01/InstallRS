@@ -3,10 +3,20 @@ mod window;
 
 use anyhow::Result;
 use std::sync::atomic::AtomicBool;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex, Once};
 
 use super::types::{ConfiguredPage, GuiMessage, WizardConfig, WizardPage};
 use crate::Installer;
+
+/// Call `gtk::disable_setlocale()` at most once, and always before the first
+/// `gtk::init()`. GTK panics if `disable_setlocale` is called after init, so
+/// subsequent wizard runs and dialog calls must not re-invoke it.
+pub(crate) fn disable_setlocale_once() {
+    static GUARD: Once = Once::new();
+    GUARD.call_once(|| {
+        gtk::disable_setlocale();
+    });
+}
 
 /// Run the wizard GUI on the main thread, spawning the install callback on a
 /// background thread when the install page is reached.

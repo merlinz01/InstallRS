@@ -1,8 +1,8 @@
 use winsafe::co;
 use winsafe::gui;
-use winsafe::msg::wm;
+use winsafe::msg::{lvm, wm};
 use winsafe::prelude::*;
-use winsafe::{HBRUSH, HFONT, SIZE};
+use winsafe::{HBRUSH, HFONT, LVITEM, SIZE};
 
 /// Internal padding between the panel edge and its controls.
 const PAD: i32 = 20;
@@ -371,8 +371,8 @@ impl DirectoryPickerPage {
 pub struct ComponentsPage {
     _heading_label: gui::Label,
     _label: gui::Label,
-    /// (component id, checkbox)
-    checks: Vec<(String, gui::CheckBox)>,
+    list: gui::ListView,
+    ids: Vec<String>,
 }
 
 impl ComponentsPage {
@@ -382,7 +382,7 @@ impl ComponentsPage {
         label_text: &str,
         components: &[crate::Component],
         width: i32,
-        _height: i32,
+        height: i32,
     ) -> Self {
         let heading_label = gui::Label::new(
             parent,
@@ -435,63 +435,140 @@ impl ComponentsPage {
             },
         );
 
-        let mut checks: Vec<(String, gui::CheckBox, bool, bool)> = Vec::new();
-        let mut y = label_y + 28;
-        for c in components {
-            let display = if c.required {
-                format!("{} (required)", c.label)
-            } else {
-                c.label.clone()
-            };
-            let cb = gui::CheckBox::new(
-                parent,
-                gui::CheckBoxOpts {
-                    text: &display,
-                    position: gui::dpi(PAD, y),
-                    size: gui::dpi(width - 2 * PAD, 22),
-                    resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                    ..Default::default()
-                },
-            );
-            checks.push((c.id.clone(), cb, c.selected, c.required));
-            y += 24;
-        }
+        // ListView with checkboxes: native scrolling + standard Windows idiom.
+        let list_y = label_y + 28;
+        let list_h = height - list_y - PAD;
+        let list_w = width - 2 * PAD;
+        let col_width: i32 = list_w - 24; // leave room for the scrollbar
+        let cols: [(&str, i32); 1] = [("Component", col_width)];
+        let list = gui::ListView::new(
+            parent,
+            gui::ListViewOpts {
+                position: gui::dpi(PAD, list_y),
+                size: gui::dpi(list_w, list_h),
+                control_style: co::LVS::REPORT
+                    | co::LVS::NOCOLUMNHEADER
+                    | co::LVS::SHOWSELALWAYS
+                    | co::LVS::SINGLESEL,
+                control_ex_style: co::LVS_EX::CHECKBOXES,
+                columns: &cols,
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
+                ..Default::default()
+            },
+        );
 
-        // Apply initial state after the controls are created.
+        let ids: Vec<String> = components.iter().map(|c| c.id.clone()).collect();
+        let required: Vec<bool> = components.iter().map(|c| c.required).collect();
+
+        // Populate rows + initial check state after the control is created.
         {
-            let checks_c: Vec<(gui::CheckBox, bool, bool)> = checks
+            let list_c = list.clone();
+            let initial: Vec<(String, bool)> = components
                 .iter()
-                .map(|(_, cb, sel, req)| (cb.clone(), *sel, *req))
+                .map(|c| {
+                    let text = if c.required {
+                        format!("{} (required)", c.label)
+                    } else {
+                        c.label.clone()
+                    };
+                    (text, c.selected)
+                })
                 .collect();
             parent.on().wm_create(move |_| {
-                for (cb, selected, required) in &checks_c {
-                    cb.set_check(*selected);
-                    if *required {
-                        cb.hwnd().EnableWindow(false);
-                    }
+                for (idx, (text, selected)) in initial.iter().enumerate() {
+                    list_c.items().add(&[text.as_str()], None, ())?;
+                    set_lv_check(&list_c, idx as u32, *selected);
                 }
                 Ok(0)
             });
         }
 
-        setup_transparent_labels(parent);
+        // Block unchecking required rows via LVN_ITEMCHANGING — the canonical
+        // Win32 way. Returning `true` tells Windows to reject the change.
+        // Only block the checked→unchecked transition, so the *initial*
+        // programmatic set (state image 0 → 2) still goes through; otherwise
+        // required rows would render without any checkbox at all.
+        {
+            let required_c = required.clone();
+            list.on().lvn_item_changing(move |p| {
+                if p.uChanged.has(co::LVIF::STATE) {
+                    let idx = p.iItem as usize;
+                    if idx < required_c.len() && required_c[idx] {
+                        let old_img = p.uOldState.raw() & 0xF000;
+                        let new_img = p.uNewState.raw() & 0xF000;
+                        if old_img == 0x2000 && new_img == 0x1000 {
+                            return Ok(true);
+                        }
+                    }
+                }
+                Ok(false)
+            });
+        }
 
-        let checks = checks.into_iter().map(|(id, cb, _, _)| (id, cb)).collect();
+        // Custom-draw required rows with the system "grey text" color so
+        // they read as disabled — the ListView doesn't have a per-row
+        // disabled state, so this is the standard approach.
+        {
+            let required_c = required.clone();
+            list.on().nm_custom_draw(move |p| match p.mcd.dwDrawStage {
+                co::CDDS::PREPAINT => Ok(co::CDRF::NOTIFYITEMDRAW),
+                co::CDDS::ITEMPREPAINT => {
+                    let idx = p.mcd.dwItemSpec;
+                    if idx < required_c.len() && required_c[idx] {
+                        p.clrText = winsafe::GetSysColor(co::COLOR::GRAYTEXT);
+                        return Ok(co::CDRF::NEWFONT);
+                    }
+                    Ok(co::CDRF::DODEFAULT)
+                }
+                _ => Ok(co::CDRF::DODEFAULT),
+            });
+        }
+
+        setup_transparent_labels(parent);
 
         Self {
             _heading_label: heading_label,
             _label: label,
-            checks,
+            list,
+            ids,
         }
     }
 
     /// Current selections, in order: `(component_id, is_checked)`.
     pub fn selections(&self) -> Vec<(String, bool)> {
-        self.checks
+        self.ids
             .iter()
-            .map(|(id, cb)| (id.clone(), cb.is_checked()))
+            .enumerate()
+            .map(|(i, id)| (id.clone(), get_lv_check(&self.list, i as u32)))
             .collect()
     }
+}
+
+// ListView check-state helpers. winsafe's `ListViewItem` has no
+// `set_checked`/`is_checked`, so we go through LVM_{SET,GET}ITEMSTATE with
+// `LVIS_STATEIMAGEMASK` directly — state image index 2 = checked, 1 = unchecked.
+
+fn set_lv_check(list: &gui::ListView, index: u32, checked: bool) {
+    let raw_state: u32 = if checked { 0x2000 } else { 0x1000 };
+    let mut lvi = LVITEM::default();
+    lvi.stateMask = co::LVIS::STATEIMAGEMASK;
+    lvi.state = unsafe { co::LVIS::from_raw(raw_state) };
+    let _ = unsafe {
+        list.hwnd().SendMessage(lvm::SetItemState {
+            index: Some(index),
+            lvitem: &lvi,
+        })
+    };
+}
+
+fn get_lv_check(list: &gui::ListView, index: u32) -> bool {
+    let state = unsafe {
+        list.hwnd().SendMessage(lvm::GetItemState {
+            index,
+            mask: co::LVIS::STATEIMAGEMASK,
+        })
+    };
+    (state.raw() & 0xF000) == 0x2000
 }
 
 // ── Install Page ────────────────────────────────────────────────────────────

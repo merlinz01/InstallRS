@@ -213,12 +213,16 @@ impl ComponentsPage {
             .vexpand(true)
             .hexpand(true)
             .shadow_type(gtk::ShadowType::In)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .min_content_height(120)
             .build();
         let list_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
         list_box.set_margin_top(6);
         list_box.set_margin_bottom(6);
         list_box.set_margin_start(6);
         list_box.set_margin_end(6);
+        list_box.set_valign(gtk::Align::Start);
 
         let mut checks: Vec<(String, gtk::CheckButton)> = Vec::new();
         for c in components {

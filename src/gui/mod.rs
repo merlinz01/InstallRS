@@ -104,6 +104,25 @@ impl InstallerGui {
         self
     }
 
+    /// Add a components page (list of checkboxes for optional features).
+    ///
+    /// Components must be registered on the `Installer` via
+    /// [`Installer::component`](crate::Installer::component) before calling
+    /// [`run`](Self::run). The page renders one checkbox per registered
+    /// component; required components render greyed-out.
+    ///
+    /// `heading` is the bold title at the top; `label` is the intro sentence
+    /// above the checkbox list (e.g. "Select the features to install:").
+    pub fn components_page(mut self, heading: &str, label: &str) -> Self {
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Components {
+                heading: heading.to_string(),
+                label: label.to_string(),
+            }));
+        self
+    }
+
     /// Add a directory picker page with a default path.
     ///
     /// `heading` is the bold title at the top of the page, `label` is the
@@ -179,6 +198,10 @@ impl InstallerGui {
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.
     /// Falls back to an error on unsupported platforms.
     pub fn run(self, installer: &mut Installer) -> Result<()> {
+        // Apply component CLI args (handles --list-components and exits, or
+        // applies --components / --with / --without to the selection state).
+        installer.apply_component_args()?;
+
         // In headless mode, skip the GUI entirely
         if installer.headless {
             return Err(anyhow::anyhow!("GUI installer cannot run in headless mode"));

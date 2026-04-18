@@ -8,7 +8,8 @@ use std::time::Duration;
 use gtk::prelude::*;
 
 use super::pages::{
-    DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind, WelcomePage,
+    ComponentsPage, DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind,
+    WelcomePage,
 };
 use crate::gui::types::{
     ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
@@ -77,6 +78,12 @@ pub fn run(
                 let p = LicensePage::new(&heading, &text, &accept_label);
                 let w = p.widget().clone();
                 (w, PageKind::License(p))
+            }
+            WizardPage::Components { heading, label } => {
+                let comps = installer.lock().unwrap().components().to_vec();
+                let p = ComponentsPage::new(&heading, &label, &comps);
+                let w = p.widget().clone();
+                (w, PageKind::Components(p))
             }
             WizardPage::DirectoryPicker {
                 heading,
@@ -293,15 +300,23 @@ pub fn run(
         let window_c = window.clone();
         let stack_c = stack.clone();
         let make_ctx_c = make_ctx.clone();
+        let installer_c = installer.clone();
 
         btn_next.connect_clicked(move |_| {
             let idx = *current_c.borrow();
 
-            // Sync directory picker into shared install_dir before callbacks.
+            // Sync directory picker / components into installer state before callbacks.
             {
                 let pages_b = pages_c.borrow();
                 if let PageKind::DirectoryPicker(ref dp) = pages_b[idx].kind {
                     *install_dir_c.lock().unwrap() = dp.get_directory();
+                }
+                if let PageKind::Components(ref cp) = pages_b[idx].kind {
+                    let sels = cp.selections();
+                    let mut inst = installer_c.lock().unwrap();
+                    for (id, on) in sels {
+                        inst.set_component_selected(&id, on);
+                    }
                 }
             }
 
@@ -367,7 +382,7 @@ pub fn run(
     });
 
     // Timer: drain background → GUI messages.
-    {
+    let timer_src = {
         let pages_c = pages.clone();
         let current_c = current_page.clone();
         let install_running_c = install_running.clone();
@@ -443,8 +458,8 @@ pub fn run(
                 }
             }
             glib::ControlFlow::Continue
-        });
-    }
+        })
+    };
 
     // Initial state + on_enter for the first page + auto-start if install.
     update_buttons();
@@ -468,6 +483,17 @@ pub fn run(
 
     window.show_all();
     gtk::main();
+
+    // Tear down GTK-owned state so all captured Arc<Mutex<Installer>> refs
+    // in widget event handlers and the timeout source can drop. Without
+    // this, Arc::try_unwrap in run_wizard fails.
+    timer_src.remove();
+    unsafe {
+        window.destroy();
+    }
+    while gtk::events_pending() {
+        gtk::main_iteration();
+    }
 
     let result = install_result.borrow_mut().take();
     if let Some(Err(e)) = result {

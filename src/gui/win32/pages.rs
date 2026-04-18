@@ -23,6 +23,7 @@ fn setup_transparent_labels(parent: &gui::WindowControl) {
 pub enum PageKind {
     Welcome(WelcomePage),
     License(LicensePage),
+    Components(ComponentsPage),
     DirectoryPicker(DirectoryPickerPage),
     Install(InstallPage),
     Finish(FinishPage),
@@ -362,6 +363,134 @@ impl DirectoryPickerPage {
 
     pub fn get_directory(&self) -> String {
         self.dir_edit.text().unwrap_or_default()
+    }
+}
+
+// ── Components Page ─────────────────────────────────────────────────────────
+
+pub struct ComponentsPage {
+    _heading_label: gui::Label,
+    _label: gui::Label,
+    /// (component id, checkbox)
+    checks: Vec<(String, gui::CheckBox)>,
+}
+
+impl ComponentsPage {
+    pub fn new(
+        parent: &gui::WindowControl,
+        heading: &str,
+        label_text: &str,
+        components: &[crate::Component],
+        width: i32,
+        _height: i32,
+    ) -> Self {
+        let heading_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: heading,
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 24),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        {
+            let heading_c = heading_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    heading_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                Ok(0)
+            });
+        }
+
+        let label_y = PAD + 24 + 20;
+        let label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: label_text,
+                position: gui::dpi(PAD, label_y),
+                size: gui::dpi(width - 2 * PAD, 20),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        let mut checks: Vec<(String, gui::CheckBox, bool, bool)> = Vec::new();
+        let mut y = label_y + 28;
+        for c in components {
+            let display = if c.required {
+                format!("{} (required)", c.label)
+            } else {
+                c.label.clone()
+            };
+            let cb = gui::CheckBox::new(
+                parent,
+                gui::CheckBoxOpts {
+                    text: &display,
+                    position: gui::dpi(PAD, y),
+                    size: gui::dpi(width - 2 * PAD, 22),
+                    resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                    ..Default::default()
+                },
+            );
+            checks.push((c.id.clone(), cb, c.selected, c.required));
+            y += 24;
+        }
+
+        // Apply initial state after the controls are created.
+        {
+            let checks_c: Vec<(gui::CheckBox, bool, bool)> = checks
+                .iter()
+                .map(|(_, cb, sel, req)| (cb.clone(), *sel, *req))
+                .collect();
+            parent.on().wm_create(move |_| {
+                for (cb, selected, required) in &checks_c {
+                    cb.set_check(*selected);
+                    if *required {
+                        cb.hwnd().EnableWindow(false);
+                    }
+                }
+                Ok(0)
+            });
+        }
+
+        setup_transparent_labels(parent);
+
+        let checks = checks.into_iter().map(|(id, cb, _, _)| (id, cb)).collect();
+
+        Self {
+            _heading_label: heading_label,
+            _label: label,
+            checks,
+        }
+    }
+
+    /// Current selections, in order: `(component_id, is_checked)`.
+    pub fn selections(&self) -> Vec<(String, bool)> {
+        self.checks
+            .iter()
+            .map(|(id, cb)| (id.clone(), cb.is_checked()))
+            .collect()
     }
 }
 

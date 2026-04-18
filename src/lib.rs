@@ -131,6 +131,72 @@ pub struct Installer {
     self_delete: bool,
     sink: Option<Box<dyn ProgressSink>>,
     progress: Mutex<ProgressState>,
+    components: Vec<Component>,
+}
+
+/// An optional feature the user can select or deselect at install time.
+///
+/// Registered via [`Installer::component`], which returns a `&mut Component`
+/// so you can chain the builder methods inline:
+///
+/// ```rust,ignore
+/// i.component("docs", "Documentation")
+///     .description("User-facing docs")
+///     .default(false);
+/// ```
+///
+/// Query with [`Installer::is_component_selected`] inside the install
+/// callback to branch on user choice.
+#[derive(Clone, Debug)]
+pub struct Component {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub default: bool,
+    pub required: bool,
+    pub selected: bool,
+}
+
+impl Component {
+    fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            description: String::new(),
+            default: true,
+            required: false,
+            selected: true,
+        }
+    }
+
+    pub fn description(&mut self, desc: impl Into<String>) -> &mut Self {
+        self.description = desc.into();
+        self
+    }
+
+    /// Whether the component starts checked. Also updates the current
+    /// selected state (so later `is_component_selected` sees it).
+    pub fn default(&mut self, on: bool) -> &mut Self {
+        self.default = on;
+        self.selected = on;
+        self
+    }
+
+    /// Required components cannot be unchecked; they render greyed-out in
+    /// the wizard and are always on in headless mode.
+    pub fn required(&mut self, on: bool) -> &mut Self {
+        self.required = on;
+        if on {
+            self.selected = true;
+            self.default = true;
+        }
+        self
+    }
+
+    pub fn label(&mut self, label: impl Into<String>) -> &mut Self {
+        self.label = label.into();
+        self
+    }
 }
 
 impl Installer {
@@ -156,7 +222,168 @@ impl Installer {
                 bytes_installed: 0,
                 bytes_total: total,
             }),
+            components: Vec::new(),
         }
+    }
+
+    /// Register an optional installable component.
+    ///
+    /// Returns a `&mut Component` so you can chain builder methods:
+    ///
+    /// ```rust,ignore
+    /// i.component("docs", "Documentation")
+    ///     .description("User-facing docs")
+    ///     .default(false);
+    /// ```
+    ///
+    /// Call before running the wizard or parsing CLI args. Later calls with
+    /// the same `id` return the existing component (subsequent builder calls
+    /// update it in place).
+    pub fn component(
+        &mut self,
+        id: impl Into<String>,
+        label: impl Into<String>,
+    ) -> &mut Component {
+        let id = id.into();
+        if let Some(pos) = self.components.iter().position(|c| c.id == id) {
+            let existing = &mut self.components[pos];
+            existing.label = label.into();
+            return existing;
+        }
+        self.components.push(Component::new(id, label));
+        self.components.last_mut().unwrap()
+    }
+
+    /// All registered components, in registration order.
+    pub fn components(&self) -> &[Component] {
+        &self.components
+    }
+
+    /// Whether a component is currently selected. Unknown ids return `false`.
+    pub fn is_component_selected(&self, id: &str) -> bool {
+        self.components
+            .iter()
+            .find(|c| c.id == id)
+            .map(|c| c.selected)
+            .unwrap_or(false)
+    }
+
+    /// Set the selected state of a component. Required components ignore
+    /// attempts to deselect them. Unknown ids are silently ignored.
+    pub fn set_component_selected(&mut self, id: &str, on: bool) {
+        if let Some(c) = self.components.iter_mut().find(|c| c.id == id) {
+            if c.required && !on {
+                return;
+            }
+            c.selected = on;
+        }
+    }
+
+    /// Apply component-related CLI arguments from `std::env::args()`.
+    ///
+    /// Recognized flags (call this *after* registering all components):
+    /// - `--list-components` — print the component table and exit with status 0
+    /// - `--components a,b,c` — install exactly this set (plus all required)
+    /// - `--with a,b` — enable these (in addition to defaults)
+    /// - `--without a,b` — disable these (requires cannot be disabled)
+    ///
+    /// Returns an error on unknown component ids. Unrecognized flags are left
+    /// alone (they might be meaningful to the user's install callback).
+    ///
+    /// The wizard calls this automatically at the top of
+    /// [`InstallerGui::run`](crate::gui::InstallerGui::run); headless
+    /// installers should call it explicitly after registering components.
+    pub fn apply_component_args(&mut self) -> Result<()> {
+        let args: Vec<String> = std::env::args().collect();
+        self.apply_component_args_from(&args)
+    }
+
+    #[doc(hidden)]
+    pub fn apply_component_args_from(&mut self, args: &[String]) -> Result<()> {
+        let mut exact: Option<Vec<String>> = None;
+        let mut with: Vec<String> = Vec::new();
+        let mut without: Vec<String> = Vec::new();
+        let mut list = false;
+
+        let mut i = 1;
+        while i < args.len() {
+            let a = &args[i];
+            let (flag, inline_val): (&str, Option<&str>) = if let Some(eq) = a.find('=') {
+                (&a[..eq], Some(&a[eq + 1..]))
+            } else {
+                (a.as_str(), None)
+            };
+            let take_val = |i: &mut usize| -> Result<String> {
+                if let Some(v) = inline_val {
+                    Ok(v.to_string())
+                } else {
+                    *i += 1;
+                    args.get(*i)
+                        .cloned()
+                        .ok_or_else(|| anyhow!("{flag} requires a value"))
+                }
+            };
+            match flag {
+                "--list-components" => list = true,
+                "--components" => {
+                    let v = take_val(&mut i)?;
+                    exact = Some(v.split(',').map(|s| s.trim().to_string()).collect());
+                }
+                "--with" => {
+                    let v = take_val(&mut i)?;
+                    with.extend(v.split(',').map(|s| s.trim().to_string()));
+                }
+                "--without" => {
+                    let v = take_val(&mut i)?;
+                    without.extend(v.split(',').map(|s| s.trim().to_string()));
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        if list {
+            println!("Available components:");
+            for c in &self.components {
+                let marker = if c.required {
+                    "*"
+                } else if c.default {
+                    "+"
+                } else {
+                    "-"
+                };
+                println!("  {} {:<20} {}", marker, c.id, c.label);
+                if !c.description.is_empty() {
+                    println!("    {}", c.description);
+                }
+            }
+            println!("\n  * required   + default on   - default off");
+            std::process::exit(0);
+        }
+
+        let known: std::collections::HashSet<String> =
+            self.components.iter().map(|c| c.id.clone()).collect();
+        for id in exact.iter().flatten().chain(with.iter()).chain(without.iter()) {
+            if !id.is_empty() && !known.contains(id) {
+                return Err(anyhow!("unknown component: {id}"));
+            }
+        }
+
+        if let Some(wanted) = exact {
+            let wanted: std::collections::HashSet<String> = wanted.into_iter().collect();
+            for c in self.components.iter_mut() {
+                let on = c.required || wanted.contains(&c.id);
+                c.selected = on;
+            }
+        }
+        for id in with {
+            self.set_component_selected(&id, true);
+        }
+        for id in without {
+            self.set_component_selected(&id, false);
+        }
+
+        Ok(())
     }
 
     /// Set the base output directory for relative destination paths.
@@ -1396,5 +1623,103 @@ mod tests {
         assert_eq!(i.bytes_of(&[src("a.txt")]), 3);
         assert_eq!(i.bytes_of(&[src("d")]), 7);
         assert_eq!(i.bytes_of(&[src("a.txt"), src("d")]), 10);
+    }
+
+    fn make_bare_installer() -> Installer {
+        Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "")
+    }
+
+    #[test]
+    fn component_register_and_query() {
+        let mut i = make_bare_installer();
+        i.component("core", "Core").required(true);
+        i.component("docs", "Docs").default(false);
+        i.component("extras", "Extras");
+
+        assert_eq!(i.components().len(), 3);
+        assert!(i.is_component_selected("core"));
+        assert!(!i.is_component_selected("docs"));
+        assert!(i.is_component_selected("extras"));
+        assert!(!i.is_component_selected("nope"));
+    }
+
+    #[test]
+    fn component_required_cannot_be_deselected() {
+        let mut i = make_bare_installer();
+        i.component("core", "Core").required(true);
+        i.set_component_selected("core", false);
+        assert!(i.is_component_selected("core"));
+    }
+
+    #[test]
+    fn component_reregistration_updates_in_place() {
+        let mut i = make_bare_installer();
+        i.component("docs", "v1");
+        i.component("docs", "v2").default(false);
+        assert_eq!(i.components().len(), 1);
+        assert_eq!(i.components()[0].label, "v2");
+        assert!(!i.is_component_selected("docs"));
+    }
+
+    #[test]
+    fn cli_exact_components_selects_only_listed() {
+        let mut i = make_bare_installer();
+        i.component("a", "A");
+        i.component("b", "B");
+        i.component("c", "C");
+        let args = vec![
+            "installer".into(),
+            "--components".into(),
+            "a,c".into(),
+        ];
+        i.apply_component_args_from(&args).unwrap();
+        assert!(i.is_component_selected("a"));
+        assert!(!i.is_component_selected("b"));
+        assert!(i.is_component_selected("c"));
+    }
+
+    #[test]
+    fn cli_exact_components_keeps_required() {
+        let mut i = make_bare_installer();
+        i.component("core", "Core").required(true);
+        i.component("docs", "Docs");
+        let args = vec!["installer".into(), "--components=docs".into()];
+        i.apply_component_args_from(&args).unwrap();
+        assert!(i.is_component_selected("core"));
+        assert!(i.is_component_selected("docs"));
+    }
+
+    #[test]
+    fn cli_with_and_without_delta() {
+        let mut i = make_bare_installer();
+        i.component("a", "A").default(false);
+        i.component("b", "B");
+        let args = vec![
+            "installer".into(),
+            "--with".into(),
+            "a".into(),
+            "--without".into(),
+            "b".into(),
+        ];
+        i.apply_component_args_from(&args).unwrap();
+        assert!(i.is_component_selected("a"));
+        assert!(!i.is_component_selected("b"));
+    }
+
+    #[test]
+    fn cli_unknown_component_errors() {
+        let mut i = make_bare_installer();
+        i.component("a", "A");
+        let args = vec!["installer".into(), "--with=bogus".into()];
+        assert!(i.apply_component_args_from(&args).is_err());
+    }
+
+    #[test]
+    fn cli_without_cannot_disable_required() {
+        let mut i = make_bare_installer();
+        i.component("core", "Core").required(true);
+        let args = vec!["installer".into(), "--without=core".into()];
+        i.apply_component_args_from(&args).unwrap();
+        assert!(i.is_component_selected("core"));
     }
 }

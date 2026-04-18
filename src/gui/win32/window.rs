@@ -7,7 +7,8 @@ use winsafe::gui;
 use winsafe::prelude::*;
 
 use super::pages::{
-    DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind, WelcomePage,
+    ComponentsPage, DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind,
+    WelcomePage,
 };
 use crate::gui::types::{
     ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
@@ -117,6 +118,17 @@ pub fn run(
                 content_width,
                 content_height,
             )),
+            WizardPage::Components { heading, label } => {
+                let comps = installer.lock().unwrap().components().to_vec();
+                PageKind::Components(ComponentsPage::new(
+                    &panel,
+                    &heading,
+                    &label,
+                    &comps,
+                    content_width,
+                    content_height,
+                ))
+            }
             WizardPage::DirectoryPicker {
                 heading,
                 label,
@@ -366,6 +378,7 @@ pub fn run(
             let start_install_c = start_install.clone();
             let wnd_c = wnd.clone();
             let make_ctx = make_page_ctx.clone();
+            let installer_c = installer.clone();
 
             btn_next.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
@@ -377,6 +390,13 @@ pub fn run(
                     if let PageKind::DirectoryPicker(ref dp) = pages_guard[idx].kind {
                         let dir = dp.get_directory();
                         *install_dir_c.lock().unwrap() = dir;
+                    }
+                    if let PageKind::Components(ref cp) = pages_guard[idx].kind {
+                        let sels = cp.selections();
+                        let mut inst = installer_c.lock().unwrap();
+                        for (id, on) in sels {
+                            inst.set_component_selected(&id, on);
+                        }
                     }
                 }
 

@@ -50,6 +50,51 @@ installer.license.accept:
   de: "Ich akzeptiere die Lizenzvereinbarung"
   es: "Acepto el acuerdo de licencia"
 
+installer.components.heading:
+  en: "Select Components"
+  de: "Komponenten auswählen"
+  es: "Seleccionar componentes"
+
+installer.components.label:
+  en: "Choose which features to install:"
+  de: "Wählen Sie, welche Funktionen installiert werden sollen:"
+  es: "Elija qué funciones instalar:"
+
+installer.components.core:
+  en: "Core files"
+  de: "Hauptdateien"
+  es: "Archivos principales"
+
+installer.components.core_desc:
+  en: "Required program files — always installed."
+  de: "Erforderliche Programmdateien — werden immer installiert."
+  es: "Archivos de programa necesarios — siempre se instalan."
+
+installer.components.docs:
+  en: "Documentation"
+  de: "Dokumentation"
+  es: "Documentación"
+
+installer.components.docs_desc:
+  en: "User-facing documentation and readme files."
+  de: "Benutzerdokumentation und Readme-Dateien."
+  es: "Documentación para el usuario y archivos readme."
+
+installer.components.extras:
+  en: "Extra samples"
+  de: "Zusätzliche Beispiele"
+  es: "Ejemplos adicionales"
+
+installer.components.extras_desc:
+  en: "Optional example files (off by default)."
+  de: "Optionale Beispieldateien (standardmäßig aus)."
+  es: "Archivos de ejemplo opcionales (desactivados por defecto)."
+
+installer.install.log_docs:
+  en: "Installing documentation..."
+  de: "Dokumentation wird installiert..."
+  es: "Instalando documentación..."
+
 installer.directory.heading:
   en: "Choose Install Location"
   de: "Installationsort auswählen"

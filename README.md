@@ -25,9 +25,11 @@ We can do better in 2026.
 - Automatically generates both installer and uninstaller binaries
 - Supports file compression (lzma, gzip, bzip2) to reduce binary size
 - Small binaries — no runtime overhead
-- Optional native wizard GUI (welcome, license, directory picker, progress,
-  finish) with translatable button labels and page-level `on_enter` /
+- Optional native wizard GUI (welcome, license, components, directory picker,
+  progress, finish) with translatable button labels and page-level `on_enter` /
   `on_before_leave` callbacks — Win32 on Windows, GTK3 on Linux
+- Component system: let users pick optional features via wizard checkboxes or
+  `--components` / `--with` / `--without` CLI flags
 - Built-in native dialog helpers (`info`, `warn`, `error`, `confirm`)
 - Windows resource support: icons (PNG auto-converted to ICO), version info, manifests
 - Separate configuration for installer and uninstaller binaries
@@ -122,6 +124,45 @@ the sink.
 | `bytes_of(&[sources])`      | Compute the byte count for a subset of embedded sources      |
 | `reset_progress()`          | Reset `bytes_installed` to zero                              |
 | `enable_self_delete()`      | Windows: re-launch from temp so the install dir can be wiped |
+| `component(id, label)`      | Register an optional component (returns `&mut Component` for chaining) |
+| `is_component_selected(id)` | Check whether a component is currently selected              |
+| `set_component_selected(id, on)` | Force a component on/off (required components ignore off) |
+| `apply_component_args()`    | Parse `--components`/`--with`/`--without`/`--list-components` from argv |
+
+## Components
+
+Register optional features with `i.component(id, label)` and chain builder
+methods on the returned `&mut Component`:
+
+```rust
+i.component("core", "Core files")
+    .description("Always installed")
+    .required(true);
+i.component("docs", "Documentation")
+    .description("User manual and readme");
+i.component("extras", "Extra samples")
+    .description("Optional example files")
+    .default(false);
+```
+
+Branch on selection inside the install callback:
+
+```rust
+if i.is_component_selected("docs") {
+    i.dir(source!("docs"), "docs").install()?;
+}
+```
+
+The wizard renders a `components_page(...)` with one checkbox per component
+(required ones greyed-out). Headless users select via CLI flags the wizard
+parses automatically:
+
+- `--list-components` — print available components and exit
+- `--components a,b,c` — install exactly this set (required always included)
+- `--with a,b` / `--without c` — delta from defaults
+
+For pure-headless installers (no GUI page), call `i.apply_component_args()?`
+explicitly after registering components.
 
 ## GUI
 
@@ -134,15 +175,22 @@ with `InstallerGui::wizard()`:
 ```rust
 use installrs::gui::*;
 
+// Register components up front (optional).
+i.component("docs", "Documentation");
+
 InstallerGui::wizard()
     .title("My App Installer")
     .welcome("Welcome!", "Click Next to continue.")
     .license("License Agreement", include_str!("../LICENSE"), "I accept")
+    .components_page("Select Components", "Choose features to install:")
     .directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
     .on_before_leave(|ctx| confirm("Confirm", &format!("Install to {}?", ctx.install_dir())))
     .install_page(|ctx| {
         let mut i = ctx.installer();
         i.file(source!("app.exe"), "app.exe").install()?;
+        if i.is_component_selected("docs") {
+            i.dir(source!("docs"), "docs").install()?;
+        }
         i.uninstaller("uninstall.exe").install()?;
         Ok(())
     })

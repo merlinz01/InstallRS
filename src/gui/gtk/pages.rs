@@ -25,6 +25,7 @@ fn bold_heading(text: &str, size: &str) -> gtk::Label {
 pub enum PageKind {
     Welcome(WelcomePage),
     License(LicensePage),
+    Components(ComponentsPage),
     DirectoryPicker(DirectoryPickerPage),
     Install(InstallPage),
     Finish(FinishPage),
@@ -184,6 +185,73 @@ impl DirectoryPickerPage {
 
     pub fn get_directory(&self) -> String {
         self.entry.text().to_string()
+    }
+}
+
+// ── Components Page ─────────────────────────────────────────────────────────
+
+pub struct ComponentsPage {
+    widget: gtk::Box,
+    checks: Vec<(String, gtk::CheckButton)>,
+}
+
+impl ComponentsPage {
+    pub fn new(heading: &str, label_text: &str, components: &[crate::Component]) -> Self {
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
+        set_page_margins(&vbox);
+
+        vbox.pack_start(&bold_heading(heading, "large"), false, false, 0);
+
+        let label = gtk::Label::new(Some(label_text));
+        label.set_xalign(0.0);
+        label.set_halign(gtk::Align::Start);
+        vbox.pack_start(&label, false, false, 0);
+
+        let scrolled = gtk::ScrolledWindow::builder()
+            .vexpand(true)
+            .hexpand(true)
+            .shadow_type(gtk::ShadowType::In)
+            .build();
+        let list_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        list_box.set_margin_top(6);
+        list_box.set_margin_bottom(6);
+        list_box.set_margin_start(6);
+        list_box.set_margin_end(6);
+
+        let mut checks: Vec<(String, gtk::CheckButton)> = Vec::new();
+        for c in components {
+            let display = if c.required {
+                format!("{} (required)", c.label)
+            } else {
+                c.label.clone()
+            };
+            let cb = gtk::CheckButton::with_label(&display);
+            cb.set_active(c.selected);
+            if c.required {
+                cb.set_sensitive(false);
+            }
+            if !c.description.is_empty() {
+                cb.set_tooltip_text(Some(&c.description));
+            }
+            list_box.pack_start(&cb, false, false, 0);
+            checks.push((c.id.clone(), cb));
+        }
+
+        scrolled.add(&list_box);
+        vbox.pack_start(&scrolled, true, true, 0);
+
+        Self { widget: vbox, checks }
+    }
+
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    pub fn selections(&self) -> Vec<(String, bool)> {
+        self.checks
+            .iter()
+            .map(|(id, cb)| (id.clone(), cb.is_active()))
+            .collect()
     }
 }
 

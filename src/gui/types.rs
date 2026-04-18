@@ -71,6 +71,10 @@ pub enum WizardPage {
         text: String,
         accept_label: String,
     },
+    Components {
+        heading: String,
+        label: String,
+    },
     DirectoryPicker {
         heading: String,
         label: String,

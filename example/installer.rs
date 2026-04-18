@@ -41,6 +41,17 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     init_locale();
 
+    // Register selectable components. "core" is required; "docs" is on by
+    // default; "extras" is off by default.
+    i.component("core", t!("installer.components.core"))
+        .description(t!("installer.components.core_desc"))
+        .required(true);
+    i.component("docs", t!("installer.components.docs"))
+        .description(t!("installer.components.docs_desc"));
+    i.component("extras", t!("installer.components.extras"))
+        .description(t!("installer.components.extras_desc"))
+        .default(false);
+
     InstallerGui::wizard()
         .title(&t!("installer.title"))
         .buttons(button_labels())
@@ -52,6 +63,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.license.heading"),
             include_str!("../LICENSE.txt"),
             &t!("installer.license.accept"),
+        )
+        .components_page(
+            &t!("installer.components.heading"),
+            &t!("installer.components.label"),
         )
         .directory_picker(
             &t!("installer.directory.heading"),
@@ -70,14 +85,23 @@ pub fn install(i: &mut Installer) -> Result<()> {
             let out_dir = ctx.install_dir();
             i.set_out_dir(&out_dir);
 
+            // core: always installed (required component)
             i.dir(installrs::source!("testdir"), "testdir")
                 .status(t!("installer.install.status_installing"))
                 .log(t!("installer.install.log_testdir"))
                 .install()?;
 
-            i.file(installrs::source!("test.txt"), "testfile.txt")
-                .log(t!("installer.install.log_testfile"))
-                .install()?;
+            if i.is_component_selected("docs") {
+                i.file(installrs::source!("test.txt"), "docs/readme.txt")
+                    .log(t!("installer.install.log_docs"))
+                    .install()?;
+            }
+
+            if i.is_component_selected("extras") {
+                i.file(installrs::source!("test.txt"), "testfile.txt")
+                    .log(t!("installer.install.log_testfile"))
+                    .install()?;
+            }
 
             #[cfg(windows)]
             i.uninstaller("uninstall.exe")

@@ -253,15 +253,22 @@ impl ComponentsPage {
                     }
                 });
             }
-            cb.add_events(gtk::gdk::EventMask::ENTER_NOTIFY_MASK);
-            let desc_c = desc_label.clone();
+            cb.add_events(
+                gtk::gdk::EventMask::ENTER_NOTIFY_MASK | gtk::gdk::EventMask::LEAVE_NOTIFY_MASK,
+            );
+            let desc_enter = desc_label.clone();
             let description = if c.description.is_empty() {
                 c.label.clone()
             } else {
                 c.description.clone()
             };
             cb.connect_enter_notify_event(move |_, _| {
-                desc_c.set_text(&description);
+                desc_enter.set_text(&description);
+                glib::Propagation::Proceed
+            });
+            let desc_leave_cb = desc_label.clone();
+            cb.connect_leave_notify_event(move |_, _| {
+                desc_leave_cb.set_text("");
                 glib::Propagation::Proceed
             });
             list_box.pack_start(&cb, false, false, 0);
@@ -271,6 +278,14 @@ impl ComponentsPage {
         scrolled.add(&list_box);
         vbox.pack_start(&scrolled, true, true, 0);
         vbox.pack_start(&desc_label, false, false, 0);
+
+        // Clear the description when the cursor leaves the list.
+        scrolled.add_events(gtk::gdk::EventMask::LEAVE_NOTIFY_MASK);
+        let desc_leave = desc_label.clone();
+        scrolled.connect_leave_notify_event(move |_, _| {
+            desc_leave.set_text("");
+            glib::Propagation::Proceed
+        });
 
         Self {
             widget: vbox,

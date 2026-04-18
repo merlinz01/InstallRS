@@ -2,7 +2,7 @@ use winsafe::co;
 use winsafe::gui;
 use winsafe::msg::{lvm, wm};
 use winsafe::prelude::*;
-use winsafe::{HBRUSH, HFONT, LVITEM, SIZE};
+use winsafe::{HBRUSH, HFONT, LVHITTESTINFO, LVITEM, SIZE, TRACKMOUSEEVENT};
 
 /// Internal padding between the panel edge and its controls.
 const PAD: i32 = 20;
@@ -541,8 +541,13 @@ impl ComponentsPage {
         );
 
         // On hover, update the description label with the component's text.
+        // We use WM_MOUSEMOVE + LVM_HITTEST instead of LVN_HOTTRACK because
+        // LVN_HOTTRACK only fires for the label region — hovering over the
+        // checkbox state icon yields iItem = -1. A manual hit test with
+        // LVHITTESTINFO covers the whole row (icon + state + label).
         {
             let desc_c = desc_label.clone();
+            let list_c = list.clone();
             let descriptions: Vec<String> = components
                 .iter()
                 .map(|c| {
@@ -553,14 +558,37 @@ impl ComponentsPage {
                     }
                 })
                 .collect();
-            list.on().lvn_hot_track(move |p| {
-                let idx = p.iItem;
-                let text = if idx >= 0 && (idx as usize) < descriptions.len() {
-                    descriptions[idx as usize].as_str()
-                } else {
-                    ""
+            let list_leave = list.clone();
+            list.on_subclass().wm_mouse_move(move |p| {
+                let mut hti = LVHITTESTINFO::default();
+                hti.pt = p.coords;
+                let idx = unsafe {
+                    list_c
+                        .hwnd()
+                        .SendMessage(lvm::HitTest { info: &mut hti })
+                };
+                let text = match idx {
+                    Some(i) if (i as usize) < descriptions.len() => {
+                        descriptions[i as usize].as_str()
+                    }
+                    _ => "",
                 };
                 let _ = desc_c.hwnd().SetWindowText(text);
+
+                // Re-arm TrackMouseEvent so WM_MOUSELEAVE fires when the
+                // cursor exits the list. It's a one-shot notification —
+                // must be re-requested on every mouse move.
+                let mut tme = TRACKMOUSEEVENT::default();
+                tme.dwFlags = co::TME::LEAVE;
+                tme.hwndTrack = unsafe { list_leave.hwnd().raw_copy() };
+                let _ = winsafe::TrackMouseEvent(&mut tme);
+                Ok(())
+            });
+
+            // Clear the description label when the cursor leaves the list.
+            let desc_leave = desc_label.clone();
+            list.on_subclass().wm_mouse_leave(move || {
+                let _ = desc_leave.hwnd().SetWindowText("");
                 Ok(())
             });
         }

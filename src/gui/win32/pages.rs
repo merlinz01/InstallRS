@@ -372,6 +372,7 @@ pub struct ComponentsPage {
     _heading_label: gui::Label,
     _label: gui::Label,
     list: gui::ListView,
+    _desc_label: gui::Label,
     ids: Vec<String>,
 }
 
@@ -436,8 +437,10 @@ impl ComponentsPage {
         );
 
         // ListView with checkboxes: native scrolling + standard Windows idiom.
+        // Reserve space at the bottom for a hover-description label.
+        const DESC_H: i32 = 48;
         let list_y = label_y + 28;
-        let list_h = height - list_y - PAD;
+        let list_h = height - list_y - DESC_H - 10 - PAD;
         let list_w = width - 2 * PAD;
         let col_width: i32 = list_w - 24; // leave room for the scrollbar
         let cols: [(&str, i32); 1] = [("Component", col_width)];
@@ -524,12 +527,51 @@ impl ComponentsPage {
             });
         }
 
+        // Description label below the list, updated on hover.
+        let desc_y = list_y + list_h + 10;
+        let desc_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: "",
+                position: gui::dpi(PAD, desc_y),
+                size: gui::dpi(width - 2 * PAD, DESC_H),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Repos),
+                ..Default::default()
+            },
+        );
+
+        // On hover, update the description label with the component's text.
+        {
+            let desc_c = desc_label.clone();
+            let descriptions: Vec<String> = components
+                .iter()
+                .map(|c| {
+                    if c.description.is_empty() {
+                        c.label.clone()
+                    } else {
+                        c.description.clone()
+                    }
+                })
+                .collect();
+            list.on().lvn_hot_track(move |p| {
+                let idx = p.iItem;
+                let text = if idx >= 0 && (idx as usize) < descriptions.len() {
+                    descriptions[idx as usize].as_str()
+                } else {
+                    ""
+                };
+                let _ = desc_c.hwnd().SetWindowText(text);
+                Ok(())
+            });
+        }
+
         setup_transparent_labels(parent);
 
         Self {
             _heading_label: heading_label,
             _label: label,
             list,
+            _desc_label: desc_label,
             ids,
         }
     }

@@ -195,6 +195,7 @@ impl DirectoryPickerPage {
 pub struct ComponentsPage {
     widget: gtk::Box,
     checks: Vec<(String, gtk::CheckButton)>,
+    _desc_label: gtk::Label,
 }
 
 impl ComponentsPage {
@@ -224,6 +225,14 @@ impl ComponentsPage {
         list_box.set_margin_end(6);
         list_box.set_valign(gtk::Align::Start);
 
+        let desc_label = gtk::Label::new(None);
+        desc_label.set_xalign(0.0);
+        desc_label.set_yalign(0.0);
+        desc_label.set_halign(gtk::Align::Start);
+        desc_label.set_valign(gtk::Align::Start);
+        desc_label.set_line_wrap(true);
+        desc_label.set_size_request(-1, 40);
+
         let mut checks: Vec<(String, gtk::CheckButton)> = Vec::new();
         for c in components {
             let display = if c.required {
@@ -234,19 +243,40 @@ impl ComponentsPage {
             let cb = gtk::CheckButton::with_label(&display);
             cb.set_active(c.selected);
             if c.required {
-                cb.set_sensitive(false);
+                // Keep the widget sensitive so it still receives hover events —
+                // setting sensitive = false silently swallows enter-notify.
+                // Instead, fade it via opacity and revert toggle attempts.
+                cb.set_opacity(0.5);
+                cb.connect_toggled(|btn| {
+                    if !btn.is_active() {
+                        btn.set_active(true);
+                    }
+                });
             }
-            if !c.description.is_empty() {
-                cb.set_tooltip_text(Some(&c.description));
-            }
+            cb.add_events(gtk::gdk::EventMask::ENTER_NOTIFY_MASK);
+            let desc_c = desc_label.clone();
+            let description = if c.description.is_empty() {
+                c.label.clone()
+            } else {
+                c.description.clone()
+            };
+            cb.connect_enter_notify_event(move |_, _| {
+                desc_c.set_text(&description);
+                glib::Propagation::Proceed
+            });
             list_box.pack_start(&cb, false, false, 0);
             checks.push((c.id.clone(), cb));
         }
 
         scrolled.add(&list_box);
         vbox.pack_start(&scrolled, true, true, 0);
+        vbox.pack_start(&desc_label, false, false, 0);
 
-        Self { widget: vbox, checks }
+        Self {
+            widget: vbox,
+            checks,
+            _desc_label: desc_label,
+        }
     }
 
     pub fn widget(&self) -> &gtk::Box {

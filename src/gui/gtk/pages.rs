@@ -46,7 +46,9 @@ impl WelcomePage {
 
         let msg = gtk::Label::new(Some(message));
         msg.set_xalign(0.0);
+        msg.set_yalign(0.0);
         msg.set_halign(gtk::Align::Start);
+        msg.set_valign(gtk::Align::Start);
         msg.set_line_wrap(true);
         vbox.pack_start(&msg, true, true, 0);
 
@@ -345,7 +347,9 @@ impl FinishPage {
 
         let msg = gtk::Label::new(Some(message));
         msg.set_xalign(0.0);
+        msg.set_yalign(0.0);
         msg.set_halign(gtk::Align::Start);
+        msg.set_valign(gtk::Align::Start);
         msg.set_line_wrap(true);
         vbox.pack_start(&msg, true, true, 0);
 

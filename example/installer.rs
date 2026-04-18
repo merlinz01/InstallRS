@@ -58,6 +58,27 @@ pub fn install(i: &mut Installer) -> Result<()> {
     InstallerGui::wizard()
         .title(&t!("installer.title"))
         .buttons(button_labels())
+        .on_start(|i| {
+            if i.headless {
+                eprintln!("Running headless install of {}", t!("installer.title"));
+                eprint!("Proceed? [y/N] ");
+                std::io::Write::flush(&mut std::io::stderr()).ok();
+                let mut answer = String::new();
+                std::io::stdin()
+                    .read_line(&mut answer)
+                    .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
+                if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+                    return Err(anyhow::anyhow!("install cancelled by user"));
+                }
+            }
+            Ok(())
+        })
+        .on_exit(|i| {
+            if i.headless {
+                eprintln!("Headless install complete.");
+            }
+            Ok(())
+        })
         .welcome(
             &t!("installer.welcome.title"),
             &t!("installer.welcome.message"),

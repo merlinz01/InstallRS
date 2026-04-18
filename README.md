@@ -28,6 +28,9 @@ We can do better in 2026.
 - Optional native wizard GUI (welcome, license, components, directory picker,
   progress, finish) with translatable button labels and page-level `on_enter` /
   `on_before_leave` callbacks — Win32 on Windows, GTK3 on Linux
+- `on_start` / `on_exit` callbacks run in both GUI and headless modes — the
+  same wizard definition works either way (`--headless` skips the window and
+  runs the install callback inline)
 - Component system: let users pick optional features via wizard checkboxes or
   `--components` / `--with` / `--without` CLI flags
 - Built-in native dialog helpers (`info`, `warn`, `error`, `confirm`)
@@ -206,6 +209,35 @@ InstallerGui::wizard()
 Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
 wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard
 window as parent.
+
+### Headless mode
+
+When `--headless` is passed (and applied via `i.process_commandline()`),
+`InstallerGui::run` skips the window and runs the install callback inline.
+Status / log messages emit to stderr instead of the install-page log. Pair
+with `.on_start(...)` and `.on_exit(...)` for setup and cleanup that must
+happen in both modes:
+
+```rust
+InstallerGui::wizard()
+    .on_start(|i| {
+        if i.headless {
+            eprintln!("Running headless install...");
+        }
+        Ok(())
+    })
+    .on_exit(|i| {
+        if i.headless { eprintln!("Done."); }
+        Ok(())
+    })
+    // ... pages ...
+    .install_page(|ctx| { /* runs in both modes */ Ok(()) })
+    .run(i)?;
+```
+
+`on_start` runs before the window opens (or before the install callback in
+headless mode). `on_exit` runs after the window closes (or after install in
+headless mode) — even if the install failed.
 
 On Linux, target systems need GTK3 runtime libraries installed
 (`libgtk-3-0` and its dependencies — present by default on virtually all

@@ -9,13 +9,13 @@ mod gtk;
 
 pub use dialog::{confirm, error, info, warn};
 pub use types::{
-    ButtonLabels, ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
-    OnEnterCallback, PageContext, WizardConfig, WizardPage,
+    ButtonLabels, ConfiguredPage, ExitCallback, GuiContext, GuiMessage, InstallCallback,
+    OnBeforeLeaveCallback, OnEnterCallback, PageContext, StartCallback, WizardConfig, WizardPage,
 };
 
 use anyhow::Result;
 
-use crate::Installer;
+use crate::{Installer, ProgressSink};
 
 /// Builder for a wizard-style installer GUI.
 ///
@@ -52,8 +52,29 @@ impl InstallerGui {
                 title: "Installer".to_string(),
                 pages: Vec::new(),
                 buttons: ButtonLabels::default(),
+                on_start: None,
+                on_exit: None,
             },
         }
+    }
+
+    /// Set a callback that runs at wizard startup, before the window is
+    /// shown (or before the install callback fires in headless mode).
+    ///
+    /// Inspect `installer.headless` inside the callback to branch on mode.
+    /// Useful for work that must happen regardless of UI — environment
+    /// setup, argument validation, prerequisite checks.
+    pub fn on_start(mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) -> Self {
+        self.config.on_start = Some(Box::new(f));
+        self
+    }
+
+    /// Set a callback that runs at wizard exit, after the window closes (or
+    /// after the install callback completes in headless mode). Runs even
+    /// when the install flow fails.
+    pub fn on_exit(mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) -> Self {
+        self.config.on_exit = Some(Box::new(f));
+        self
     }
 
     /// Set the window title.
@@ -197,15 +218,114 @@ impl InstallerGui {
     ///
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.
     /// Falls back to an error on unsupported platforms.
-    pub fn run(self, installer: &mut Installer) -> Result<()> {
-        // In headless mode, skip the GUI entirely. Callers must have run
-        // `Installer::process_commandline` before reaching here so that
-        // `--headless` and component selections have been applied.
-        if installer.headless {
-            return Err(anyhow::anyhow!("GUI installer cannot run in headless mode"));
+    pub fn run(mut self, installer: &mut Installer) -> Result<()> {
+        let on_start = self.config.on_start.take();
+        let on_exit = self.config.on_exit.take();
+
+        if let Some(cb) = on_start {
+            cb(installer)?;
         }
 
-        self.run_platform(installer)
+        let result = if installer.headless {
+            self.run_headless(installer)
+        } else {
+            self.run_platform(installer)
+        };
+
+        if let Some(cb) = on_exit {
+            if let Err(e) = cb(installer) {
+                eprintln!("on_exit error: {e:#}");
+            }
+        }
+
+        result
+    }
+
+    /// Headless runner: pulls the install callback out of the pages, invokes
+    /// it on the current thread with a `GuiContext` wired to an stderr sink
+    /// so status/log messages still surface.
+    fn run_headless(self, installer: &mut Installer) -> Result<()> {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::{mpsc, Arc, Mutex};
+
+        // Extract install callback and default install dir.
+        let mut install_callback: Option<InstallCallback> = None;
+        let mut default_dir = String::new();
+        for configured in self.config.pages {
+            match configured.page {
+                WizardPage::Install { callback } => install_callback = Some(callback),
+                WizardPage::DirectoryPicker { default, .. } if default_dir.is_empty() => {
+                    default_dir = default;
+                }
+                _ => {}
+            }
+        }
+
+        let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
+        let installer_arc = Arc::new(Mutex::new(installer_taken));
+        let install_dir = Arc::new(Mutex::new(default_dir));
+        let cancelled = Arc::new(AtomicBool::new(false));
+
+        let (tx, rx) = mpsc::channel::<GuiMessage>();
+
+        // Drainer thread writes status and log messages to stderr so users
+        // get feedback during the headless install.
+        let drainer = std::thread::spawn(move || {
+            for msg in rx {
+                match msg {
+                    GuiMessage::SetStatus(s) => eprintln!("[*] {s}"),
+                    GuiMessage::Log(m) => eprintln!("    {m}"),
+                    GuiMessage::SetProgress(_) | GuiMessage::Finished(_) => {}
+                }
+            }
+        });
+
+        // Attach a stderr-forwarding sink so `Installer::file`/`dir`/etc.
+        // progress events also surface.
+        struct HeadlessSink {
+            tx: mpsc::Sender<GuiMessage>,
+        }
+        impl ProgressSink for HeadlessSink {
+            fn set_status(&self, s: &str) {
+                let _ = self.tx.send(GuiMessage::SetStatus(s.to_string()));
+            }
+            fn set_progress(&self, _: f64) {}
+            fn log(&self, m: &str) {
+                let _ = self.tx.send(GuiMessage::Log(m.to_string()));
+            }
+        }
+        {
+            let mut inst = installer_arc.lock().unwrap();
+            inst.set_progress_sink(Box::new(HeadlessSink { tx: tx.clone() }));
+            inst.reset_progress();
+        }
+
+        let result = (|| -> Result<()> {
+            if let Some(cb) = install_callback {
+                let mut ctx = GuiContext::new(
+                    tx.clone(),
+                    installer_arc.clone(),
+                    install_dir.clone(),
+                    cancelled.clone(),
+                );
+                cb(&mut ctx)?;
+            }
+            Ok(())
+        })();
+
+        // Detach sink and close the channel so the drainer exits.
+        installer_arc.lock().unwrap().clear_progress_sink();
+        drop(tx);
+        let _ = drainer.join();
+
+        // Restore the installer back to the caller.
+        let restored = Arc::try_unwrap(installer_arc)
+            .map_err(|_| anyhow::anyhow!("installer still referenced after headless run"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("installer mutex poisoned: {e}"))?;
+        *installer = restored;
+
+        result
     }
 
     #[cfg(feature = "gui-win32")]

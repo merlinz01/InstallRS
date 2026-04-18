@@ -13,11 +13,23 @@ pub type OnEnterCallback = Box<dyn Fn(&mut PageContext) -> Result<()> + 'static>
 /// cancels the navigation.
 pub type OnBeforeLeaveCallback = Box<dyn Fn(&mut PageContext) -> Result<bool> + 'static>;
 
+/// Callback that runs at wizard startup (before the window is shown, or
+/// before the install callback fires in headless mode). Inspect
+/// `installer.headless` to branch on mode.
+pub type StartCallback = Box<dyn FnOnce(&mut crate::Installer) -> Result<()> + 'static>;
+
+/// Callback that runs at wizard exit (after the window closes, or after
+/// the install callback completes in headless mode). Always runs, even on
+/// failure.
+pub type ExitCallback = Box<dyn FnOnce(&mut crate::Installer) -> Result<()> + 'static>;
+
 /// Configuration for the wizard-style installer GUI.
 pub struct WizardConfig {
     pub title: String,
     pub pages: Vec<ConfiguredPage>,
     pub buttons: ButtonLabels,
+    pub on_start: Option<StartCallback>,
+    pub on_exit: Option<ExitCallback>,
 }
 
 /// A wizard page with optional navigation callbacks.

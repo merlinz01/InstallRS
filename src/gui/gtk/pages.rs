@@ -29,6 +29,7 @@ pub enum PageKind {
     DirectoryPicker(DirectoryPickerPage),
     Install(InstallPage),
     Finish(FinishPage),
+    Error(ErrorPage),
 }
 
 // ── Welcome Page ────────────────────────────────────────────────────────────
@@ -378,6 +379,59 @@ impl InstallPage {
             self.log_view.scroll_to_mark(&end_mark, 0.0, true, 0.0, 1.0);
             self.log_buffer.delete_mark(&end_mark);
         }
+    }
+}
+
+// ── Error Page ──────────────────────────────────────────────────────────────
+
+pub struct ErrorPage {
+    widget: gtk::Box,
+    error_buffer: gtk::TextBuffer,
+}
+
+impl ErrorPage {
+    pub fn new(title: &str, message: &str) -> Self {
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
+        set_page_margins(&vbox);
+
+        vbox.pack_start(&bold_heading(title, "x-large"), false, false, 0);
+
+        let msg = gtk::Label::new(Some(message));
+        msg.set_xalign(0.0);
+        msg.set_halign(gtk::Align::Start);
+        msg.set_line_wrap(true);
+        vbox.pack_start(&msg, false, false, 0);
+
+        let scrolled = gtk::ScrolledWindow::builder()
+            .vexpand(true)
+            .hexpand(true)
+            .shadow_type(gtk::ShadowType::In)
+            .build();
+        let text_view = gtk::TextView::new();
+        text_view.set_editable(false);
+        text_view.set_cursor_visible(false);
+        text_view.set_wrap_mode(gtk::WrapMode::WordChar);
+        text_view.set_monospace(true);
+        text_view.set_left_margin(8);
+        text_view.set_right_margin(8);
+        text_view.set_top_margin(6);
+        text_view.set_bottom_margin(6);
+        let error_buffer = text_view.buffer().expect("TextView has no buffer");
+        scrolled.add(&text_view);
+        vbox.pack_start(&scrolled, true, true, 0);
+
+        Self {
+            widget: vbox,
+            error_buffer,
+        }
+    }
+
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    pub fn set_error_text(&self, text: &str) {
+        self.error_buffer.set_text(text);
     }
 }
 

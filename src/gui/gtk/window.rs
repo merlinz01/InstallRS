@@ -8,7 +8,7 @@ use std::time::Duration;
 use gtk::prelude::*;
 
 use super::pages::{
-    ComponentsPage, DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind,
+    ComponentsPage, DirectoryPickerPage, ErrorPage, FinishPage, InstallPage, LicensePage, PageKind,
     WelcomePage,
 };
 use crate::gui::types::{
@@ -109,6 +109,11 @@ pub fn run(
                 let w = p.widget().clone();
                 (w, PageKind::Finish(p))
             }
+            WizardPage::Error { title, message } => {
+                let p = ErrorPage::new(&title, &message);
+                let w = p.widget().clone();
+                (w, PageKind::Error(p))
+            }
         };
 
         stack.add_named(&widget, &format!("page-{idx}"));
@@ -175,12 +180,14 @@ pub fn run(
             let is_first = idx == 0;
             let is_install = matches!(&pages_b[idx].kind, PageKind::Install(_));
             let is_finish = matches!(&pages_b[idx].kind, PageKind::Finish(_));
+            let is_error = matches!(&pages_b[idx].kind, PageKind::Error(_));
+            let is_terminal = is_finish || is_error;
             let next_is_install =
                 idx + 1 < pages_b.len() && matches!(&pages_b[idx + 1].kind, PageKind::Install(_));
             let running = install_running_c.load(Ordering::Relaxed);
 
-            btn_back_c.set_sensitive(!is_first && !is_install && !is_finish);
-            let label = if is_finish {
+            btn_back_c.set_sensitive(!is_first && !is_install && !is_terminal);
+            let label = if is_terminal {
                 &label_finish
             } else if next_is_install || is_install {
                 &label_install
@@ -189,7 +196,7 @@ pub fn run(
             };
             btn_next_c.set_label(label);
             btn_next_c.set_sensitive(!running && !is_install && can_advance(&pages_b[idx]));
-            btn_cancel_c.set_sensitive(!is_finish);
+            btn_cancel_c.set_sensitive(!is_terminal);
         })
     };
 
@@ -342,8 +349,11 @@ pub fn run(
                 }
             }
 
-            // Finish page closes the window.
-            if matches!(&pages_c.borrow()[idx].kind, PageKind::Finish(_)) {
+            // Finish or error page closes the window.
+            if matches!(
+                &pages_c.borrow()[idx].kind,
+                PageKind::Finish(_) | PageKind::Error(_)
+            ) {
                 window_c.close();
                 return;
             }
@@ -378,9 +388,15 @@ pub fn run(
     {
         let cancelled_c = cancelled.clone();
         let window_c = window.clone();
+        let install_running_c = install_running.clone();
         btn_cancel.connect_clicked(move |_| {
             cancelled_c.store(true, Ordering::Relaxed);
-            window_c.close();
+            // If the install is still running, leave the window open so the
+            // Finished handler can route to the error page once the bg
+            // thread bails out. Otherwise close immediately.
+            if !install_running_c.load(Ordering::Relaxed) {
+                window_c.close();
+            }
         });
     }
 
@@ -457,7 +473,32 @@ pub fn run(
                                 }
                             }
                             *install_result_c.borrow_mut() = Some(result);
-                            let _ = crate::gui::error("Installation failed", &err_msg);
+
+                            // Navigate to the error page if one was registered.
+                            let error_idx = pages_c
+                                .borrow()
+                                .iter()
+                                .position(|p| matches!(&p.kind, PageKind::Error(_)));
+                            if let Some(new_idx) = error_idx {
+                                {
+                                    let pages_b = pages_c.borrow();
+                                    if let PageKind::Error(ref ep) = pages_b[new_idx].kind {
+                                        ep.set_error_text(&err_msg);
+                                    }
+                                    stack_c.set_visible_child(&pages_b[new_idx].widget);
+                                }
+                                *current_c.borrow_mut() = new_idx;
+
+                                let pages_b = pages_c.borrow();
+                                if let Some(ref cb) = pages_b[new_idx].on_enter {
+                                    let mut ctx = make_ctx_c();
+                                    if let Err(e) = cb(&mut ctx) {
+                                        eprintln!("on_enter error: {e}");
+                                    }
+                                }
+                            } else {
+                                let _ = crate::gui::error("Installation failed", &err_msg);
+                            }
                         }
 
                         update();

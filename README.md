@@ -26,8 +26,8 @@ We can do better in 2026.
 - Supports file compression (lzma, gzip, bzip2) to reduce binary size
 - Small binaries — no runtime overhead
 - Optional native wizard GUI (welcome, license, components, directory picker,
-  progress, finish) with translatable button labels and page-level `on_enter` /
-  `on_before_leave` callbacks — Win32 on Windows, GTK3 on Linux
+  progress, finish, error) with translatable button labels and page-level
+  `on_enter` / `on_before_leave` callbacks — Win32 on Windows, GTK3 on Linux
 - `on_start` / `on_exit` callbacks run in both GUI and headless modes — the
   same wizard definition works either way (`--headless` skips the window and
   runs the install callback inline)
@@ -209,8 +209,18 @@ InstallerGui::wizard()
         Ok(())
     })
     .finish_page("Done!", "Click Finish to exit.")
+    .error_page(
+        "Installation Failed",
+        "The installation did not complete. Details are shown below.",
+    )
     .run(i)?;
 ```
+
+If the install callback returns an error (including cancellation via the
+Cancel button or Ctrl+C), the wizard navigates to the error page — the
+provided `message` sits above an auto-populated text area showing the
+actual error. Without an `.error_page(...)`, failures fall back to a
+native error dialog instead.
 
 Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
 wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard

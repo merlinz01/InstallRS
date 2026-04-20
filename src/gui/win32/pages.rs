@@ -27,6 +27,7 @@ pub enum PageKind {
     DirectoryPicker(DirectoryPickerPage),
     Install(InstallPage),
     Finish(FinishPage),
+    Error(ErrorPage),
 }
 
 // ── Welcome Page ────────────────────────────────────────────────────────────
@@ -714,6 +715,109 @@ impl InstallPage {
             format!("{current}\r\n{message}")
         };
         let _ = self.log_edit.set_text(&new_text);
+    }
+}
+
+// ── Error Page ──────────────────────────────────────────────────────────────
+
+pub struct ErrorPage {
+    _title_label: gui::Label,
+    _message_label: gui::Label,
+    error_edit: gui::Edit,
+}
+
+impl ErrorPage {
+    pub fn new(
+        parent: &gui::WindowControl,
+        title: &str,
+        message: &str,
+        width: i32,
+        height: i32,
+    ) -> Self {
+        let title_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: title,
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 30),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        let message_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: message,
+                position: gui::dpi(PAD, PAD + 40),
+                size: gui::dpi(width - 2 * PAD, 40),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        let edit_y = PAD + 40 + 48;
+        let (ew, eh) = gui::dpi(width - 2 * PAD, height - edit_y - PAD);
+        let error_edit = gui::Edit::new(
+            parent,
+            gui::EditOpts {
+                position: gui::dpi(PAD, edit_y),
+                width: ew,
+                height: eh,
+                control_style: co::ES::MULTILINE
+                    | co::ES::READONLY
+                    | co::ES::AUTOVSCROLL
+                    | co::ES::WANTRETURN,
+                window_style: co::WS::CHILD
+                    | co::WS::GROUP
+                    | co::WS::TABSTOP
+                    | co::WS::VISIBLE
+                    | co::WS::VSCROLL,
+                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
+                ..Default::default()
+            },
+        );
+
+        {
+            let title_c = title_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    title_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                Ok(0)
+            });
+        }
+
+        setup_transparent_labels(parent);
+
+        Self {
+            _title_label: title_label,
+            _message_label: message_label,
+            error_edit,
+        }
+    }
+
+    pub fn set_error_text(&self, text: &str) {
+        let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
+        let _ = self.error_edit.set_text(&text);
     }
 }
 

@@ -167,6 +167,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.finish.title"),
             &t!("installer.finish.message"),
         )
+        .error_page(
+            &t!("installer.error.title"),
+            &t!("installer.error.message"),
+        )
         .run(i)?;
 
     Ok(())
@@ -210,6 +214,10 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         .finish_page(
             &t!("uninstaller.finish.title"),
             &t!("uninstaller.finish.message"),
+        )
+        .error_page(
+            &t!("uninstaller.error.title"),
+            &t!("uninstaller.error.message"),
         )
         .run(i)?;
 

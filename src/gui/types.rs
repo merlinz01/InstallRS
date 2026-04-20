@@ -99,6 +99,13 @@ pub enum WizardPage {
         title: String,
         message: String,
     },
+    /// Shown after the install page when the install callback returns an
+    /// error or the user cancels mid-install. The actual error text is
+    /// populated at runtime.
+    Error {
+        title: String,
+        message: String,
+    },
 }
 
 /// Messages sent from the background install thread to the GUI thread.

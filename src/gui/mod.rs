@@ -187,6 +187,23 @@ impl InstallerGui {
         self
     }
 
+    /// Add an error page shown after the install page if the install
+    /// callback returns an error or the user cancels mid-install. `title`
+    /// is the bold heading; `message` is a user-facing description shown
+    /// above the actual error text (which is filled in at runtime).
+    ///
+    /// If no error page is registered, install failures surface as a
+    /// native error dialog instead.
+    pub fn error_page(mut self, title: &str, message: &str) -> Self {
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Error {
+                title: title.to_string(),
+                message: message.to_string(),
+            }));
+        self
+    }
+
     /// Attach an `on_enter` callback to the most recently added page.
     ///
     /// The callback runs on the GUI thread after the page becomes visible.
@@ -260,10 +277,14 @@ impl InstallerGui {
             }
         }
 
+        // Grab the real installer's cancellation flag BEFORE we swap it out,
+        // so the Ctrl+C handler and `check_cancelled()` inside the install
+        // callback both see the same flag.
+        let cancelled = installer.cancellation_flag();
+
         let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
         let installer_arc = Arc::new(Mutex::new(installer_taken));
         let install_dir = Arc::new(Mutex::new(default_dir));
-        let cancelled = installer.cancellation_flag();
 
         let (tx, rx) = mpsc::channel::<GuiMessage>();
 

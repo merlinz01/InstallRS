@@ -7,7 +7,7 @@ use winsafe::gui;
 use winsafe::prelude::*;
 
 use super::pages::{
-    ComponentsPage, DirectoryPickerPage, FinishPage, InstallPage, LicensePage, PageKind,
+    ComponentsPage, DirectoryPickerPage, ErrorPage, FinishPage, InstallPage, LicensePage, PageKind,
     WelcomePage,
 };
 use crate::gui::types::{
@@ -151,6 +151,13 @@ pub fn run(
                 content_width,
                 content_height,
             )),
+            WizardPage::Error { title, message } => PageKind::Error(ErrorPage::new(
+                &panel,
+                &title,
+                &message,
+                content_width,
+                content_height,
+            )),
         };
 
         pages.push(Page {
@@ -229,14 +236,16 @@ pub fn run(
             let is_first = idx == 0;
             let is_install = matches!(&pages_guard[idx].kind, PageKind::Install(_));
             let is_finish = matches!(&pages_guard[idx].kind, PageKind::Finish(_));
+            let is_error = matches!(&pages_guard[idx].kind, PageKind::Error(_));
+            let is_terminal = is_finish || is_error;
             let next_is_install = idx + 1 < pages_guard.len()
                 && matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
             let running = install_running_c.load(std::sync::atomic::Ordering::Relaxed);
 
             btn_back_c
                 .hwnd()
-                .EnableWindow(!is_first && !is_install && !is_finish);
-            let _ = if is_finish {
+                .EnableWindow(!is_first && !is_install && !is_terminal);
+            let _ = if is_terminal {
                 btn_next_c.hwnd().SetWindowText(&label_finish)
             } else if next_is_install || is_install {
                 btn_next_c.hwnd().SetWindowText(&label_install)
@@ -246,7 +255,7 @@ pub fn run(
             btn_next_c
                 .hwnd()
                 .EnableWindow(!running && !is_install && can_advance(&pages_guard[idx]));
-            btn_cancel_c.hwnd().EnableWindow(!is_finish);
+            btn_cancel_c.hwnd().EnableWindow(!is_terminal);
         };
 
         // Store the closure in an Arc for reuse.
@@ -422,8 +431,11 @@ pub fn run(
 
                 let pages_guard = pages_c.lock().unwrap();
 
-                // On finish page, close the window.
-                if matches!(&pages_guard[idx].kind, PageKind::Finish(_)) {
+                // On finish or error page, close the window.
+                if matches!(
+                    &pages_guard[idx].kind,
+                    PageKind::Finish(_) | PageKind::Error(_)
+                ) {
                     drop(pages_guard);
                     wnd_c.close();
                     return Ok(());
@@ -463,9 +475,15 @@ pub fn run(
         {
             let cancelled_c = cancelled.clone();
             let wnd_c = wnd.clone();
+            let install_running_c = install_running.clone();
             btn_cancel.on().bn_clicked(move || {
                 cancelled_c.store(true, std::sync::atomic::Ordering::Relaxed);
-                wnd_c.close();
+                // If the install is still running, leave the window open so
+                // the Finished handler can route to the error page once the
+                // bg thread bails out. Otherwise close immediately.
+                if !install_running_c.load(std::sync::atomic::Ordering::Relaxed) {
+                    wnd_c.close();
+                }
                 Ok(())
             });
         }
@@ -578,7 +596,9 @@ pub fn run(
                                 }
                             } else {
                                 // Surface the error to the user: append it to
-                                // the install page log and show an error dialog.
+                                // the install page log, then navigate to the
+                                // error page if one was registered. Fall back
+                                // to a native error dialog otherwise.
                                 let err_msg = match &result {
                                     Err(e) => format!("{e:#}"),
                                     Ok(_) => String::new(),
@@ -591,7 +611,38 @@ pub fn run(
                                     }
                                 }
                                 *install_result_timer.lock().unwrap() = Some(result);
-                                let _ = crate::gui::error("Installation failed", &err_msg);
+
+                                // Find an error page anywhere in the wizard.
+                                let error_idx = {
+                                    let pages_guard = pages_timer.lock().unwrap();
+                                    pages_guard.iter().position(|p| {
+                                        matches!(&p.kind, PageKind::Error(_))
+                                    })
+                                };
+                                if let Some(new_idx) = error_idx {
+                                    let pages_guard = pages_timer.lock().unwrap();
+                                    let idx = *current_timer.lock().unwrap();
+                                    if let PageKind::Error(ref ep) = pages_guard[new_idx].kind {
+                                        ep.set_error_text(&err_msg);
+                                    }
+                                    pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
+                                    pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
+                                    drop(pages_guard);
+                                    *current_timer.lock().unwrap() = new_idx;
+
+                                    let pages_guard = pages_timer.lock().unwrap();
+                                    if let Some(ref cb) = pages_guard[new_idx].on_enter {
+                                        let mut ctx = make_ctx();
+                                        if let Err(e) = cb(&mut ctx) {
+                                            eprintln!("on_enter error: {e}");
+                                        }
+                                    }
+                                } else {
+                                    let _ = crate::gui::error(
+                                        "Installation failed",
+                                        &err_msg,
+                                    );
+                                }
                             }
 
                             update_timer();

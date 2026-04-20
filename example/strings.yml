@@ -165,6 +165,16 @@ installer.finish.message:
   de: "Alle Dateien wurden erfolgreich installiert.\n\nKlicken Sie auf „Fertigstellen“, um zu beenden."
   es: "Todos los archivos se han instalado correctamente.\n\nHaga clic en «Finalizar» para salir."
 
+installer.error.title:
+  en: "Installation Failed"
+  de: "Installation fehlgeschlagen"
+  es: "Instalación fallida"
+
+installer.error.message:
+  en: "The installation did not complete. Details are shown below."
+  de: "Die Installation wurde nicht abgeschlossen. Einzelheiten sind unten aufgeführt."
+  es: "La instalación no se completó. Los detalles se muestran a continuación."
+
 uninstaller.title:
   en: "InstallRS Example — Uninstall"
   de: "InstallRS-Beispiel — Deinstallation"
@@ -204,3 +214,13 @@ uninstaller.finish.message:
   en: "All files have been removed successfully.\n\nClick Finish to exit."
   de: "Alle Dateien wurden erfolgreich entfernt.\n\nKlicken Sie auf „Fertigstellen“, um zu beenden."
   es: "Todos los archivos se han eliminado correctamente.\n\nHaga clic en «Finalizar» para salir."
+
+uninstaller.error.title:
+  en: "Uninstall Failed"
+  de: "Deinstallation fehlgeschlagen"
+  es: "Desinstalación fallida"
+
+uninstaller.error.message:
+  en: "The uninstall did not complete. Details are shown below."
+  de: "Die Deinstallation wurde nicht abgeschlossen. Einzelheiten sind unten aufgeführt."
+  es: "La desinstalación no se completó. Los detalles se muestran a continuación."

@@ -16,7 +16,7 @@ sys-locale = "0.3"
 # Shared defaults for both installer and uninstaller
 [package.metadata.installrs]
 gui = true
-subsystem = "console"
+subsystem = "windows"
 icon = "../installrs.png"
 icon-sizes = [16, 32, 48, 256]
 language = 0x0409

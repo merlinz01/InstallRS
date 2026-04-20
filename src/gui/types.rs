@@ -6,11 +6,13 @@ use crate::Installer;
 /// Callback type for the install page closure.
 pub type InstallCallback = Box<dyn FnOnce(&mut GuiContext) -> Result<()> + Send + 'static>;
 
-/// Callback that runs after a page becomes visible.
+/// Callback that runs after a page becomes visible via forward navigation.
+/// Back navigation does not fire this callback.
 pub type OnEnterCallback = Box<dyn Fn(&mut PageContext) -> Result<()> + 'static>;
 
-/// Callback that runs before navigating away from a page. Returning `Ok(false)`
-/// cancels the navigation.
+/// Callback that runs before forward navigation away from a page.
+/// Returning `Ok(false)` cancels the navigation. Back navigation does not
+/// fire this callback.
 pub type OnBeforeLeaveCallback = Box<dyn Fn(&mut PageContext) -> Result<bool> + 'static>;
 
 /// Callback that runs at wizard startup (before the window is shown, or

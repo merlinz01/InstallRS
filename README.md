@@ -229,6 +229,11 @@ users don't see "Install" on the button that kicks off an uninstall.
 Customize the label by passing `.buttons(ButtonLabels { uninstall:
 "Desinstalar".into(), ..Default::default() })`.
 
+Page-level `on_enter` and `on_before_leave` callbacks fire only on
+forward navigation — the Back button walks backwards without re-running
+either callback, so you won't prompt the user for confirmation when
+they're just retreating.
+
 Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
 wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard
 window as parent.

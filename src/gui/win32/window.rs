@@ -368,29 +368,14 @@ pub fn run(
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let update = update_buttons.clone();
-            let make_ctx = make_page_ctx.clone();
             btn_back.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
                 if idx == 0 {
                     return Ok(());
                 }
 
-                // on_before_leave — cancel navigation on Ok(false) or Err.
-                {
-                    let pages_guard = pages_c.lock().unwrap();
-                    if let Some(ref cb) = pages_guard[idx].on_before_leave {
-                        let mut ctx = make_ctx();
-                        match cb(&mut ctx) {
-                            Ok(true) => {}
-                            Ok(false) => return Ok(()),
-                            Err(e) => {
-                                eprintln!("on_before_leave error: {e}");
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
-
+                // on_before_leave / on_enter are intentionally skipped on
+                // backward navigation — they fire only on forward moves.
                 let pages_guard = pages_c.lock().unwrap();
                 pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
                 let new_idx = idx - 1;
@@ -398,15 +383,6 @@ pub fn run(
                 drop(pages_guard);
                 *current_c.lock().unwrap() = new_idx;
                 update();
-
-                // on_enter of the new page.
-                let pages_guard = pages_c.lock().unwrap();
-                if let Some(ref cb) = pages_guard[new_idx].on_enter {
-                    let mut ctx = make_ctx();
-                    if let Err(e) = cb(&mut ctx) {
-                        eprintln!("on_enter error: {e}");
-                    }
-                }
                 Ok(())
             });
         }

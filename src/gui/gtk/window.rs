@@ -295,7 +295,6 @@ pub fn run(
         let pages_c = pages.clone();
         let current_c = current_page.clone();
         let update = update_buttons.clone();
-        let make_ctx_c = make_ctx.clone();
         let stack_c = stack.clone();
 
         btn_back.connect_clicked(move |_| {
@@ -304,30 +303,12 @@ pub fn run(
                 return;
             }
 
-            if let Some(ref cb) = pages_c.borrow()[idx].on_before_leave {
-                let mut ctx = make_ctx_c();
-                match cb(&mut ctx) {
-                    Ok(true) => {}
-                    Ok(false) => return,
-                    Err(e) => {
-                        eprintln!("on_before_leave error: {e}");
-                        return;
-                    }
-                }
-            }
-
+            // on_before_leave / on_enter are intentionally skipped on
+            // backward navigation — they fire only on forward moves.
             let new_idx = idx - 1;
             stack_c.set_visible_child(&pages_c.borrow()[new_idx].widget);
             *current_c.borrow_mut() = new_idx;
             update();
-
-            let pages_b = pages_c.borrow();
-            if let Some(ref cb) = pages_b[new_idx].on_enter {
-                let mut ctx = make_ctx_c();
-                if let Err(e) = cb(&mut ctx) {
-                    eprintln!("on_enter error: {e}");
-                }
-            }
         });
     }
 

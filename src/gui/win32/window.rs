@@ -28,6 +28,9 @@ struct Page {
     kind: PageKind,
     on_enter: Option<OnEnterCallback>,
     on_before_leave: Option<OnBeforeLeaveCallback>,
+    /// Only meaningful for `PageKind::Install` — when true, the Next button
+    /// leading into / shown on this page uses `buttons.uninstall`.
+    is_uninstall: bool,
 }
 
 pub fn run(
@@ -98,6 +101,14 @@ pub fn run(
             },
         );
 
+        let page_is_uninstall = matches!(
+            &page_cfg,
+            WizardPage::Install {
+                is_uninstall: true,
+                ..
+            }
+        );
+
         let kind = match page_cfg {
             WizardPage::Welcome { title, message } => PageKind::Welcome(WelcomePage::new(
                 &panel,
@@ -165,6 +176,7 @@ pub fn run(
             kind,
             on_enter,
             on_before_leave,
+            is_uninstall: page_is_uninstall,
         });
     }
 
@@ -228,6 +240,7 @@ pub fn run(
         let install_running_c = install_running.clone();
         let label_next = config.buttons.next.clone();
         let label_install = config.buttons.install.clone();
+        let label_uninstall = config.buttons.uninstall.clone();
         let label_finish = config.buttons.finish.clone();
 
         let update_buttons = move || {
@@ -240,15 +253,30 @@ pub fn run(
             let is_terminal = is_finish || is_error;
             let next_is_install = idx + 1 < pages_guard.len()
                 && matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
+            // Pull the uninstall flag off whichever install page the button
+            // currently refers to (the current one, or the one we're about
+            // to advance into).
+            let install_is_uninstall = if is_install {
+                pages_guard[idx].is_uninstall
+            } else if next_is_install {
+                pages_guard[idx + 1].is_uninstall
+            } else {
+                false
+            };
             let running = install_running_c.load(std::sync::atomic::Ordering::Relaxed);
 
             btn_back_c
                 .hwnd()
                 .EnableWindow(!is_first && !is_install && !is_terminal);
+            let install_label = if install_is_uninstall {
+                &label_uninstall
+            } else {
+                &label_install
+            };
             let _ = if is_terminal {
                 btn_next_c.hwnd().SetWindowText(&label_finish)
             } else if next_is_install || is_install {
-                btn_next_c.hwnd().SetWindowText(&label_install)
+                btn_next_c.hwnd().SetWindowText(install_label)
             } else {
                 btn_next_c.hwnd().SetWindowText(&label_next)
             };

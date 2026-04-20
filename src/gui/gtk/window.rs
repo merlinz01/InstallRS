@@ -25,6 +25,9 @@ struct Page {
     kind: PageKind,
     on_enter: Option<OnEnterCallback>,
     on_before_leave: Option<OnBeforeLeaveCallback>,
+    /// Only meaningful for `PageKind::Install` — when true, the Next button
+    /// leading into / shown on this page uses `buttons.uninstall`.
+    is_uninstall: bool,
 }
 
 pub fn run(
@@ -68,6 +71,14 @@ pub fn run(
             on_enter,
             on_before_leave,
         } = configured;
+
+        let page_is_uninstall = matches!(
+            &page_cfg,
+            WizardPage::Install {
+                is_uninstall: true,
+                ..
+            }
+        );
 
         let (widget, kind) = match page_cfg {
             WizardPage::Welcome { title, message } => {
@@ -122,6 +133,7 @@ pub fn run(
             kind,
             on_enter,
             on_before_leave,
+            is_uninstall: page_is_uninstall,
         });
     }
 
@@ -172,6 +184,7 @@ pub fn run(
         let install_running_c = install_running.clone();
         let label_next = config.buttons.next.clone();
         let label_install = config.buttons.install.clone();
+        let label_uninstall = config.buttons.uninstall.clone();
         let label_finish = config.buttons.finish.clone();
 
         Rc::new(move || {
@@ -184,13 +197,25 @@ pub fn run(
             let is_terminal = is_finish || is_error;
             let next_is_install =
                 idx + 1 < pages_b.len() && matches!(&pages_b[idx + 1].kind, PageKind::Install(_));
+            let install_is_uninstall = if is_install {
+                pages_b[idx].is_uninstall
+            } else if next_is_install {
+                pages_b[idx + 1].is_uninstall
+            } else {
+                false
+            };
             let running = install_running_c.load(Ordering::Relaxed);
 
             btn_back_c.set_sensitive(!is_first && !is_install && !is_terminal);
+            let install_label = if install_is_uninstall {
+                &label_uninstall
+            } else {
+                &label_install
+            };
             let label = if is_terminal {
                 &label_finish
             } else if next_is_install || is_install {
-                &label_install
+                install_label
             } else {
                 &label_next
             };

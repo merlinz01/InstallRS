@@ -38,11 +38,15 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
             on_before_leave,
         } = configured;
         let page = match page {
-            WizardPage::Install { callback } => {
+            WizardPage::Install {
+                callback,
+                is_uninstall,
+            } => {
                 install_callback = Some(callback);
                 WizardPage::Install {
                     // Placeholder — the real callback is moved out.
                     callback: Box::new(|_| Ok(())),
+                    is_uninstall,
                 }
             }
             other => other,

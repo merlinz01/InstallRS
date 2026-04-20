@@ -20,6 +20,11 @@ wizard.install:
   de: "Installieren"
   es: "Instalar"
 
+wizard.uninstall:
+  en: "Uninstall"
+  de: "Deinstallieren"
+  es: "Desinstalar"
+
 wizard.finish:
   en: "Finish"
   de: "Fertigstellen"

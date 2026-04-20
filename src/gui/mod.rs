@@ -172,6 +172,24 @@ impl InstallerGui {
             .pages
             .push(ConfiguredPage::new(WizardPage::Install {
                 callback: Box::new(callback),
+                is_uninstall: false,
+            }));
+        self
+    }
+
+    /// Add an uninstall page — identical to [`install_page`](Self::install_page)
+    /// except the Next button preceding it (and visible while the page is
+    /// showing) uses `ButtonLabels::uninstall` ("Uninstall" by default) in
+    /// place of `ButtonLabels::install`.
+    pub fn uninstall_page(
+        mut self,
+        callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
+    ) -> Self {
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Install {
+                callback: Box::new(callback),
+                is_uninstall: true,
             }));
         self
     }
@@ -269,7 +287,7 @@ impl InstallerGui {
         let mut default_dir = String::new();
         for configured in self.config.pages {
             match configured.page {
-                WizardPage::Install { callback } => install_callback = Some(callback),
+                WizardPage::Install { callback, .. } => install_callback = Some(callback),
                 WizardPage::DirectoryPicker { default, .. } if default_dir.is_empty() => {
                     default_dir = default;
                 }

@@ -19,6 +19,7 @@ fn button_labels() -> installrs::gui::ButtonLabels {
         back: t!("wizard.back").into(),
         next: t!("wizard.next").into(),
         install: t!("wizard.install").into(),
+        uninstall: t!("wizard.uninstall").into(),
         finish: t!("wizard.finish").into(),
         cancel: t!("wizard.cancel").into(),
     }
@@ -200,7 +201,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
             &t!("uninstaller.welcome.title"),
             &t!("uninstaller.welcome.message"),
         )
-        .install_page(|ctx| {
+        .uninstall_page(|ctx| {
             let mut i = ctx.installer();
 
             i.remove(install_dir)

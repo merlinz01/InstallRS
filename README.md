@@ -115,28 +115,28 @@ the sink.
 
 ## Installer API
 
-| Method                      | Description                                                  |
-| --------------------------- | ------------------------------------------------------------ |
-| `set_out_dir(dir)`          | Set the base output directory for relative destination paths |
-| `file(src, dest)`           | Install a single embedded file (returns a `FileOp` builder)  |
-| `dir(src, dest)`            | Install an embedded directory tree (returns a `DirOp`)       |
-| `mkdir(dir)`                | Create a directory (returns a `MkdirOp` builder)             |
-| `uninstaller(dest)`         | Write the uninstaller executable (returns an `UninstallerOp`)|
-| `remove(path)`              | Remove a file or directory (returns a `RemoveOp`)            |
-| `exists(path)`              | Check whether a path exists                                  |
-| `exec_shell(cmd)`           | Run a shell command                                          |
-| `set_progress_sink(sink)`   | Attach a `ProgressSink` for status / progress / log events   |
-| `set_total_bytes(n)`        | Override the progress bar's total (default: sum of embeds)   |
-| `bytes_of(&[sources])`      | Compute the byte count for a subset of embedded sources      |
-| `reset_progress()`          | Reset `bytes_installed` to zero                              |
-| `enable_self_delete()`      | Windows: re-launch from temp so the install dir can be wiped |
-| `component(id, label)`      | Register an optional component (returns `&mut Component` for chaining) |
-| `is_component_selected(id)` | Check whether a component is currently selected              |
-| `set_component_selected(id, on)` | Force a component on/off (required components ignore off) |
-| `process_commandline()`     | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` from argv |
-| `cancellation_flag()`       | Returns `Arc<AtomicBool>` — shared flag set by Cancel button / Ctrl+C |
-| `is_cancelled()` / `cancel()` / `check_cancelled()` | Read / set / error-if-set the cancellation flag |
-| `install_ctrlc_handler()`   | Install a SIGINT handler (called from generated `main()`); first press cancels, second press exits with status 130 |
+| Method                                              | Description                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `set_out_dir(dir)`                                  | Set the base output directory for relative destination paths                                                       |
+| `file(src, dest)`                                   | Install a single embedded file (returns a `FileOp` builder)                                                        |
+| `dir(src, dest)`                                    | Install an embedded directory tree (returns a `DirOp`)                                                             |
+| `mkdir(dir)`                                        | Create a directory (returns a `MkdirOp` builder)                                                                   |
+| `uninstaller(dest)`                                 | Write the uninstaller executable (returns an `UninstallerOp`)                                                      |
+| `remove(path)`                                      | Remove a file or directory (returns a `RemoveOp`)                                                                  |
+| `exists(path)`                                      | Check whether a path exists                                                                                        |
+| `exec_shell(cmd)`                                   | Run a shell command                                                                                                |
+| `set_progress_sink(sink)`                           | Attach a `ProgressSink` for status / progress / log events                                                         |
+| `set_total_bytes(n)`                                | Override the progress bar's total (default: sum of embeds)                                                         |
+| `bytes_of(&[sources])`                              | Compute the byte count for a subset of embedded sources                                                            |
+| `reset_progress()`                                  | Reset `bytes_installed` to zero                                                                                    |
+| `enable_self_delete()`                              | Windows: re-launch from temp so the install dir can be wiped                                                       |
+| `component(id, label)`                              | Register an optional component (returns `&mut Component` for chaining)                                             |
+| `is_component_selected(id)`                         | Check whether a component is currently selected                                                                    |
+| `set_component_selected(id, on)`                    | Force a component on/off (required components ignore off)                                                          |
+| `process_commandline()`                             | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` from argv                 |
+| `cancellation_flag()`                               | Returns `Arc<AtomicBool>` — shared flag set by Cancel button / Ctrl+C                                              |
+| `is_cancelled()` / `cancel()` / `check_cancelled()` | Read / set / error-if-set the cancellation flag                                                                    |
+| `install_ctrlc_handler()`                           | Install a SIGINT handler (called from generated `main()`); first press cancels, second press exits with status 130 |
 
 ## Components
 
@@ -222,6 +222,13 @@ provided `message` sits above an auto-populated text area showing the
 actual error. Without an `.error_page(...)`, failures fall back to a
 native error dialog instead.
 
+For the uninstall flow, use `.uninstall_page(cb)` instead of
+`.install_page(cb)`. It behaves identically but causes the preceding Next
+button to render `ButtonLabels::uninstall` (default `"Uninstall"`), so
+users don't see "Install" on the button that kicks off an uninstall.
+Customize the label by passing `.buttons(ButtonLabels { uninstall:
+"Desinstalar".into(), ..Default::default() })`.
+
 Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
 wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard
 window as parent.
@@ -229,7 +236,7 @@ window as parent.
 For a pre-wizard language selector, `installrs::gui::choose_language(title,
 prompt, &[(code, display), ...], default_code) -> Result<Option<String>>`
 shows a modal dropdown and returns the selected code (or `None` if
-dismissed). Run it *before* building the wizard — page strings are
+dismissed). Run it _before_ building the wizard — page strings are
 captured eagerly, so the locale must be final by then:
 
 ```rust

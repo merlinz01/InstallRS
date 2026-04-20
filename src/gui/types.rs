@@ -56,6 +56,7 @@ pub struct ButtonLabels {
     pub back: String,
     pub next: String,
     pub install: String,
+    pub uninstall: String,
     pub finish: String,
     pub cancel: String,
 }
@@ -66,6 +67,7 @@ impl Default for ButtonLabels {
             back: "< Back".into(),
             next: "Next >".into(),
             install: "Install".into(),
+            uninstall: "Uninstall".into(),
             finish: "Finish".into(),
             cancel: "Cancel".into(),
         }
@@ -94,6 +96,10 @@ pub enum WizardPage {
     },
     Install {
         callback: InstallCallback,
+        /// When true, the Next button preceding this page (and visible while
+        /// on it) renders `buttons.uninstall` instead of `buttons.install`.
+        /// Set via [`InstallerGui::uninstall_page`].
+        is_uninstall: bool,
     },
     Finish {
         title: String,

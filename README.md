@@ -31,6 +31,9 @@ We can do better in 2026.
 - `on_start` / `on_exit` callbacks run in both GUI and headless modes — the
   same wizard definition works either way (`--headless` skips the window and
   runs the install callback inline)
+- Automatic cancellation: every file/dir/remove/mkdir/uninstaller op checks
+  a shared cancel flag before doing work. The wizard's Cancel button and a
+  Ctrl+C handler (first press cancels, second press exits) both flip it
 - Component system: let users pick optional features via wizard checkboxes or
   `--components` / `--with` / `--without` CLI flags
 - Built-in native dialog helpers (`info`, `warn`, `error`, `confirm`)
@@ -131,6 +134,9 @@ the sink.
 | `is_component_selected(id)` | Check whether a component is currently selected              |
 | `set_component_selected(id, on)` | Force a component on/off (required components ignore off) |
 | `process_commandline()`     | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` from argv |
+| `cancellation_flag()`       | Returns `Arc<AtomicBool>` — shared flag set by Cancel button / Ctrl+C |
+| `is_cancelled()` / `cancel()` / `check_cancelled()` | Read / set / error-if-set the cancellation flag |
+| `install_ctrlc_handler()`   | Install a SIGINT handler (called from generated `main()`); first press cancels, second press exits with status 130 |
 
 ## Components
 

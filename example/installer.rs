@@ -148,9 +148,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
             for step in 1..=5 {
                 ctx.set_status(&t!("installer.install.status_step", step = step));
                 std::thread::sleep(std::time::Duration::from_secs(1));
-                if ctx.is_cancelled() {
-                    return Err(anyhow::anyhow!("install cancelled by user"));
-                }
+                i.check_cancelled()?;
             }
 
             #[cfg(windows)]

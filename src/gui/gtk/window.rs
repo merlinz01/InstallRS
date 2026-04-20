@@ -149,6 +149,8 @@ pub fn run(
         Rc::new(RefCell::new(install_callback));
     let install_running = Rc::new(AtomicBool::new(false));
     let install_result: Rc<RefCell<Option<Result<()>>>> = Rc::new(RefCell::new(None));
+    let install_handle: Rc<RefCell<Option<std::thread::JoinHandle<()>>>> =
+        Rc::new(RefCell::new(None));
 
     // Show the first page.
     if let Some(first) = pages.borrow().first() {
@@ -224,6 +226,7 @@ pub fn run(
         let tx_c = tx.clone();
         let install_cb = install_callback.clone();
         let install_running_c = install_running.clone();
+        let install_handle_c = install_handle.clone();
         let update = update_buttons.clone();
 
         Rc::new(move || {
@@ -236,7 +239,7 @@ pub fn run(
                 let cancelled_bg = cancelled_c.clone();
                 let tx_bg = tx_c.clone();
 
-                std::thread::spawn(move || {
+                let handle = std::thread::spawn(move || {
                     let mut ctx =
                         GuiContext::new(tx_bg.clone(), installer_bg, install_dir_bg, cancelled_bg);
                     {
@@ -248,6 +251,7 @@ pub fn run(
                     ctx.installer().clear_progress_sink();
                     let _ = tx_bg.send(GuiMessage::Finished(result));
                 });
+                *install_handle_c.borrow_mut() = Some(handle);
 
                 update();
             }
@@ -498,6 +502,13 @@ pub fn run(
     }
     while gtk::events_pending() {
         gtk::main_iteration();
+    }
+
+    // Join the install bg thread if still running — it holds a clone of
+    // the installer Arc. Cancellation flag was already set by the Cancel
+    // button, so the next op inside the thread errors out quickly.
+    if let Some(handle) = install_handle.borrow_mut().take() {
+        let _ = handle.join();
     }
 
     let result = install_result.borrow_mut().take();

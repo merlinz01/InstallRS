@@ -2,7 +2,6 @@ mod pages;
 mod window;
 
 use anyhow::Result;
-use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc, Mutex};
 
 use super::types::{ConfiguredPage, GuiMessage, WizardConfig, WizardPage};
@@ -22,7 +21,9 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     let install_dir = Arc::new(Mutex::new(default_dir));
 
     // Cancellation flag.
-    let cancelled = Arc::new(AtomicBool::new(false));
+    // Share the Installer's cancellation flag so the Cancel button, the
+    // Ctrl+C handler, and the auto-check in every op all see the same state.
+    let cancelled = installer.cancellation_flag();
 
     // Channel for background → GUI messages.
     let (tx, rx) = mpsc::channel::<GuiMessage>();

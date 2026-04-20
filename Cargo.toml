@@ -34,6 +34,7 @@ log = "0.4"
 env_logger = "0.11"
 image = { version = "0.25", default-features = false, features = ["png"] }
 ico = "0.3"
+ctrlc = "3"
 
 [target.'cfg(windows)'.dependencies]
 winsafe = { version = "0.0.27", features = ["gui", "shell"], optional = true }

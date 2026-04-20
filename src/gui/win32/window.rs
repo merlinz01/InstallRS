@@ -208,6 +208,8 @@ pub fn run(
     let install_callback = Arc::new(Mutex::new(install_callback));
     let install_running = Arc::new(AtomicBool::new(false));
     let install_result: Arc<Mutex<Option<Result<()>>>> = Arc::new(Mutex::new(None));
+    let install_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>> =
+        Arc::new(Mutex::new(None));
 
     // Helper: update button states for the current page.
     {
@@ -259,6 +261,7 @@ pub fn run(
             let tx_c = tx.clone();
             let install_cb = install_callback.clone();
             let install_running_c = install_running.clone();
+            let install_handle_c = install_handle.clone();
             let update = update_buttons.clone();
 
             Arc::new(move || {
@@ -271,7 +274,7 @@ pub fn run(
                     let cancelled_bg = cancelled_c.clone();
                     let tx_bg = tx_c.clone();
 
-                    std::thread::spawn(move || {
+                    let handle = std::thread::spawn(move || {
                         let mut ctx = GuiContext::new(
                             tx_bg.clone(),
                             installer_bg,
@@ -291,6 +294,7 @@ pub fn run(
                         ctx.installer().clear_progress_sink();
                         let _ = tx_bg.send(GuiMessage::Finished(result));
                     });
+                    *install_handle_c.lock().unwrap() = Some(handle);
 
                     update();
                 }
@@ -638,6 +642,13 @@ pub fn run(
     }
 
     wnd.run_main(None).map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    // Join the install bg thread if still running — it holds a clone of the
+    // installer Arc. Cancellation flag was already set by Cancel / Ctrl+C,
+    // so the next op errors out quickly and the thread exits.
+    if let Some(handle) = install_handle.lock().unwrap().take() {
+        let _ = handle.join();
+    }
 
     // Check if the install had an error.
     let result = install_result.lock().unwrap().take();

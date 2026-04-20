@@ -245,7 +245,6 @@ impl InstallerGui {
     /// it on the current thread with a `GuiContext` wired to an stderr sink
     /// so status/log messages still surface.
     fn run_headless(self, installer: &mut Installer) -> Result<()> {
-        use std::sync::atomic::AtomicBool;
         use std::sync::{mpsc, Arc, Mutex};
 
         // Extract install callback and default install dir.
@@ -264,7 +263,7 @@ impl InstallerGui {
         let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
         let installer_arc = Arc::new(Mutex::new(installer_taken));
         let install_dir = Arc::new(Mutex::new(default_dir));
-        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled = installer.cancellation_flag();
 
         let (tx, rx) = mpsc::channel::<GuiMessage>();
 

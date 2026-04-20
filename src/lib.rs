@@ -2,7 +2,8 @@
 pub mod gui;
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -132,6 +133,7 @@ pub struct Installer {
     sink: Option<Box<dyn ProgressSink>>,
     progress: Mutex<ProgressState>,
     components: Vec<Component>,
+    cancelled: Arc<AtomicBool>,
 }
 
 /// An optional feature the user can select or deselect at install time.
@@ -223,7 +225,65 @@ impl Installer {
                 bytes_total: total,
             }),
             components: Vec::new(),
+            cancelled: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// The shared cancellation flag. Flipping this to `true` causes the
+    /// next file/dir/mkdir/remove op to error with "install cancelled".
+    /// The wizard's Cancel button and the headless Ctrl+C handler both
+    /// write through this.
+    pub fn cancellation_flag(&self) -> Arc<AtomicBool> {
+        self.cancelled.clone()
+    }
+
+    /// True if a cancel has been requested.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+
+    /// Request cancellation. Subsequent op `.install()` calls will return
+    /// a "cancelled" error before doing any work.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    /// Error out if cancellation has been requested. Called at the top of
+    /// every builder op's `.install()`; user code calling the op-level
+    /// helpers can rely on this without any polling.
+    pub fn check_cancelled(&self) -> Result<()> {
+        if self.is_cancelled() {
+            Err(anyhow!("install cancelled by user"))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Install a Ctrl+C / SIGINT handler tied to this installer's
+    /// cancellation flag. First press sets the flag (the next op errors
+    /// with "cancelled"); a second press exits the process with status 130.
+    ///
+    /// Called from the generated installer/uninstaller `main()` before
+    /// [`install_main`](Self::install_main) / [`uninstall_main`](Self::uninstall_main).
+    /// Idempotent: re-invocations are no-ops.
+    pub fn install_ctrlc_handler(&self) {
+        static INSTALLED: std::sync::Once = std::sync::Once::new();
+        let flag = self.cancelled.clone();
+        INSTALLED.call_once(|| {
+            let counter = Arc::new(AtomicU32::new(0));
+            let flag_h = flag.clone();
+            let _ = ctrlc::set_handler(move || {
+                let n = counter.fetch_add(1, Ordering::Relaxed) + 1;
+                if n == 1 {
+                    flag_h.store(true, Ordering::Relaxed);
+                    eprintln!(
+                        "\nCancellation requested. Press Ctrl+C again to exit immediately."
+                    );
+                } else {
+                    std::process::exit(130);
+                }
+            });
+        });
     }
 
     /// Register an optional installable component.
@@ -765,6 +825,7 @@ impl<'i> FileOp<'i> {
         self
     }
     pub fn install(self) -> Result<()> {
+        self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
 
@@ -843,6 +904,7 @@ impl<'i> DirOp<'i> {
         self
     }
     pub fn install(self) -> Result<()> {
+        self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
 
@@ -886,6 +948,7 @@ impl<'i> UninstallerOp<'i> {
         self
     }
     pub fn install(self) -> Result<()> {
+        self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
 
@@ -946,6 +1009,7 @@ impl<'i> MkdirOp<'i> {
         self
     }
     pub fn install(self) -> Result<()> {
+        self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
         let path = self.installer.resolve_out_path(&self.dst)?;
@@ -971,6 +1035,7 @@ impl<'i> RemoveOp<'i> {
         self
     }
     pub fn install(self) -> Result<()> {
+        self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
         let p = self.installer.resolve_out_path(&self.path)?;
@@ -1061,6 +1126,7 @@ fn install_children(
     on_error: Option<&(dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static)>,
 ) -> Result<()> {
     for child in children {
+        installer.check_cancelled()?;
         let target = dest.join(child.name);
         let rel = if rel_prefix.is_empty() {
             child.name.to_string()

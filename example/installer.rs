@@ -225,7 +225,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
             i.set_out_dir(&out_dir);
 
             // core: always installed (required component)
-            i.dir(installrs::source!("testdir"), "testdir")
+            i.dir(
+                installrs::source!("testdir", ignore = ["*.bak"]),
+                "testdir",
+            )
                 .status(t!("installer.install.status_installing"))
                 .log(t!("installer.install.log_testdir"))
                 .install()?;

@@ -250,18 +250,22 @@ mod tests {
 
     // ── scanner: source! macro detection ─────────────────────────────────────
 
+    fn has_path(list: &[scanner::SourceRef], path: &str) -> bool {
+        list.iter().any(|r| r.path == path)
+    }
+
     #[test]
     fn scanner_detects_source_macro() {
         let r = scan_str(
             r#"fn install(i: &mut T) { i.file(installrs::source!("cfg.toml"), "dst").install().unwrap(); }"#,
         );
-        assert!(r.install_sources.contains(&"cfg.toml".to_string()));
+        assert!(has_path(&r.install_sources, "cfg.toml"));
     }
 
     #[test]
     fn scanner_detects_unqualified_source_macro() {
         let r = scan_str(r#"fn install(i: &mut T) { i.file(source!("data.txt"), "dst"); }"#);
-        assert!(r.install_sources.contains(&"data.txt".to_string()));
+        assert!(has_path(&r.install_sources, "data.txt"));
     }
 
     #[test]
@@ -275,7 +279,7 @@ mod tests {
         assert_eq!(
             r.install_sources
                 .iter()
-                .filter(|p| p.as_str() == "x.txt")
+                .filter(|p| p.path == "x.txt")
                 .count(),
             1
         );
@@ -286,7 +290,7 @@ mod tests {
         let r =
             scan_str(r#"fn install(i: &mut T) { i.file(source!("vendor/lib.so"), "lib.so"); }"#);
         assert!(
-            r.install_sources.contains(&"vendor/lib.so".to_string()),
+            has_path(&r.install_sources, "vendor/lib.so"),
             "got: {:?}",
             r.install_sources
         );
@@ -297,7 +301,7 @@ mod tests {
         // Builder determines file-vs-dir from filesystem; scanner just collects paths.
         let r = scan_str(r#"fn install(i: &mut T) { i.dir(source!("assets/icons"), "icons"); }"#);
         assert!(
-            r.install_sources.contains(&"assets/icons".to_string()),
+            has_path(&r.install_sources, "assets/icons"),
             "got: {:?}",
             r.install_sources
         );
@@ -308,15 +312,15 @@ mod tests {
     #[test]
     fn scanner_source_in_uninstall_goes_to_uninstall() {
         let r = scan_str(r#"fn uninstall(i: &mut T) { i.file(source!("cleanup.sh"), "dst"); }"#);
-        assert!(r.uninstall_sources.contains(&"cleanup.sh".to_string()));
+        assert!(has_path(&r.uninstall_sources, "cleanup.sh"));
         assert!(r.install_sources.is_empty());
     }
 
     #[test]
     fn scanner_source_outside_install_uninstall_goes_to_both() {
         let r = scan_str(r#"fn helper(i: &mut T) { i.file(source!("shared.dat"), "dst"); }"#);
-        assert!(r.install_sources.contains(&"shared.dat".to_string()));
-        assert!(r.uninstall_sources.contains(&"shared.dat".to_string()));
+        assert!(has_path(&r.install_sources, "shared.dat"));
+        assert!(has_path(&r.uninstall_sources, "shared.dat"));
     }
 
     #[test]
@@ -328,6 +332,39 @@ mod tests {
                 i.file(source!("real.txt"), "dst");
             }"#,
         );
-        assert_eq!(r.install_sources, vec!["real.txt".to_string()]);
+        assert_eq!(r.install_sources.len(), 1);
+        assert_eq!(r.install_sources[0].path, "real.txt");
+    }
+
+    // ── scanner: source! options ─────────────────────────────────────────────
+
+    #[test]
+    fn scanner_parses_ignore_option() {
+        let r = scan_str(
+            r#"fn install(i: &mut T) { i.dir(source!("assets", ignore = ["*.bak", "scratch"]), "dst"); }"#,
+        );
+        let s = r
+            .install_sources
+            .iter()
+            .find(|s| s.path == "assets")
+            .expect("missing assets source");
+        assert_eq!(s.ignore, vec!["*.bak".to_string(), "scratch".to_string()]);
+    }
+
+    #[test]
+    fn scanner_merges_ignore_across_invocations() {
+        let r = scan_str(
+            r#"fn install(i: &mut T) {
+                i.dir(source!("assets", ignore = ["*.bak"]), "a");
+                i.dir(source!("assets", ignore = ["scratch"]), "b");
+            }"#,
+        );
+        let s = r
+            .install_sources
+            .iter()
+            .find(|s| s.path == "assets")
+            .unwrap();
+        assert!(s.ignore.contains(&"*.bak".to_string()));
+        assert!(s.ignore.contains(&"scratch".to_string()));
     }
 }

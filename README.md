@@ -87,6 +87,19 @@ i.file(source!("app.exe"), "app.exe").install()?;
 i.dir(source!("data"), "data").install()?;
 ```
 
+The macro also accepts build-time-only keyword options that the scanner
+reads from the source — the runtime expansion still evaluates to a
+`Source(u64)`. Supported keys:
+
+- `ignore = ["glob", ...]` — extra glob patterns applied when gathering a
+  directory, merged (union) with the CLI `--ignore` list. Repeat references
+  to the same path across the installer/uninstaller merge their ignore
+  lists, so only one declaration needs to carry it.
+
+```rust
+i.dir(source!("assets", ignore = ["*.bak", "scratch"]), "assets").install()?;
+```
+
 ### Builder options
 
 Every install operation returns a builder that terminates with `.install()`.

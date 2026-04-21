@@ -138,24 +138,25 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 
     log::info!("Install sources ({}):", scan.install_sources.len());
     for s in &scan.install_sources {
-        log::info!("  {s}");
+        log_source_ref(s);
     }
     log::info!("Uninstall sources ({}):", scan.uninstall_sources.len());
     for s in &scan.uninstall_sources {
-        log::info!("  {s}");
+        log_source_ref(s);
     }
 
     // ── Gather and compress files for installer ──────────────────────────────
     let mut install_gathered: Vec<GatheredFile> = Vec::new();
     let mut hash_cache: HashMap<String, String> = HashMap::new();
 
-    for source_path in &scan.install_sources {
+    for src in &scan.install_sources {
+        let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
         gather_source(
-            source_path,
+            &src.path,
             &params.target_dir,
             &install_files_dir,
             &params.compression,
-            &params.ignore_patterns,
+            &merged,
             &mut install_gathered,
             &mut hash_cache,
         )?;
@@ -165,13 +166,14 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     // ── Gather and compress files for uninstaller ────────────────────────────
     let mut uninstall_gathered: Vec<GatheredFile> = Vec::new();
 
-    for source_path in &scan.uninstall_sources {
+    for src in &scan.uninstall_sources {
+        let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
         gather_source(
-            source_path,
+            &src.path,
             &params.target_dir,
             &uninstall_files_dir,
             &params.compression,
-            &params.ignore_patterns,
+            &merged,
             &mut uninstall_gathered,
             &mut hash_cache,
         )?;
@@ -641,6 +643,24 @@ fn merge_win_resource_config(
             merged
         },
     }
+}
+
+fn log_source_ref(s: &scanner::SourceRef) {
+    if s.ignore.is_empty() {
+        log::info!("  {}", s.path);
+    } else {
+        log::info!("  {} (ignore: {})", s.path, s.ignore.join(", "));
+    }
+}
+
+fn merge_ignore(global: &[String], per_source: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = global.to_vec();
+    for p in per_source {
+        if !out.contains(p) {
+            out.push(p.clone());
+        }
+    }
+    out
 }
 
 /// Gather a single `source!()` path — dispatches to `gather_file` or

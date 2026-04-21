@@ -39,9 +39,20 @@ pub struct Source(pub u64);
 /// i.file(installrs::source!("assets/config.toml"), "etc/myapp/config.toml")
 ///     .install()?;
 /// ```
+/// Produce a [`Source`] from a literal path, hashed at compile time.
+///
+/// Accepts optional build-time-only keyword arguments; the values are parsed
+/// by the build tool's scanner (not used at runtime). Supported keys:
+///
+/// - `ignore = ["glob", ...]` — extra glob patterns applied when gathering a
+///   directory, merged with the CLI-level `--ignore` list.
+///
+/// ```rust,ignore
+/// i.dir(source!("assets", ignore = ["*.bak", "scratch"]), "assets").install()?;
+/// ```
 #[macro_export]
 macro_rules! source {
-    ($path:literal) => {{
+    ($path:literal $(, $key:ident = $val:expr)* $(,)?) => {{
         const H: u64 = $crate::source_path_hash_const($path);
         $crate::Source(H)
     }};

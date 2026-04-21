@@ -28,6 +28,7 @@ pub enum PageKind {
     Install(InstallPage),
     Finish(FinishPage),
     Error(ErrorPage),
+    Custom(CustomPage),
 }
 
 // ── Welcome Page ────────────────────────────────────────────────────────────
@@ -715,6 +716,247 @@ impl InstallPage {
             format!("{current}\r\n{message}")
         };
         let _ = self.log_edit.set_text(&new_text);
+    }
+}
+
+// ── Custom Page ─────────────────────────────────────────────────────────────
+
+enum CustomControl {
+    Text { edit: gui::Edit },
+    Checkbox { check: gui::CheckBox },
+    Dropdown { combo: gui::ComboBox, values: Vec<String> },
+}
+
+pub struct CustomPage {
+    _heading_label: gui::Label,
+    _label: gui::Label,
+    controls: Vec<(String, CustomControl)>,
+    _extras: Vec<gui::Label>,
+}
+
+impl CustomPage {
+    pub fn new(
+        parent: &gui::WindowControl,
+        heading: &str,
+        label_text: &str,
+        widgets: &[crate::gui::CustomWidget],
+        initial: &std::collections::HashMap<String, crate::OptionValue>,
+        width: i32,
+        _height: i32,
+    ) -> Self {
+        let heading_label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: heading,
+                position: gui::dpi(PAD, PAD),
+                size: gui::dpi(width - 2 * PAD, 24),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        let label = gui::Label::new(
+            parent,
+            gui::LabelOpts {
+                text: label_text,
+                position: gui::dpi(PAD, PAD + 28),
+                size: gui::dpi(width - 2 * PAD, 20),
+                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                ..Default::default()
+            },
+        );
+
+        let mut y = PAD + 28 + 26;
+        let row_w = width - 2 * PAD;
+        let mut controls: Vec<(String, CustomControl)> = Vec::new();
+        let mut extras: Vec<gui::Label> = Vec::new();
+        // Collect per-widget initial states to apply in a single wm_create
+        // handler — winsafe only keeps one wm_create registration per parent.
+        let mut initial_checks: Vec<(gui::CheckBox, bool)> = Vec::new();
+        let mut initial_dropdowns: Vec<(gui::ComboBox, usize)> = Vec::new();
+
+        for w in widgets {
+            use crate::gui::CustomWidget;
+            match w {
+                CustomWidget::Text {
+                    key,
+                    label: lbl,
+                    default,
+                    password,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let (ew, eh) = gui::dpi(row_w, 24);
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let style = if *password {
+                        co::ES::AUTOHSCROLL | co::ES::PASSWORD
+                    } else {
+                        co::ES::AUTOHSCROLL
+                    };
+                    let edit = gui::Edit::new(
+                        parent,
+                        gui::EditOpts {
+                            text: &initial_text,
+                            position: gui::dpi(PAD, y + 20),
+                            width: ew,
+                            height: eh,
+                            control_style: style,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    controls.push((key.clone(), CustomControl::Text { edit }));
+                    extras.push(lbl_ctl);
+                    y += 52;
+                }
+                CustomWidget::Checkbox {
+                    key,
+                    label: lbl,
+                    default,
+                } => {
+                    let initial_val = match initial.get(key) {
+                        Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => {
+                            *b
+                        }
+                        _ => *default,
+                    };
+                    let check = gui::CheckBox::new(
+                        parent,
+                        gui::CheckBoxOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y + 4),
+                            size: gui::dpi(row_w, 20),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    initial_checks.push((check.clone(), initial_val));
+                    controls.push((key.clone(), CustomControl::Checkbox { check }));
+                    y += 32;
+                }
+                CustomWidget::Dropdown {
+                    key,
+                    label: lbl,
+                    choices,
+                    default,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let current = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let idx = choices
+                        .iter()
+                        .position(|(v, _)| *v == current)
+                        .unwrap_or(0);
+                    let items: Vec<&str> = choices.iter().map(|(_, d)| d.as_str()).collect();
+                    let values: Vec<String> =
+                        choices.iter().map(|(v, _)| v.clone()).collect();
+                    let (cw, _) = gui::dpi(row_w, 0);
+                    let combo = gui::ComboBox::new(
+                        parent,
+                        gui::ComboBoxOpts {
+                            position: gui::dpi(PAD, y + 20),
+                            width: cw,
+                            items: &items,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    initial_dropdowns.push((combo.clone(), idx));
+                    controls.push((key.clone(), CustomControl::Dropdown { combo, values }));
+                    extras.push(lbl_ctl);
+                    y += 52;
+                }
+            }
+        }
+
+        // Single wm_create handler: apply the heading font, then seed every
+        // checkbox / dropbox's initial state in one shot.
+        {
+            let heading_c = heading_label.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = HFONT::CreateFont(
+                    SIZE { cx: 0, cy: -18 },
+                    0,
+                    0,
+                    co::FW::BOLD,
+                    false,
+                    false,
+                    false,
+                    co::CHARSET::DEFAULT,
+                    co::OUT_PRECIS::DEFAULT,
+                    co::CLIP::DEFAULT_PRECIS,
+                    co::QUALITY::DEFAULT,
+                    co::PITCH::DEFAULT,
+                    "Segoe UI",
+                )?;
+                unsafe {
+                    heading_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                for (check, val) in &initial_checks {
+                    check.set_check(*val);
+                }
+                for (combo, idx) in &initial_dropdowns {
+                    combo.items().select(Some(*idx as u32));
+                }
+                Ok(0)
+            });
+        }
+
+        setup_transparent_labels(parent);
+
+        Self {
+            _heading_label: heading_label,
+            _label: label,
+            controls,
+            _extras: extras,
+        }
+    }
+
+    /// Read the current value of every widget, keyed by option name. The
+    /// wizard calls this on forward navigation and stores each entry via
+    /// [`crate::Installer::set_option_value`].
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        let mut out = Vec::new();
+        for (key, ctl) in &self.controls {
+            let val = match ctl {
+                CustomControl::Text { edit } => {
+                    crate::OptionValue::String(edit.text().unwrap_or_default())
+                }
+                CustomControl::Checkbox { check } => crate::OptionValue::Bool(check.is_checked()),
+                CustomControl::Dropdown { combo, values } => {
+                    let idx = combo.items().selected_index().unwrap_or(0) as usize;
+                    let v = values.get(idx).cloned().unwrap_or_default();
+                    crate::OptionValue::String(v)
+                }
+            };
+            out.push((key.clone(), val));
+        }
+        out
     }
 }
 

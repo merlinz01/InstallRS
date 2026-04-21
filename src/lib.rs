@@ -414,6 +414,22 @@ impl Installer {
         self.option_values.get(name)
     }
 
+    /// Store (or overwrite) a parsed option value directly. The wizard
+    /// calls this when a custom-page widget commits its current value on
+    /// forward navigation. User code can call it too, e.g. to seed a
+    /// value from a config file before the wizard opens.
+    pub fn set_option_value(&mut self, name: &str, value: OptionValue) {
+        let name = name.trim_start_matches('-').to_string();
+        self.option_values.insert(name, value);
+    }
+
+    /// Clone of the full parsed-options map. Used by the wizard to
+    /// pre-fill custom-page widgets from already-set option values
+    /// (whether from the CLI or a previous wizard run).
+    pub fn option_values_snapshot(&self) -> std::collections::HashMap<String, OptionValue> {
+        self.option_values.clone()
+    }
+
     /// The shared cancellation flag. Flipping this to `true` causes the
     /// next file/dir/mkdir/remove op to error with "install cancelled".
     /// The wizard's Cancel button and the headless Ctrl+C handler both

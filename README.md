@@ -267,6 +267,41 @@ forward navigation — the Back button walks backwards without re-running
 either callback, so you won't prompt the user for confirmation when
 they're just retreating.
 
+### Custom pages
+
+`.custom_page(heading, label, |p| { ... })` lays out a column of simple
+widgets — text fields, checkboxes, and dropdowns — each bound to an
+installer option by key:
+
+```rust
+.custom_page("Settings", "Configure your install:", |p| {
+    p.text("username", "Username:", "admin");
+    p.password("password", "Password:");
+    p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
+    p.dropdown(
+        "db_backend",
+        "Database:",
+        &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
+        "sqlite",
+    );
+})
+.on_before_leave(|ctx| {
+    let user: String = ctx.installer().get_option("username").unwrap_or_default();
+    if user.trim().is_empty() {
+        installrs::gui::error("Required", "Please enter a username.");
+        return Ok(false);
+    }
+    Ok(true)
+})
+```
+
+Widgets pre-fill from the options store on entry and write back on
+forward navigation — so `--username=alice` on the command line
+pre-fills the field (as long as you registered the option via
+`i.option("username", OptionKind::String)` before
+`process_commandline`). Validation lives in `on_before_leave`:
+return `Ok(false)` to keep the user on the page.
+
 Native dialog helpers (`installrs::gui::info`, `warn`, `error`, `confirm`)
 wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3) with the wizard
 window as parent.

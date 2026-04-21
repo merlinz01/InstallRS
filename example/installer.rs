@@ -144,6 +144,33 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 &t!("installer.confirm.message", dir = ctx.install_dir()),
             )
         })
+        .custom_page(
+            "Additional Settings",
+            "Tell us a bit more about this install:",
+            |p| {
+                p.text("username", "Administrator username:", "admin");
+                p.password("password", "Administrator password:");
+                p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
+                p.dropdown(
+                    "db_backend",
+                    "Database backend:",
+                    &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
+                    "sqlite",
+                );
+            },
+        )
+        .on_before_leave(|ctx| {
+            let i = ctx.installer();
+            let user: String = i.get_option("username").unwrap_or_default();
+            if user.trim().is_empty() {
+                let _ = installrs::gui::error(
+                    "Missing field",
+                    "Please enter an administrator username.",
+                );
+                return Ok(false);
+            }
+            Ok(true)
+        })
         .install_page(|ctx| {
             let mut i = ctx.installer();
 

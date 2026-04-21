@@ -9,8 +9,9 @@ mod gtk;
 
 pub use dialog::{choose_language, confirm, error, info, warn};
 pub use types::{
-    ButtonLabels, ConfiguredPage, ExitCallback, GuiContext, GuiMessage, InstallCallback,
-    OnBeforeLeaveCallback, OnEnterCallback, PageContext, StartCallback, WizardConfig, WizardPage,
+    ButtonLabels, ConfiguredPage, CustomPageBuilder, CustomWidget, ExitCallback, GuiContext,
+    GuiMessage, InstallCallback, OnBeforeLeaveCallback, OnEnterCallback, PageContext,
+    StartCallback, WizardConfig, WizardPage,
 };
 
 use anyhow::Result;
@@ -201,6 +202,52 @@ impl InstallerGui {
             .push(ConfiguredPage::new(WizardPage::Finish {
                 title: title.to_string(),
                 message: message.to_string(),
+            }));
+        self
+    }
+
+    /// Add a custom page — a labeled column of text inputs, checkboxes,
+    /// and dropdowns. Each widget is tied to an installer option by key:
+    /// values are pre-filled from `installer.option_value(key)` (useful
+    /// for CLI overrides), and written back to the options store on
+    /// forward navigation. Validate via `.on_before_leave(...)`:
+    ///
+    /// ```rust,ignore
+    /// .custom_page("Settings", "Configure your install:", |p| {
+    ///     p.text("username", "Username:", "admin");
+    ///     p.password("password", "Password:");
+    ///     p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
+    ///     p.dropdown(
+    ///         "db_backend",
+    ///         "Database:",
+    ///         &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
+    ///         "sqlite",
+    ///     );
+    /// })
+    /// .on_before_leave(|ctx| {
+    ///     let i = ctx.installer();
+    ///     let u: String = i.get_option("username").unwrap_or_default();
+    ///     if u.is_empty() {
+    ///         installrs::gui::error("Required", "Enter a username.");
+    ///         return Ok(false);
+    ///     }
+    ///     Ok(true)
+    /// })
+    /// ```
+    pub fn custom_page(
+        mut self,
+        heading: &str,
+        label: &str,
+        build: impl FnOnce(&mut CustomPageBuilder),
+    ) -> Self {
+        let mut b = CustomPageBuilder::new();
+        build(&mut b);
+        self.config
+            .pages
+            .push(ConfiguredPage::new(WizardPage::Custom {
+                heading: heading.to_string(),
+                label: label.to_string(),
+                widgets: b.widgets,
             }));
         self
     }

@@ -114,6 +114,117 @@ pub enum WizardPage {
         title: String,
         message: String,
     },
+    /// A user-defined page that lays out a column of simple widgets (text
+    /// inputs, checkboxes, dropdowns). Each widget is tied to an
+    /// [`crate::OptionValue`] keyed by `key`; values are pre-filled from the
+    /// installer's options store on entry and written back on forward
+    /// navigation. Validation belongs in `on_before_leave`.
+    Custom {
+        heading: String,
+        label: String,
+        widgets: Vec<CustomWidget>,
+    },
+}
+
+/// A single row on a [`WizardPage::Custom`]. Built via
+/// [`CustomPageBuilder`] and rendered as a labeled input control in a
+/// vertical column.
+#[derive(Clone, Debug)]
+pub enum CustomWidget {
+    /// Single-line text entry (optionally masked as a password).
+    Text {
+        key: String,
+        label: String,
+        default: String,
+        password: bool,
+    },
+    /// Single boolean toggle (the label sits next to the checkbox itself).
+    Checkbox {
+        key: String,
+        label: String,
+        default: bool,
+    },
+    /// One-of-N dropdown. `choices` is `(value, display_label)` — the
+    /// stored option value is the `value` field of the selected pair.
+    Dropdown {
+        key: String,
+        label: String,
+        choices: Vec<(String, String)>,
+        default: String,
+    },
+}
+
+/// Builds the widget list for a [`WizardPage::Custom`]. Each method
+/// appends one widget to the column; the returned `&mut Self` lets you
+/// chain. Widget keys are the same string used by
+/// [`crate::Installer::get_option`] / [`crate::Installer::option_value`]
+/// — so CLI `--<key>=<value>` overrides (when the matching option is
+/// registered via [`crate::Installer::option`] before
+/// `process_commandline`) pre-fill the field.
+pub struct CustomPageBuilder {
+    pub(crate) widgets: Vec<CustomWidget>,
+}
+
+impl CustomPageBuilder {
+    pub(crate) fn new() -> Self {
+        Self {
+            widgets: Vec::new(),
+        }
+    }
+
+    /// Add a single-line text entry.
+    pub fn text(&mut self, key: &str, label: &str, default: &str) -> &mut Self {
+        self.widgets.push(CustomWidget::Text {
+            key: key.into(),
+            label: label.into(),
+            default: default.into(),
+            password: false,
+        });
+        self
+    }
+
+    /// Add a masked single-line password entry.
+    pub fn password(&mut self, key: &str, label: &str) -> &mut Self {
+        self.widgets.push(CustomWidget::Text {
+            key: key.into(),
+            label: label.into(),
+            default: String::new(),
+            password: true,
+        });
+        self
+    }
+
+    /// Add a checkbox with the given label.
+    pub fn checkbox(&mut self, key: &str, label: &str, default: bool) -> &mut Self {
+        self.widgets.push(CustomWidget::Checkbox {
+            key: key.into(),
+            label: label.into(),
+            default,
+        });
+        self
+    }
+
+    /// Add a dropdown. `choices` is `(value, display_label)`; `default` is
+    /// the `value` of the initially-selected entry (use the first entry's
+    /// value if you don't care).
+    pub fn dropdown(
+        &mut self,
+        key: &str,
+        label: &str,
+        choices: &[(&str, &str)],
+        default: &str,
+    ) -> &mut Self {
+        self.widgets.push(CustomWidget::Dropdown {
+            key: key.into(),
+            label: label.into(),
+            choices: choices
+                .iter()
+                .map(|(v, d)| ((*v).into(), (*d).into()))
+                .collect(),
+            default: default.into(),
+        });
+        self
+    }
 }
 
 /// Messages sent from the background install thread to the GUI thread.

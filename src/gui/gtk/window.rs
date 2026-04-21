@@ -8,8 +8,8 @@ use std::time::Duration;
 use gtk::prelude::*;
 
 use super::pages::{
-    ComponentsPage, DirectoryPickerPage, ErrorPage, FinishPage, InstallPage, LicensePage, PageKind,
-    WelcomePage,
+    ComponentsPage, CustomPage, DirectoryPickerPage, ErrorPage, FinishPage, InstallPage,
+    LicensePage, PageKind, WelcomePage,
 };
 use crate::gui::types::{
     ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
@@ -124,6 +124,16 @@ pub fn run(
                 let p = ErrorPage::new(&title, &message);
                 let w = p.widget().clone();
                 (w, PageKind::Error(p))
+            }
+            WizardPage::Custom {
+                heading,
+                label,
+                widgets,
+            } => {
+                let initial = installer.lock().unwrap().option_values_snapshot();
+                let p = CustomPage::new(&heading, &label, &widgets, &initial);
+                let w = p.widget().clone();
+                (w, PageKind::Custom(p))
             }
         };
 
@@ -338,6 +348,13 @@ pub fn run(
                     let mut inst = installer_c.lock().unwrap();
                     for (id, on) in sels {
                         inst.set_component_selected(&id, on);
+                    }
+                }
+                if let PageKind::Custom(ref cp) = pages_b[idx].kind {
+                    let values = cp.collect_values();
+                    let mut inst = installer_c.lock().unwrap();
+                    for (key, v) in values {
+                        inst.set_option_value(&key, v);
                     }
                 }
             }

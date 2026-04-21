@@ -30,6 +30,7 @@ pub enum PageKind {
     Install(InstallPage),
     Finish(FinishPage),
     Error(ErrorPage),
+    Custom(CustomPage),
 }
 
 // ── Welcome Page ────────────────────────────────────────────────────────────
@@ -379,6 +380,157 @@ impl InstallPage {
             self.log_view.scroll_to_mark(&end_mark, 0.0, true, 0.0, 1.0);
             self.log_buffer.delete_mark(&end_mark);
         }
+    }
+}
+
+// ── Custom Page ─────────────────────────────────────────────────────────────
+
+enum CustomControl {
+    Text(gtk::Entry),
+    Checkbox(gtk::CheckButton),
+    Dropdown { combo: gtk::ComboBoxText, values: Vec<String> },
+}
+
+pub struct CustomPage {
+    widget: gtk::Box,
+    controls: Vec<(String, CustomControl)>,
+}
+
+impl CustomPage {
+    pub fn new(
+        heading: &str,
+        label_text: &str,
+        widgets: &[crate::gui::CustomWidget],
+        initial: &std::collections::HashMap<String, crate::OptionValue>,
+    ) -> Self {
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
+        set_page_margins(&vbox);
+
+        vbox.pack_start(&bold_heading(heading, "large"), false, false, 0);
+
+        let label = gtk::Label::new(Some(label_text));
+        label.set_xalign(0.0);
+        label.set_halign(gtk::Align::Start);
+        vbox.pack_start(&label, false, false, 0);
+
+        let scrolled = gtk::ScrolledWindow::builder()
+            .vexpand(true)
+            .hexpand(true)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .build();
+        let inner = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        inner.set_margin_top(6);
+        inner.set_margin_bottom(6);
+
+        let mut controls: Vec<(String, CustomControl)> = Vec::new();
+
+        for w in widgets {
+            use crate::gui::CustomWidget;
+            match w {
+                CustomWidget::Text {
+                    key,
+                    label: lbl,
+                    default,
+                    password,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let entry = gtk::Entry::new();
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    entry.set_text(&initial_text);
+                    if *password {
+                        entry.set_visibility(false);
+                        entry.set_invisible_char(Some('\u{2022}'));
+                    }
+                    inner.pack_start(&entry, false, false, 0);
+                    controls.push((key.clone(), CustomControl::Text(entry)));
+                }
+                CustomWidget::Checkbox {
+                    key,
+                    label: lbl,
+                    default,
+                } => {
+                    let check = gtk::CheckButton::with_label(lbl);
+                    let initial_val = match initial.get(key) {
+                        Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => {
+                            *b
+                        }
+                        _ => *default,
+                    };
+                    check.set_active(initial_val);
+                    inner.pack_start(&check, false, false, 0);
+                    controls.push((key.clone(), CustomControl::Checkbox(check)));
+                }
+                CustomWidget::Dropdown {
+                    key,
+                    label: lbl,
+                    choices,
+                    default,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let combo = gtk::ComboBoxText::new();
+                    let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
+                    for (_, display) in choices {
+                        combo.append_text(display);
+                    }
+                    let current = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let idx = values
+                        .iter()
+                        .position(|v| v == &current)
+                        .unwrap_or(0);
+                    combo.set_active(Some(idx as u32));
+                    inner.pack_start(&combo, false, false, 0);
+                    controls.push((
+                        key.clone(),
+                        CustomControl::Dropdown { combo, values },
+                    ));
+                }
+            }
+        }
+
+        scrolled.add(&inner);
+        vbox.pack_start(&scrolled, true, true, 0);
+
+        Self {
+            widget: vbox,
+            controls,
+        }
+    }
+
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    /// Read the current value of every widget, keyed by option name.
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        let mut out = Vec::new();
+        for (key, ctl) in &self.controls {
+            let val = match ctl {
+                CustomControl::Text(entry) => crate::OptionValue::String(entry.text().to_string()),
+                CustomControl::Checkbox(check) => crate::OptionValue::Bool(check.is_active()),
+                CustomControl::Dropdown { combo, values } => {
+                    let idx = combo.active().unwrap_or(0) as usize;
+                    let v = values.get(idx).cloned().unwrap_or_default();
+                    crate::OptionValue::String(v)
+                }
+            };
+            out.push((key.clone(), val));
+        }
+        out
     }
 }
 

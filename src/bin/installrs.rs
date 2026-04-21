@@ -89,7 +89,8 @@ fn run(cli: Cli) -> Result<()> {
 
     let mut output_file = cli.output;
     if let Some(ref triple) = cli.target_triple {
-        if triple.contains("windows") && output_file.extension().is_none_or(|e| e != "exe") {
+        if triple.contains("windows") && output_file.extension().map(|e| e != "exe").unwrap_or(true)
+        {
             output_file.set_extension("exe");
         }
     }

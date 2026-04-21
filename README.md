@@ -1,3 +1,9 @@
+<!-- markdownlint-configure-file {
+  "MD013": {
+    "line_length": 100
+  }
+} -->
+<!-- markdownlint-disable-next-line MD033 MD041 -->
 <div align="center">
 
 ![InstallRS](installrs.svg)
@@ -8,10 +14,15 @@
 
 </div>
 
-Very early development stage - not ready for production use.
+Are you tired of wrestling with clunky installer frameworks?
+That only compile and run on a developer-unfriendly OS?
+That force you to write your installer logic in a 1990's scripting language
+without proper flow control and error handling?
+That have restrictive licenses and closed-source implementations?
+Do you want the full power of Rust's ecosystem at your fingertips?
 
-Why? Because NSIS is a pain for anything non-trivial.
 We can do better in 2026.
+InstallRS is here to revolutionize the way you create software installers.
 
 ## Features
 
@@ -131,33 +142,30 @@ the sink.
 
 ## Installer API
 
-| Method                                              | Description                                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `set_out_dir(dir)`                                  | Set the base output directory for relative destination paths                                                       |
-| `file(src, dest)`                                   | Install a single embedded file (returns a `FileOp` builder)                                                        |
-| `dir(src, dest)`                                    | Install an embedded directory tree (returns a `DirOp`)                                                             |
-| `mkdir(dir)`                                        | Create a directory (returns a `MkdirOp` builder)                                                                   |
-| `uninstaller(dest)`                                 | Write the uninstaller executable (returns an `UninstallerOp`)                                                      |
-| `remove(path)`                                      | Remove a file or directory (returns a `RemoveOp`)                                                                  |
-| `exists(path)`                                      | Check whether a path exists                                                                                        |
-| `exec_shell(cmd)`                                   | Run a shell command                                                                                                |
-| `set_progress_sink(sink)`                           | Attach a `ProgressSink` for status / progress / log events                                                         |
-| `set_total_bytes(n)`                                | Override the progress bar's total (default: sum of embeds)                                                         |
-| `bytes_of(&[sources])`                              | Compute the byte count for a subset of embedded sources                                                            |
-| `reset_progress()`                                  | Reset `bytes_installed` to zero                                                                                    |
-| `enable_self_delete()`                              | Windows: re-launch from temp so the install dir can be wiped                                                       |
-| `component(id, label)`                              | Register an optional component (returns `&mut Component` for chaining)                                             |
-| `is_component_selected(id)`                         | Check whether a component is currently selected                                                                    |
-| `set_component_selected(id, on)`                    | Force a component on/off (required components ignore off)                                                          |
-| `process_commandline()`                             | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without`/`--log` + any registered user options from argv; errors on unknown flags |
-| `set_log_file(path)` / `clear_log_file()`           | Tee status / log / error messages to a file (or stop). Built-in `--log <path>` calls `set_log_file` for you                                         |
-| `log_error(&err)`                                   | Manually record an error line to the log file (wizard + headless runners call this automatically on install failure)                                |
-| `option(name, kind)`                                | Register a user-defined CLI option (`OptionKind::Flag`/`String`/`Int`/`Bool`). Read after parse with `get_option`   |
-| `get_option::<T>(name)`                             | Typed accessor for a parsed user option; `T: FromOptionValue` (`bool`, `String`, `i64`, `i32`, `u64`, `u32`)         |
-| `option_value(name)`                                | Raw `&OptionValue` for a parsed user option, or `None`                                                              |
-| `cancellation_flag()`                               | Returns `Arc<AtomicBool>` — shared flag set by Cancel button / Ctrl+C                                              |
-| `is_cancelled()` / `cancel()` / `check_cancelled()` | Read / set / error-if-set the cancellation flag                                                                    |
-| `install_ctrlc_handler()`                           | Install a SIGINT handler (called from generated `main()`); first press cancels, second press exits with status 130 |
+| Method                           | Description                                            |
+| -------------------------------- | ------------------------------------------------------ |
+| `set_out_dir(dir)`               | Set the base directory for relative output paths       |
+| `file(src, dest)`                | Install a single embedded file                         |
+| `dir(src, dest)`                 | Install an embedded directory tree                     |
+| `mkdir(dir)`                     | Create a directory                                     |
+| `uninstaller(dest)`              | Write the uninstaller executable                       |
+| `remove(path)`                   | Remove a file or directory                             |
+| `exists(path)`                   | Check whether a path exists                            |
+| `exec_shell(cmd)`                | Run a shell command                                    |
+| `set_progress_sink(sink)`        | Attach a `ProgressSink` for status & progress          |
+| `set_total_bytes(n)`             | Override the progress bar's total                      |
+| `reset_progress()`               | Reset `bytes_installed` to zero                        |
+| `enable_self_delete()`           | Windows: relaunch from copy so original can be deleted |
+| `component(id, label)`           | Register an optional component                         |
+| `is_component_selected(id)`      | Check whether a component is currently selected        |
+| `set_component_selected(id, on)` | Enable/disable a component                             |
+| `process_commandline()`          | **Required.** Parse registered CLI args                |
+| `set_log_file(path)`             | Tee status messages to a file (see `--log` option)     |
+| `log_error(&err)`                | Manually record an error line to the log file          |
+| `option(name, kind)`             | Register a user-defined CLI option                     |
+| `get_option::<T>(name)`          | Typed accessor for a parsed user option                |
+| `option_value(name)`             | Raw `&OptionValue` for a parsed user option            |
+| `cancel()` / `check_cancelled()` | Set / error-if-set the cancellation flag               |
 
 ## Components
 
@@ -191,9 +199,7 @@ command line:
 - `--list-components` — print available components and exit 0
 - `--components a,b,c` — install exactly this set (required always included)
 - `--with a,b` / `--without c` — delta from defaults
-- `--log <path>` — tee every `status` / `log` / error message to a file
-  (append mode). Format: `[*] <status>`, `    <log>`, `[ERROR] <msg>` — the
-  same format used for `--headless` stderr output
+- `--log <path>` — tee every `status` / `log` / error message to a file (append mode).
 
 **All installers must call `i.process_commandline()?`** after registering
 components (before running the wizard or doing headless work). This parses
@@ -201,16 +207,16 @@ argv and applies the flags above.
 
 ### Custom command-line options
 
-Register your own flags via `i.option(name, OptionKind)` *before* calling
+Register your own flags via `i.option(name, OptionKind)` _before_ calling
 `process_commandline()`, then read them afterwards with a typed getter:
 
 ```rust
 use installrs::OptionKind;
 
-i.option("config", OptionKind::String);   // --config /path
-i.option("port", OptionKind::Int);         // --port 8080
-i.option("verbose", OptionKind::Flag);    // --verbose (presence = true)
-i.option("fast", OptionKind::Bool);        // --fast true|false|yes|no|on|off
+i.option("config", OptionKind::String); // --config /path
+i.option("port", OptionKind::Int);      // --port 8080
+i.option("verbose", OptionKind::Flag);  // --verbose (presence = true)
+i.option("fast", OptionKind::Bool);     // --fast true|false|yes|no|on|off
 
 i.process_commandline()?;
 
@@ -393,7 +399,7 @@ headers on the build host (`libgtk-3-dev` on Debian/Ubuntu,
 
 ## Command Line Options
 
-```
+```sh
 --target <dir>           Directory containing the installer source crate (default: .)
 --output <file>          Output installer file path (default: ./installer)
 --compression <method>   lzma, gzip, bzip2, or none (default: lzma)
@@ -406,18 +412,21 @@ headers on the build host (`libgtk-3-dev` on Debian/Ubuntu,
 
 ## Windows Resource Configuration
 
-Configure icons, version info, and manifests via `[package.metadata.installrs]` in your installer's `Cargo.toml`. Shared settings apply to both installer and uninstaller; use `[package.metadata.installrs.installer]` and `[…uninstaller]` sub-tables to override per-binary.
+Configure icons, version info, and manifests via `[package.metadata.installrs]`
+in your installer's `Cargo.toml`. Shared settings apply to both installer
+and uninstaller; use `[package.metadata.installrs.installer]`
+and `[…uninstaller]` sub-tables to override per-binary.
 
 ```toml
 # Shared defaults
 [package.metadata.installrs]
-icon = "assets/app.png"                   # .png or .ico — PNG auto-converts to ICO
-icon-sizes = [16, 32, 48, 256]            # optional, defaults to [16, 32, 48, 64, 128, 256]
-language = 0x0409                          # Windows LANGID
-subsystem = "console"                      # "console" or "windows"
-execution-level = "requireAdministrator"   # manifest: asInvoker, requireAdministrator, highestAvailable
-dpi-aware = "permonitorv2"                 # manifest: true, false, system, permonitor, permonitorv2
-supported-os = ["7", "8", "8.1", "10"]    # manifest: vista, 7, 8, 8.1, 10 (defaults to all)
+icon = "assets/app.png"                  # .png or .ico — PNG auto-converts to ICO
+icon-sizes = [16, 32, 48, 256]           # optional, defaults to [16, 32, 48, 64, 128, 256]
+language = 0x0409                        # Windows LANGID
+subsystem = "console"                    # "console" or "windows"
+execution-level = "requireAdministrator" # manifest: asInvoker, requireAdministrator, highestAvailable
+dpi-aware = "permonitorv2"               # manifest: true, false, system, permonitor, permonitorv2
+supported-os = ["7", "8", "8.1", "10"]   # manifest: vista, 7, 8, 8.1, 10 (defaults to all)
 product-name = "My App"
 file-version = "1.0.0.0"
 product-version = "1.0.0.0"

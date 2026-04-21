@@ -65,6 +65,10 @@ fn build_install_uninstall(compression: &str) {
             compression,
             "--silent",
         ])
+        // Integration tests exercise the current working-tree runtime, not a
+        // published crate. `INSTALLRS_LOCAL_PATH=1` makes the builder emit
+        // `path = ".../InstallRS"` in the generated Cargo.toml.
+        .env("INSTALLRS_LOCAL_PATH", "1")
         .output()
         .expect("failed to spawn installrs");
 

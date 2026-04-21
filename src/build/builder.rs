@@ -11,6 +11,34 @@ use super::scanner;
 // Embedded at compile time so the build tool is self-contained.
 const INSTALLRS_CRATE_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
+/// The crates.io version this CLI was built from. Generated installer /
+/// uninstaller crates pin to this exact version so binaries built by a
+/// given `installrs` release always compile against a matching runtime.
+const INSTALLRS_CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Render the `installrs` dependency spec for the generated `Cargo.toml`.
+///
+/// For local development of InstallRS itself (running `cargo run` or
+/// `./target/release/installrs` from the repo), setting
+/// `INSTALLRS_LOCAL_PATH=1` at invocation time makes the generated crates
+/// pick up the current working tree via `path =` instead of the published
+/// crate — useful for end-to-end testing changes to the runtime before a
+/// release. Unset (the default), generated crates depend on
+/// `installrs = "<version>"` from crates.io.
+fn installrs_dep_spec(features_suffix: &str) -> String {
+    if std::env::var_os("INSTALLRS_LOCAL_PATH").is_some() {
+        format!(
+            "installrs = {{ path = {path:?}{features_suffix} }}",
+            path = INSTALLRS_CRATE_PATH,
+        )
+    } else {
+        format!(
+            "installrs = {{ version = {version:?}{features_suffix} }}",
+            version = INSTALLRS_CRATE_VERSION,
+        )
+    }
+}
+
 /// Write a file only if its content has changed, preserving mtime for build caching.
 fn write_if_changed(path: &Path, content: &str) -> Result<()> {
     if path.exists() {
@@ -1223,7 +1251,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-installrs = {{ path = {installrs_path:?}{features_str} }}
+{installrs_dep}
 {user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
 {build_deps}
 [profile.release]
@@ -1232,7 +1260,7 @@ strip = true
 lto = true
 codegen-units = 1
 "#,
-        installrs_path = INSTALLRS_CRATE_PATH,
+        installrs_dep = installrs_dep_spec(&features_str),
         user_path = user_crate_path,
         user_package_name = user_crate_name.replace('_', "-"),
     );
@@ -1356,7 +1384,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-installrs = {{ path = {installrs_path:?}{features_str} }}
+{installrs_dep}
 {user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
 {build_deps}
 [profile.release]
@@ -1365,7 +1393,7 @@ strip = true
 lto = true
 codegen-units = 1
 "#,
-        installrs_path = INSTALLRS_CRATE_PATH,
+        installrs_dep = installrs_dep_spec(&features_str),
         user_path = user_crate_path,
         user_package_name = user_crate_name.replace('_', "-"),
     );

@@ -94,16 +94,11 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
 
-    let (installer_win_resource, uninstaller_win_resource) = if cli
-        .target_triple
-        .as_deref()
-        .is_some_and(|t| t.contains("windows"))
-        || cfg!(target_os = "windows")
-    {
-        build::builder::read_win_resource_config(&target)?
-    } else {
-        (None, None)
-    };
+    // Always read the [package.metadata.installrs] config — the builder
+    // decides per-target whether to emit Windows resources vs. embed the
+    // icon as PNG for the GTK backend.
+    let (installer_win_resource, uninstaller_win_resource) =
+        build::builder::read_win_resource_config(&target)?;
 
     let gui_enabled = build::builder::read_gui_config(&target)?;
     if gui_enabled {

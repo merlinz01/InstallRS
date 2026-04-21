@@ -45,6 +45,7 @@ pub fn run(
     // C locale configuration either way.
     super::disable_setlocale_once();
     gtk::init().map_err(|e| anyhow::anyhow!("gtk init failed: {e}"))?;
+    super::apply_default_window_icon();
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title(&config.title);

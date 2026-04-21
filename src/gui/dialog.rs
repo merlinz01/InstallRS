@@ -27,6 +27,7 @@ fn show_gtk(
     use gtk::prelude::*;
     crate::gui::gtk::disable_setlocale_once();
     gtk::init().map_err(|e| anyhow::anyhow!("gtk init failed: {e}"))?;
+    crate::gui::gtk::apply_default_window_icon();
     let parent = gtk::Window::list_toplevels()
         .into_iter()
         .filter_map(|w| w.downcast::<gtk::Window>().ok())
@@ -155,6 +156,7 @@ fn choose_language_gtk(
     use gtk::prelude::*;
     crate::gui::gtk::disable_setlocale_once();
     gtk::init().map_err(|e| anyhow::anyhow!("gtk init failed: {e}"))?;
+    crate::gui::gtk::apply_default_window_icon();
 
     let dialog = gtk::Dialog::with_buttons(
         Some(title),

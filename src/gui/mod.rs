@@ -8,6 +8,24 @@ mod win32;
 mod gtk;
 
 pub use dialog::{choose_language, confirm, error, info, warn};
+
+/// Install a PNG byte-slice as the default window icon for every GTK
+/// window and dialog the wizard creates. No-op on Windows (icons come
+/// from the embedded `.ico` resource) and on builds without a GTK
+/// backend. InstallRS's build tool emits a call to this at the top of
+/// the generated Linux `main.rs` when `[package.metadata.installrs].icon`
+/// points at a PNG — user code shouldn't need to call it directly.
+#[doc(hidden)]
+pub fn __set_window_icon_png(bytes: &'static [u8]) {
+    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    {
+        gtk::set_icon_bytes(bytes);
+    }
+    #[cfg(not(all(feature = "gui-gtk", not(feature = "gui-win32"))))]
+    {
+        let _ = bytes;
+    }
+}
 pub use types::{
     ButtonLabels, ConfiguredPage, CustomPageBuilder, CustomWidget, ExitCallback, GuiContext,
     GuiMessage, InstallCallback, OnBeforeLeaveCallback, OnEnterCallback, PageContext,

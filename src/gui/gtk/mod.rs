@@ -17,6 +17,36 @@ pub(crate) fn disable_setlocale_once() {
     });
 }
 
+/// PNG bytes for the default window icon, stashed by
+/// [`crate::gui::__set_window_icon_png`]. Read by
+/// [`apply_default_window_icon`] after each `gtk::init()`.
+static ICON_BYTES: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
+
+pub(crate) fn set_icon_bytes(bytes: &'static [u8]) {
+    let _ = ICON_BYTES.set(bytes);
+}
+
+/// Apply the stashed window icon as GTK's process-wide default so every
+/// window and dialog inherits it (title bar, taskbar, Alt-Tab). Must be
+/// called after `gtk::init()`. Safe to call repeatedly; GTK copies the
+/// pixbuf internally so only the per-call parse cost applies.
+pub(crate) fn apply_default_window_icon() {
+    use gtk::prelude::*;
+    let Some(bytes) = ICON_BYTES.get().copied() else {
+        return;
+    };
+    let loader = gtk::gdk_pixbuf::PixbufLoader::new();
+    if loader.write(bytes).is_err() {
+        return;
+    }
+    if loader.close().is_err() {
+        return;
+    }
+    if let Some(pixbuf) = loader.pixbuf() {
+        gtk::Window::set_default_icon(&pixbuf);
+    }
+}
+
 /// Run the wizard GUI on the main thread, spawning the install callback on a
 /// background thread when the install page is reached.
 pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()> {

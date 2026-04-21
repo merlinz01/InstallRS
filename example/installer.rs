@@ -1,5 +1,5 @@
 use anyhow::Result;
-use installrs::Installer;
+use installrs::{Installer, OptionKind};
 use rust_i18n::t;
 
 // Load translations from any .yml files in this directory, with English as the fallback language.
@@ -70,14 +70,27 @@ pub fn install(i: &mut Installer) -> Result<()> {
         .description(t!("installer.components.extras_desc"))
         .default(false);
 
+    // Register custom CLI options. `--yes` skips every confirmation prompt
+    // (handy for CI / unattended installs); `--install-dir` overrides the
+    // default install location. Both work in GUI and headless modes.
+    i.option("yes", OptionKind::Flag);
+    i.option("install-dir", OptionKind::String);
+
     // Parse CLI (--headless, --list-components, --components, etc.).
     i.process_commandline()?;
+
+    // Seed the directory picker's default from --install-dir when provided,
+    // otherwise fall back to the platform default.
+    let default_dir = i
+        .get_option::<String>("install-dir")
+        .unwrap_or_else(|| default_install_dir().to_string());
 
     InstallerGui::wizard()
         .title(&t!("installer.title"))
         .buttons(button_labels())
         .on_start(|i| {
-            if i.headless {
+            let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+            if i.headless && !auto_yes {
                 eprintln!("Running headless install of {}", t!("installer.title"));
                 eprint!("Proceed? [y/N] ");
                 std::io::Write::flush(&mut std::io::stderr()).ok();
@@ -88,6 +101,11 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
                     return Err(anyhow::anyhow!("install cancelled by user"));
                 }
+            } else if i.headless && auto_yes {
+                eprintln!(
+                    "Running headless install of {} (auto-confirmed)",
+                    t!("installer.title")
+                );
             }
             Ok(())
         })
@@ -113,9 +131,13 @@ pub fn install(i: &mut Installer) -> Result<()> {
         .directory_picker(
             &t!("installer.directory.heading"),
             &t!("installer.directory.label"),
-            default_install_dir(),
+            &default_dir,
         )
         .on_before_leave(|ctx| {
+            // --yes skips the confirmation dialog.
+            if ctx.installer().get_option::<bool>("yes").unwrap_or(false) {
+                return Ok(true);
+            }
             installrs::gui::confirm(
                 &t!("installer.confirm.title"),
                 &t!("installer.confirm.message", dir = ctx.install_dir()),
@@ -182,6 +204,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 
     init_locale();
 
+    i.option("yes", OptionKind::Flag);
     i.process_commandline()?;
 
     let install_dir = std::env::current_exe()?
@@ -197,6 +220,21 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     InstallerGui::wizard()
         .title(&t!("uninstaller.title"))
         .buttons(button_labels())
+        .on_start(|i| {
+            let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+            if i.headless && !auto_yes {
+                eprint!("Really uninstall? [y/N] ");
+                std::io::Write::flush(&mut std::io::stderr()).ok();
+                let mut answer = String::new();
+                std::io::stdin()
+                    .read_line(&mut answer)
+                    .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
+                if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+                    return Err(anyhow::anyhow!("uninstall cancelled by user"));
+                }
+            }
+            Ok(())
+        })
         .welcome(
             &t!("uninstaller.welcome.title"),
             &t!("uninstaller.welcome.message"),

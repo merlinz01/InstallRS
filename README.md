@@ -133,7 +133,10 @@ the sink.
 | `component(id, label)`                              | Register an optional component (returns `&mut Component` for chaining)                                             |
 | `is_component_selected(id)`                         | Check whether a component is currently selected                                                                    |
 | `set_component_selected(id, on)`                    | Force a component on/off (required components ignore off)                                                          |
-| `process_commandline()`                             | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` from argv                 |
+| `process_commandline()`                             | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` + any registered user options from argv; errors on unknown flags |
+| `option(name, kind)`                                | Register a user-defined CLI option (`OptionKind::Flag`/`String`/`Int`/`Bool`). Read after parse with `get_option`   |
+| `get_option::<T>(name)`                             | Typed accessor for a parsed user option; `T: FromOptionValue` (`bool`, `String`, `i64`, `i32`, `u64`, `u32`)         |
+| `option_value(name)`                                | Raw `&OptionValue` for a parsed user option, or `None`                                                              |
 | `cancellation_flag()`                               | Returns `Arc<AtomicBool>` — shared flag set by Cancel button / Ctrl+C                                              |
 | `is_cancelled()` / `cancel()` / `check_cancelled()` | Read / set / error-if-set the cancellation flag                                                                    |
 | `install_ctrlc_handler()`                           | Install a SIGINT handler (called from generated `main()`); first press cancels, second press exits with status 130 |
@@ -174,6 +177,31 @@ command line:
 **All installers must call `i.process_commandline()?`** after registering
 components (before running the wizard or doing headless work). This parses
 argv and applies the flags above.
+
+### Custom command-line options
+
+Register your own flags via `i.option(name, OptionKind)` *before* calling
+`process_commandline()`, then read them afterwards with a typed getter:
+
+```rust
+use installrs::OptionKind;
+
+i.option("config", OptionKind::String);   // --config /path
+i.option("port", OptionKind::Int);         // --port 8080
+i.option("verbose", OptionKind::Flag);    // --verbose (presence = true)
+i.option("fast", OptionKind::Bool);        // --fast true|false|yes|no|on|off
+
+i.process_commandline()?;
+
+let config: Option<String> = i.get_option("config");
+let port: i64 = i.get_option("port").unwrap_or(8080);
+let verbose: bool = i.get_option("verbose").unwrap_or(false);
+```
+
+`get_option::<T>` is generic over `FromOptionValue`, which is implemented
+for `bool`, `String`, `i64`, `i32`, `u64`, and `u32`. Unknown flags now
+cause `process_commandline()` to return an error — register everything you
+expect users to pass.
 
 ## GUI
 

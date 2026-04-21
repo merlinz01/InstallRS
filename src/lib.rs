@@ -134,6 +134,94 @@ pub struct Installer {
     progress: Mutex<ProgressState>,
     components: Vec<Component>,
     cancelled: Arc<AtomicBool>,
+    options: Vec<CmdOption>,
+    option_values: std::collections::HashMap<String, OptionValue>,
+}
+
+/// Declared shape of a user-defined command-line option. Register via
+/// [`Installer::option`]; read parsed results via [`Installer::get_option`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OptionKind {
+    /// Presence-only switch. `--name` → `true`, absent → `false`.
+    Flag,
+    /// String value. `--name value` or `--name=value`.
+    String,
+    /// Signed integer value. `--name 42` or `--name=42`.
+    Int,
+    /// Explicit boolean. `--name true|false|1|0|yes|no|on|off`.
+    Bool,
+}
+
+/// Parsed value of a user-defined option, stored per-option after
+/// [`Installer::process_commandline`].
+#[derive(Clone, Debug)]
+pub enum OptionValue {
+    Flag(bool),
+    String(String),
+    Int(i64),
+    Bool(bool),
+}
+
+/// Types that can be pulled out of an [`OptionValue`] via
+/// [`Installer::get_option`]. Implemented for `bool`, `String`, `i64`,
+/// `i32`, `u64`, `u32`.
+pub trait FromOptionValue: Sized {
+    fn from_option_value(v: &OptionValue) -> Option<Self>;
+}
+
+impl FromOptionValue for bool {
+    fn from_option_value(v: &OptionValue) -> Option<Self> {
+        match v {
+            OptionValue::Flag(b) | OptionValue::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+}
+impl FromOptionValue for String {
+    fn from_option_value(v: &OptionValue) -> Option<Self> {
+        match v {
+            OptionValue::String(s) => Some(s.clone()),
+            _ => None,
+        }
+    }
+}
+impl FromOptionValue for i64 {
+    fn from_option_value(v: &OptionValue) -> Option<Self> {
+        match v {
+            OptionValue::Int(n) => Some(*n),
+            _ => None,
+        }
+    }
+}
+impl FromOptionValue for i32 {
+    fn from_option_value(v: &OptionValue) -> Option<Self> {
+        match v {
+            OptionValue::Int(n) => i32::try_from(*n).ok(),
+            _ => None,
+        }
+    }
+}
+impl FromOptionValue for u64 {
+    fn from_option_value(v: &OptionValue) -> Option<Self> {
+        match v {
+            OptionValue::Int(n) if *n >= 0 => Some(*n as u64),
+            _ => None,
+        }
+    }
+}
+impl FromOptionValue for u32 {
+    fn from_option_value(v: &OptionValue) -> Option<Self> {
+        match v {
+            OptionValue::Int(n) if *n >= 0 => u32::try_from(*n as u64).ok(),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CmdOption {
+    name: String,
+    kind: OptionKind,
 }
 
 /// An optional feature the user can select or deselect at install time.
@@ -226,7 +314,56 @@ impl Installer {
             }),
             components: Vec::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
+            options: Vec::new(),
+            option_values: std::collections::HashMap::new(),
         }
+    }
+
+    /// Register a user-defined command-line option. Register all options
+    /// before calling [`Installer::process_commandline`]; afterwards read
+    /// values via [`Installer::get_option`] or [`Installer::option_value`].
+    ///
+    /// Option names must not collide with the built-ins (`headless`,
+    /// `list-components`, `components`, `with`, `without`). The leading
+    /// `--` is implied — pass just `"config"` for `--config`.
+    ///
+    /// ```rust,ignore
+    /// i.option("config", OptionKind::String);
+    /// i.option("port", OptionKind::Int);
+    /// i.option("verbose", OptionKind::Flag);
+    /// i.process_commandline()?;
+    /// let config: Option<String> = i.get_option("config");
+    /// let port: i64 = i.get_option("port").unwrap_or(8080);
+    /// let verbose: bool = i.get_option("verbose").unwrap_or(false);
+    /// ```
+    pub fn option(&mut self, name: &str, kind: OptionKind) -> &mut Self {
+        let name = name.trim_start_matches('-').to_string();
+        if let Some(existing) = self.options.iter_mut().find(|o| o.name == name) {
+            existing.kind = kind;
+        } else {
+            self.options.push(CmdOption { name, kind });
+        }
+        self
+    }
+
+    /// Typed accessor for a parsed option value.
+    ///
+    /// Returns `None` if the option was never registered, not provided on
+    /// the command line, or the stored value doesn't convert to `T`.
+    ///
+    /// For `OptionKind::Flag`, `.get_option::<bool>(name)` returns
+    /// `Some(false)` when the flag is absent (flags are always populated).
+    pub fn get_option<T: FromOptionValue>(&self, name: &str) -> Option<T> {
+        let name = name.trim_start_matches('-');
+        self.option_values
+            .get(name)
+            .and_then(|v| T::from_option_value(v))
+    }
+
+    /// Raw parsed value for an option, or `None` if not set.
+    pub fn option_value(&self, name: &str) -> Option<&OptionValue> {
+        let name = name.trim_start_matches('-');
+        self.option_values.get(name)
     }
 
     /// The shared cancellation flag. Flipping this to `true` causes the
@@ -360,8 +497,8 @@ impl Installer {
     /// - `--with a,b` — enable these in addition to defaults
     /// - `--without a,b` — disable these (required cannot be disabled)
     ///
-    /// Returns an error on unknown component ids. Unrecognized flags are
-    /// left alone (they may be meaningful to the user's install callback).
+    /// Returns an error on unknown component ids or unknown flags. Register
+    /// custom flags via [`Installer::option`] before calling this.
     pub fn process_commandline(&mut self) -> Result<()> {
         let args: Vec<String> = std::env::args().collect();
         self.process_commandline_from(&args)
@@ -407,9 +544,63 @@ impl Installer {
                     let v = take_val(&mut i)?;
                     without.extend(v.split(',').map(|s| s.trim().to_string()));
                 }
-                _ => {}
+                _ => {
+                    // User-defined option? Strip the leading `--`.
+                    let bare = flag.strip_prefix("--").unwrap_or(flag);
+                    let opt = self
+                        .options
+                        .iter()
+                        .find(|o| o.name == bare)
+                        .cloned()
+                        .ok_or_else(|| anyhow!("unknown flag: {flag}"))?;
+                    let parsed = match opt.kind {
+                        OptionKind::Flag => {
+                            if inline_val.is_some() {
+                                return Err(anyhow!(
+                                    "--{} is a flag and does not take a value",
+                                    opt.name
+                                ));
+                            }
+                            OptionValue::Flag(true)
+                        }
+                        OptionKind::String => OptionValue::String(take_val(&mut i)?),
+                        OptionKind::Int => {
+                            let v = take_val(&mut i)?;
+                            let n: i64 = v.parse().map_err(|_| {
+                                anyhow!("--{} expected an integer, got {v:?}", opt.name)
+                            })?;
+                            OptionValue::Int(n)
+                        }
+                        OptionKind::Bool => {
+                            let v = take_val(&mut i)?;
+                            let b = match v.to_ascii_lowercase().as_str() {
+                                "true" | "1" | "yes" | "on" => true,
+                                "false" | "0" | "no" | "off" => false,
+                                _ => {
+                                    return Err(anyhow!(
+                                        "--{} expected true/false, got {v:?}",
+                                        opt.name
+                                    ))
+                                }
+                            };
+                            OptionValue::Bool(b)
+                        }
+                    };
+                    self.option_values.insert(opt.name.clone(), parsed);
+                }
             }
             i += 1;
+        }
+
+        // Flags default to `false` so `get_option::<bool>("flag")` always
+        // returns `Some(...)` for registered flags, regardless of presence.
+        for opt in &self.options {
+            if matches!(opt.kind, OptionKind::Flag)
+                && !self.option_values.contains_key(&opt.name)
+            {
+                self.option_values
+                    .insert(opt.name.clone(), OptionValue::Flag(false));
+            }
         }
 
         if list {
@@ -1807,5 +1998,62 @@ mod tests {
         let args = vec!["installer".into(), "--headless".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.headless);
+    }
+
+    #[test]
+    fn cli_user_options_parse_and_typed_read() {
+        let mut i = make_bare_installer();
+        i.option("config", OptionKind::String);
+        i.option("port", OptionKind::Int);
+        i.option("verbose", OptionKind::Flag);
+        i.option("fast", OptionKind::Bool);
+        let args = vec![
+            "installer".into(),
+            "--config".into(),
+            "/etc/my.conf".into(),
+            "--port=8080".into(),
+            "--verbose".into(),
+            "--fast=yes".into(),
+        ];
+        i.process_commandline_from(&args).unwrap();
+        assert_eq!(
+            i.get_option::<String>("config").as_deref(),
+            Some("/etc/my.conf")
+        );
+        assert_eq!(i.get_option::<i64>("port"), Some(8080));
+        assert_eq!(i.get_option::<i32>("port"), Some(8080));
+        assert_eq!(i.get_option::<bool>("verbose"), Some(true));
+        assert_eq!(i.get_option::<bool>("fast"), Some(true));
+    }
+
+    #[test]
+    fn cli_flag_absent_is_false() {
+        let mut i = make_bare_installer();
+        i.option("verbose", OptionKind::Flag);
+        i.process_commandline_from(&["installer".into()]).unwrap();
+        assert_eq!(i.get_option::<bool>("verbose"), Some(false));
+    }
+
+    #[test]
+    fn cli_unknown_flag_errors() {
+        let mut i = make_bare_installer();
+        let args = vec!["installer".into(), "--nope".into()];
+        assert!(i.process_commandline_from(&args).is_err());
+    }
+
+    #[test]
+    fn cli_int_option_rejects_non_integer() {
+        let mut i = make_bare_installer();
+        i.option("port", OptionKind::Int);
+        let args = vec!["installer".into(), "--port=abc".into()];
+        assert!(i.process_commandline_from(&args).is_err());
+    }
+
+    #[test]
+    fn cli_flag_with_value_errors() {
+        let mut i = make_bare_installer();
+        i.option("verbose", OptionKind::Flag);
+        let args = vec!["installer".into(), "--verbose=true".into()];
+        assert!(i.process_commandline_from(&args).is_err());
     }
 }

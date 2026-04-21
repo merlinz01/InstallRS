@@ -46,7 +46,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
 
   binaries:
-    name: ${{ matrix.target }}
+    name: Build binary (${{ matrix.target }})
     needs: crates-io
     runs-on: ${{ matrix.os }}
     strategy:

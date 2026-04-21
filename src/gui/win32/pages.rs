@@ -562,8 +562,10 @@ impl ComponentsPage {
                 .collect();
             let list_leave = list.clone();
             list.on_subclass().wm_mouse_move(move |p| {
-                let mut hti = LVHITTESTINFO::default();
-                hti.pt = p.coords;
+                let mut hti = LVHITTESTINFO {
+                    pt: p.coords,
+                    ..Default::default()
+                };
                 let idx = unsafe { list_c.hwnd().SendMessage(lvm::HitTest { info: &mut hti }) };
                 let text = match idx {
                     Some(i) if (i as usize) < descriptions.len() => {

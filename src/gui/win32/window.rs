@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -229,7 +230,7 @@ pub fn run(
         &wnd,
         gui::ButtonOpts {
             text: &config.buttons.cancel,
-            position: gui::dpi(WINDOW_WIDTH - 1 * (BUTTON_WIDTH + MARGIN), btn_y),
+            position: gui::dpi(WINDOW_WIDTH - (BUTTON_WIDTH + MARGIN), btn_y),
             width: bw,
             height: bh,
             resize_behavior: (gui::Horz::Repos, gui::Vert::Repos),
@@ -239,7 +240,7 @@ pub fn run(
 
     let page_count = pages.len();
     let current_page = Arc::new(Mutex::new(0usize));
-    let pages = Arc::new(Mutex::new(pages));
+    let pages = Rc::new(Mutex::new(pages));
     let install_callback = Arc::new(Mutex::new(install_callback));
     let install_running = Arc::new(AtomicBool::new(false));
     let install_result: Arc<Mutex<Option<Result<()>>>> = Arc::new(Mutex::new(None));
@@ -303,11 +304,11 @@ pub fn run(
         };
 
         // Store the closure in an Arc for reuse.
-        let update_buttons = Arc::new(update_buttons);
+        let update_buttons = Rc::new(update_buttons);
 
         // Helper to start the install in a background thread. Idempotent — the
         // callback is consumed on first call, so subsequent calls are a no-op.
-        let start_install: Arc<dyn Fn() + 'static> = {
+        let start_install: Rc<dyn Fn() + 'static> = {
             let installer_c = installer.clone();
             let install_dir_c = install_dir.clone();
             let cancelled_c = cancelled.clone();
@@ -317,7 +318,7 @@ pub fn run(
             let install_handle_c = install_handle.clone();
             let update = update_buttons.clone();
 
-            Arc::new(move || {
+            Rc::new(move || {
                 let cb = install_cb.lock().unwrap().take();
                 if let Some(callback) = cb {
                     install_running_c.store(true, std::sync::atomic::Ordering::Relaxed);

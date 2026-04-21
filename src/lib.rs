@@ -139,6 +139,12 @@ pub type DirFilter = Box<dyn Fn(&str) -> bool + 'static>;
 /// Per-file error handler for directory installs.
 pub type DirErrorHandler = Box<dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static>;
 
+// Borrowed forms of the filter / error-handler closures, used internally by
+// `install_children`. Aliased so the function signature stays readable and
+// clippy's `type_complexity` lint stays quiet.
+type DirFilterRef = dyn Fn(&str) -> bool + 'static;
+type DirErrorHandlerRef = dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static;
+
 /// Sink for progress, status, and log events emitted by installer operations.
 ///
 /// Attach one to an [`Installer`] with [`Installer::set_progress_sink`] (the
@@ -1498,8 +1504,8 @@ fn install_children(
     installer: &Installer,
     overwrite: OverwriteMode,
     mode: Option<u32>,
-    filter: Option<&(dyn Fn(&str) -> bool + 'static)>,
-    on_error: Option<&(dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static)>,
+    filter: Option<&DirFilterRef>,
+    on_error: Option<&DirErrorHandlerRef>,
     per_file_weight: u32,
 ) -> Result<()> {
     for child in children {

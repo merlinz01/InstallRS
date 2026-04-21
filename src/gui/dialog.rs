@@ -51,11 +51,11 @@ fn show_gtk(
 pub fn info(title: &str, message: &str) -> Result<()> {
     #[cfg(feature = "gui-win32")]
     {
-        return show_win32(title, message, co::MB::OK | co::MB::ICONINFORMATION).map(|_| ());
+        show_win32(title, message, co::MB::OK | co::MB::ICONINFORMATION).map(|_| ())
     }
     #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
     {
-        return show_gtk(title, message, gtk::MessageType::Info, gtk::ButtonsType::Ok).map(|_| ());
+        show_gtk(title, message, gtk::MessageType::Info, gtk::ButtonsType::Ok).map(|_| ())
     }
     #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
     {
@@ -68,17 +68,17 @@ pub fn info(title: &str, message: &str) -> Result<()> {
 pub fn warn(title: &str, message: &str) -> Result<()> {
     #[cfg(feature = "gui-win32")]
     {
-        return show_win32(title, message, co::MB::OK | co::MB::ICONWARNING).map(|_| ());
+        show_win32(title, message, co::MB::OK | co::MB::ICONWARNING).map(|_| ())
     }
     #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
     {
-        return show_gtk(
+        show_gtk(
             title,
             message,
             gtk::MessageType::Warning,
             gtk::ButtonsType::Ok,
         )
-        .map(|_| ());
+        .map(|_| ())
     }
     #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
     {
@@ -91,17 +91,17 @@ pub fn warn(title: &str, message: &str) -> Result<()> {
 pub fn error(title: &str, message: &str) -> Result<()> {
     #[cfg(feature = "gui-win32")]
     {
-        return show_win32(title, message, co::MB::OK | co::MB::ICONERROR).map(|_| ());
+        show_win32(title, message, co::MB::OK | co::MB::ICONERROR).map(|_| ())
     }
     #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
     {
-        return show_gtk(
+        show_gtk(
             title,
             message,
             gtk::MessageType::Error,
             gtk::ButtonsType::Ok,
         )
-        .map(|_| ());
+        .map(|_| ())
     }
     #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
     {
@@ -133,11 +133,11 @@ pub fn choose_language(
 ) -> Result<Option<String>> {
     #[cfg(feature = "gui-win32")]
     {
-        return choose_language_win32(title, prompt, choices, default_code);
+        choose_language_win32(title, prompt, choices, default_code)
     }
     #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
     {
-        return choose_language_gtk(title, prompt, choices, default_code);
+        choose_language_gtk(title, prompt, choices, default_code)
     }
     #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
     {
@@ -330,7 +330,7 @@ pub fn confirm(title: &str, message: &str) -> Result<bool> {
     #[cfg(feature = "gui-win32")]
     {
         let r = show_win32(title, message, co::MB::YESNO | co::MB::ICONQUESTION)?;
-        return Ok(r == co::DLGID::YES);
+        Ok(r == co::DLGID::YES)
     }
     #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
     {
@@ -340,7 +340,7 @@ pub fn confirm(title: &str, message: &str) -> Result<bool> {
             gtk::MessageType::Question,
             gtk::ButtonsType::YesNo,
         )?;
-        return Ok(r == gtk::ResponseType::Yes);
+        Ok(r == gtk::ResponseType::Yes)
     }
     #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
     {

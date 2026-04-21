@@ -84,7 +84,10 @@ Then build with the `installrs` CLI:
 installrs --target ./my-installer --output installer.exe
 ```
 
-See the `example/` directory for a working example.
+For a step-by-step walkthrough from `cargo install` to your first working
+installer, see the [Getting Started guide](docs/getting-started.md). For a
+complete working example with GUI, components, translations, and custom
+pages, see the [`example/`](example) directory.
 
 ### Source paths and the `source!` macro
 

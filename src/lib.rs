@@ -154,8 +154,14 @@ pub trait ProgressSink: Send + Sync {
 }
 
 struct ProgressState {
-    bytes_installed: u64,
-    bytes_total: u64,
+    /// Weighted step cursor. Each operation advances this by its weight (default 1).
+    /// `f64` so in-flight updates (`set_step_progress`) can land anywhere in
+    /// the current step's range.
+    steps_done: f64,
+    /// Start of the current step's weight range — the cursor when the step opened.
+    step_range_start: f64,
+    /// End of the current step's weight range — cursor + weight.
+    step_range_end: f64,
 }
 
 pub struct Installer {
@@ -263,13 +269,15 @@ struct CmdOption {
 
 /// An optional feature the user can select or deselect at install time.
 ///
-/// Registered via [`Installer::component`], which returns a `&mut Component`
-/// so you can chain the builder methods inline:
+/// Registered via [`Installer::component`]. The component's progress weight
+/// contributes to the installer's step total whenever the component is
+/// selected; operations performed while the component is active each advance
+/// the cursor by their own weight (default 1).
 ///
 /// ```rust,ignore
-/// i.component("docs", "Documentation")
-///     .description("User-facing docs")
-///     .default(false);
+/// i.component("docs", "Documentation", "User-facing docs", 3);
+/// i.component("extras", "Extras", "Optional samples", 1).default_off();
+/// i.component("core", "Core files", "Always installed", 10).required();
 /// ```
 ///
 /// Query with [`Installer::is_component_selected`] inside the install
@@ -279,49 +287,32 @@ pub struct Component {
     pub id: String,
     pub label: String,
     pub description: String,
+    /// Step weight this component contributes to the global progress total
+    /// when selected. Over/undershoot is possible if the actual op count
+    /// diverges from this number.
+    pub progress_weight: u32,
     pub default: bool,
     pub required: bool,
     pub selected: bool,
 }
 
 impl Component {
-    fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            label: label.into(),
-            description: String::new(),
-            default: true,
-            required: false,
-            selected: true,
+    /// Mark this component as required: it cannot be unchecked, renders
+    /// greyed-out in the wizard, and is always on in headless mode.
+    pub fn required(&mut self) -> &mut Self {
+        self.required = true;
+        self.selected = true;
+        self.default = true;
+        self
+    }
+
+    /// Start this component unchecked. Components default to on — call this
+    /// on ones the user has to opt into.
+    pub fn default_off(&mut self) -> &mut Self {
+        self.default = false;
+        if !self.required {
+            self.selected = false;
         }
-    }
-
-    pub fn description(&mut self, desc: impl Into<String>) -> &mut Self {
-        self.description = desc.into();
-        self
-    }
-
-    /// Whether the component starts checked. Also updates the current
-    /// selected state (so later `is_component_selected` sees it).
-    pub fn default(&mut self, on: bool) -> &mut Self {
-        self.default = on;
-        self.selected = on;
-        self
-    }
-
-    /// Required components cannot be unchecked; they render greyed-out in
-    /// the wizard and are always on in headless mode.
-    pub fn required(&mut self, on: bool) -> &mut Self {
-        self.required = on;
-        if on {
-            self.selected = true;
-            self.default = true;
-        }
-        self
-    }
-
-    pub fn label(&mut self, label: impl Into<String>) -> &mut Self {
-        self.label = label.into();
         self
     }
 }
@@ -332,10 +323,6 @@ impl Installer {
         uninstaller_data: &'static [u8],
         uninstaller_compression: &'static str,
     ) -> Self {
-        // Default total = sum of all embedded bytes (uncompressed size is
-        // unknown without decompressing, so use raw data length as a proxy,
-        // plus the uninstaller).
-        let total = sum_embedded_bytes(entries) + uninstaller_data.len() as u64;
         Installer {
             headless: false,
             entries,
@@ -346,8 +333,9 @@ impl Installer {
             self_delete: false,
             sink: None,
             progress: Mutex::new(ProgressState {
-                bytes_installed: 0,
-                bytes_total: total,
+                steps_done: 0.0,
+                step_range_start: 0.0,
+                step_range_end: 0.0,
             }),
             components: Vec::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -523,31 +511,52 @@ impl Installer {
         });
     }
 
-    /// Register an optional installable component.
+    /// Register (or update) an optional component.
     ///
-    /// Returns a `&mut Component` so you can chain builder methods:
+    /// `progress_weight` is the number of step units the component contributes
+    /// to the installer's progress total when selected. Operations inside the
+    /// component's install code each advance the cursor by their own weight
+    /// (default 1) — overshoot/undershoot happens if the actual op count
+    /// diverges from `progress_weight`.
     ///
     /// ```rust,ignore
-    /// i.component("docs", "Documentation")
-    ///     .description("User-facing docs")
-    ///     .default(false);
+    /// i.component("docs", "Documentation", "User-facing docs", 3);
+    /// i.component("extras", "Extras", "Optional samples", 1).default_off();
+    /// i.component("core", "Core files", "Always installed", 10).required();
     /// ```
     ///
-    /// Call before running the wizard or parsing CLI args. Later calls with
-    /// the same `id` return the existing component (subsequent builder calls
-    /// update it in place).
+    /// Components start selected (`default = true`); call `.default_off()`
+    /// on ones the user has to opt into. Call this before running the
+    /// wizard or parsing CLI args. Later calls with the same `id` update
+    /// the existing component in place.
     pub fn component(
         &mut self,
         id: impl Into<String>,
         label: impl Into<String>,
+        description: impl Into<String>,
+        progress_weight: u32,
     ) -> &mut Component {
         let id = id.into();
+        let label = label.into();
+        let description = description.into();
         if let Some(pos) = self.components.iter().position(|c| c.id == id) {
             let existing = &mut self.components[pos];
-            existing.label = label.into();
+            existing.label = label;
+            existing.description = description;
+            existing.progress_weight = progress_weight;
+            existing.default = true;
+            existing.selected = true;
             return existing;
         }
-        self.components.push(Component::new(id, label));
+        self.components.push(Component {
+            id,
+            label,
+            description,
+            progress_weight,
+            default: true,
+            required: false,
+            selected: true,
+        });
         self.components.last_mut().unwrap()
     }
 
@@ -584,7 +593,7 @@ impl Installer {
     ///
     /// ```rust,ignore
     /// pub fn install(i: &mut Installer) -> Result<()> {
-    ///     i.component("docs", "Documentation");
+    ///     i.component("docs", "Documentation", "", 3);
     ///     i.process_commandline()?;
     ///     // ... wizard or headless install flow ...
     /// }
@@ -768,53 +777,77 @@ impl Installer {
         self.sink = None;
     }
 
-    /// Override the total byte count used for progress reporting.
-    ///
-    /// By default, total = sum of all embedded file bytes + uninstaller bytes.
-    /// Override this if you plan to install only a subset of the embedded
-    /// content and want progress to reach 100% at the end.
-    pub fn set_total_bytes(&mut self, total: u64) {
-        self.progress.lock().unwrap().bytes_total = total;
+    /// Total step weight across all currently-selected components. Every
+    /// builder op (and `step`/`begin_step`) advances a cursor that runs from
+    /// 0 up to this total; the progress sink receives `cursor / total` on
+    /// each update.
+    pub fn total_steps(&self) -> u64 {
+        self.components
+            .iter()
+            .filter(|c| c.selected)
+            .map(|c| c.progress_weight as u64)
+            .sum()
     }
 
-    /// Reset the bytes-installed counter to zero.
+    /// Reset the step cursor to zero. Usually not needed — `install_main`
+    /// leaves it alone and the wizard's install page runs exactly once.
     pub fn reset_progress(&mut self) {
-        self.progress.lock().unwrap().bytes_installed = 0;
+        let mut state = self.progress.lock().unwrap();
+        state.steps_done = 0.0;
+        state.step_range_start = 0.0;
+        state.step_range_end = 0.0;
     }
 
-    /// Sum the uncompressed byte size of one or more [`Source`]s.
+    /// Open a weighted step without running a builder op. Use this around
+    /// your own long-running work (downloads, service registration, etc.) so
+    /// the progress bar advances; pair with [`Installer::set_step_progress`]
+    /// for sub-step updates, then [`Installer::end_step`] to close it out.
     ///
-    /// Useful for budgeting a custom total, e.g.
-    /// `i.set_total_bytes(i.bytes_of(&[source!("a"), source!("b")]))`.
-    pub fn bytes_of(&self, sources: &[Source]) -> u64 {
-        let mut total = 0u64;
-        for s in sources {
-            total += self.bytes_of_source(*s);
-        }
-        total
+    /// ```rust,ignore
+    /// i.begin_step("Downloading", 5);
+    /// for (done, total) in download_chunks(&url)? {
+    ///     i.set_step_progress(done as f64 / total as f64);
+    /// }
+    /// i.end_step();
+    /// ```
+    pub fn begin_step(&self, status: &str, weight: u32) {
+        self.emit_status(&Some(status.to_string()));
+        let mut state = self.progress.lock().unwrap();
+        state.step_range_start = state.steps_done;
+        state.step_range_end = state.steps_done + weight as f64;
+        drop(state);
+        self.emit_progress();
     }
 
-    fn bytes_of_source(&self, source: Source) -> u64 {
-        for entry in self.entries {
-            match entry {
-                EmbeddedEntry::File {
-                    source_path_hash,
-                    data,
-                    ..
-                } if *source_path_hash == source.0 => {
-                    return data.len() as u64;
-                }
-                EmbeddedEntry::Dir {
-                    source_path_hash,
-                    children,
-                    ..
-                } if *source_path_hash == source.0 => {
-                    return sum_children_bytes(children);
-                }
-                _ => {}
-            }
-        }
-        0
+    /// Update progress within the currently-open step: `fraction` is
+    /// interpreted as a position from 0.0 (step start) to 1.0 (step end).
+    /// Outside an open step this is a no-op. Clamped to `[0, 1]`.
+    pub fn set_step_progress(&self, fraction: f64) {
+        let f = fraction.clamp(0.0, 1.0);
+        let mut state = self.progress.lock().unwrap();
+        let span = state.step_range_end - state.step_range_start;
+        state.steps_done = state.step_range_start + f * span;
+        drop(state);
+        self.emit_progress();
+    }
+
+    /// Close the currently-open step, jumping the cursor to the end of its
+    /// range. If no step is open this just snaps the cursor to the previous
+    /// `step_range_end`.
+    pub fn end_step(&self) {
+        let mut state = self.progress.lock().unwrap();
+        state.steps_done = state.step_range_end;
+        state.step_range_start = state.step_range_end;
+        drop(state);
+        self.emit_progress();
+    }
+
+    /// One-shot equivalent of `begin_step` + `end_step` for user code whose
+    /// progress can't be subdivided: advances the cursor by `weight` units
+    /// and emits the status message.
+    pub fn step(&self, status: &str, weight: u32) {
+        self.begin_step(status, weight);
+        self.end_step();
     }
 
     fn resolve_out_path(&self, dest_path: &str) -> Result<PathBuf> {
@@ -881,18 +914,42 @@ impl Installer {
         }
     }
 
-    fn advance_bytes(&self, bytes: u64) {
-        let mut state = self.progress.lock().unwrap();
-        state.bytes_installed = state.bytes_installed.saturating_add(bytes);
-        let fraction = if state.bytes_total == 0 {
+    fn emit_progress(&self) {
+        let Some(sink) = self.sink.as_ref() else {
+            return;
+        };
+        let state = self.progress.lock().unwrap();
+        let total = self.total_steps();
+        let fraction = if total == 0 {
             0.0
         } else {
-            (state.bytes_installed as f64 / state.bytes_total as f64).clamp(0.0, 1.0)
+            (state.steps_done / total as f64).clamp(0.0, 1.0)
         };
         drop(state);
-        if let Some(sink) = self.sink.as_ref() {
-            sink.set_progress(fraction);
+        sink.set_progress(fraction);
+    }
+
+    /// Open a step with the given weight, run `f`, then close the step.
+    /// Used by builder ops' `.install()` to wrap the actual work in a
+    /// progress step. If `f` errors, the step is still closed.
+    fn run_weighted_step<F>(&self, weight: u32, f: F) -> Result<()>
+    where
+        F: FnOnce() -> Result<()>,
+    {
+        {
+            let mut state = self.progress.lock().unwrap();
+            state.step_range_start = state.steps_done;
+            state.step_range_end = state.steps_done + weight as f64;
         }
+        self.emit_progress();
+        let result = f();
+        {
+            let mut state = self.progress.lock().unwrap();
+            state.steps_done = state.step_range_end;
+            state.step_range_start = state.step_range_end;
+        }
+        self.emit_progress();
+        result
     }
 
     // ── Builders ─────────────────────────────────────────────────────────────
@@ -913,6 +970,7 @@ impl Installer {
             log: None,
             overwrite: OverwriteMode::default(),
             mode: None,
+            weight: 1,
         }
     }
 
@@ -928,6 +986,7 @@ impl Installer {
             mode: None,
             filter: None,
             on_error: None,
+            per_file_weight: 1,
         }
     }
 
@@ -939,6 +998,7 @@ impl Installer {
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
+            weight: 1,
         }
     }
 
@@ -947,6 +1007,7 @@ impl Installer {
         MkdirOp {
             installer: self,
             dst: dst.into(),
+            weight: 1,
             status: None,
             log: None,
         }
@@ -957,6 +1018,7 @@ impl Installer {
         RemoveOp {
             installer: self,
             path: path.into(),
+            weight: 1,
             status: None,
             log: None,
         }
@@ -1107,6 +1169,7 @@ pub struct FileOp<'i> {
     log: Option<String>,
     overwrite: OverwriteMode,
     mode: Option<u32>,
+    weight: u32,
 }
 
 impl<'i> FileOp<'i> {
@@ -1127,6 +1190,11 @@ impl<'i> FileOp<'i> {
         self.mode = Some(mode);
         self
     }
+    /// Step weight this op consumes from the component budget. Default 1.
+    pub fn weight(mut self, w: u32) -> Self {
+        self.weight = w;
+        self
+    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -1134,33 +1202,34 @@ impl<'i> FileOp<'i> {
 
         let (raw_bytes, compression) = find_file(self.installer.entries, self.source.0)?;
         let dest = self.installer.resolve_out_path(&self.dst)?;
+        let overwrite = self.overwrite;
+        let mode = self.mode;
+        let weight = self.weight;
 
-        match self.overwrite {
-            OverwriteMode::Overwrite => {}
-            OverwriteMode::Skip => {
-                if dest.exists() {
-                    self.installer.advance_bytes(raw_bytes.len() as u64);
-                    return Ok(());
+        self.installer.run_weighted_step(weight, || {
+            match overwrite {
+                OverwriteMode::Overwrite => {}
+                OverwriteMode::Skip => {
+                    if dest.exists() {
+                        return Ok(());
+                    }
+                }
+                OverwriteMode::Error => {
+                    if dest.exists() {
+                        return Err(anyhow!("destination already exists: {}", dest.display()));
+                    }
+                }
+                OverwriteMode::Backup => {
+                    if dest.exists() {
+                        backup_path(&dest)?;
+                    }
                 }
             }
-            OverwriteMode::Error => {
-                if dest.exists() {
-                    return Err(anyhow!("destination already exists: {}", dest.display()));
-                }
-            }
-            OverwriteMode::Backup => {
-                if dest.exists() {
-                    backup_path(&dest)?;
-                }
-            }
-        }
-
-        let bytes = Installer::decompress(raw_bytes, compression)?;
-        write_file(&dest, &bytes)?;
-        apply_mode(&dest, self.mode)?;
-
-        self.installer.advance_bytes(raw_bytes.len() as u64);
-        Ok(())
+            let bytes = Installer::decompress(raw_bytes, compression)?;
+            write_file(&dest, &bytes)?;
+            apply_mode(&dest, mode)?;
+            Ok(())
+        })
     }
 }
 
@@ -1174,6 +1243,8 @@ pub struct DirOp<'i> {
     mode: Option<u32>,
     filter: Option<DirFilter>,
     on_error: Option<DirErrorHandler>,
+    /// Weight applied per-file inside the directory tree. Default 1.
+    per_file_weight: u32,
 }
 
 impl<'i> DirOp<'i> {
@@ -1206,6 +1277,11 @@ impl<'i> DirOp<'i> {
         self.on_error = Some(Box::new(f));
         self
     }
+    /// Step weight applied per-file inside the directory tree. Default 1.
+    pub fn weight(mut self, w: u32) -> Self {
+        self.per_file_weight = w;
+        self
+    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -1225,6 +1301,7 @@ impl<'i> DirOp<'i> {
             self.mode,
             self.filter.as_deref(),
             self.on_error.as_deref(),
+            self.per_file_weight,
         )
     }
 }
@@ -1235,6 +1312,7 @@ pub struct UninstallerOp<'i> {
     status: Option<String>,
     log: Option<String>,
     overwrite: OverwriteMode,
+    weight: u32,
 }
 
 impl<'i> UninstallerOp<'i> {
@@ -1250,48 +1328,52 @@ impl<'i> UninstallerOp<'i> {
         self.overwrite = mode;
         self
     }
+    /// Step weight this op consumes from the component budget. Default 1.
+    pub fn weight(mut self, w: u32) -> Self {
+        self.weight = w;
+        self
+    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
 
         let dest = self.installer.resolve_out_path(&self.dst)?;
+        let overwrite = self.overwrite;
+        let weight = self.weight;
+        let data_ptr = self.installer.uninstaller_data;
+        let compression = self.installer.uninstaller_compression;
 
-        match self.overwrite {
-            OverwriteMode::Overwrite => {}
-            OverwriteMode::Skip => {
-                if dest.exists() {
-                    self.installer
-                        .advance_bytes(self.installer.uninstaller_data.len() as u64);
-                    return Ok(());
+        self.installer.run_weighted_step(weight, || {
+            match overwrite {
+                OverwriteMode::Overwrite => {}
+                OverwriteMode::Skip => {
+                    if dest.exists() {
+                        return Ok(());
+                    }
+                }
+                OverwriteMode::Error => {
+                    if dest.exists() {
+                        return Err(anyhow!("destination already exists: {}", dest.display()));
+                    }
+                }
+                OverwriteMode::Backup => {
+                    if dest.exists() {
+                        backup_path(&dest)?;
+                    }
                 }
             }
-            OverwriteMode::Error => {
-                if dest.exists() {
-                    return Err(anyhow!("destination already exists: {}", dest.display()));
-                }
-            }
-            OverwriteMode::Backup => {
-                if dest.exists() {
-                    backup_path(&dest)?;
-                }
-            }
-        }
 
-        let data = Installer::decompress(
-            self.installer.uninstaller_data,
-            self.installer.uninstaller_compression,
-        )?;
-        write_file(&dest, &data)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
-                .with_context(|| format!("failed to set permissions on: {}", dest.display()))?;
-        }
-        self.installer
-            .advance_bytes(self.installer.uninstaller_data.len() as u64);
-        Ok(())
+            let data = Installer::decompress(data_ptr, compression)?;
+            write_file(&dest, &data)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
+                    .with_context(|| format!("failed to set permissions on: {}", dest.display()))?;
+            }
+            Ok(())
+        })
     }
 }
 
@@ -1300,6 +1382,7 @@ pub struct MkdirOp<'i> {
     dst: String,
     status: Option<String>,
     log: Option<String>,
+    weight: u32,
 }
 
 impl<'i> MkdirOp<'i> {
@@ -1311,13 +1394,20 @@ impl<'i> MkdirOp<'i> {
         self.log = Some(s.into());
         self
     }
+    /// Step weight this op consumes from the component budget. Default 1.
+    pub fn weight(mut self, w: u32) -> Self {
+        self.weight = w;
+        self
+    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
         let path = self.installer.resolve_out_path(&self.dst)?;
-        std::fs::create_dir_all(&path)
-            .with_context(|| format!("failed to create directory: {}", path.display()))
+        self.installer.run_weighted_step(self.weight, || {
+            std::fs::create_dir_all(&path)
+                .with_context(|| format!("failed to create directory: {}", path.display()))
+        })
     }
 }
 
@@ -1326,6 +1416,7 @@ pub struct RemoveOp<'i> {
     path: String,
     status: Option<String>,
     log: Option<String>,
+    weight: u32,
 }
 
 impl<'i> RemoveOp<'i> {
@@ -1337,47 +1428,32 @@ impl<'i> RemoveOp<'i> {
         self.log = Some(s.into());
         self
     }
+    /// Step weight this op consumes from the component budget. Default 1.
+    pub fn weight(mut self, w: u32) -> Self {
+        self.weight = w;
+        self
+    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
         self.installer.emit_log(&self.log);
         let p = self.installer.resolve_out_path(&self.path)?;
-        if !p.exists() {
-            return Ok(());
-        }
-        if p.is_dir() {
-            std::fs::remove_dir_all(&p)
-                .with_context(|| format!("failed to remove directory: {}", p.display()))
-        } else {
-            std::fs::remove_file(&p)
-                .with_context(|| format!("failed to remove file: {}", p.display()))
-        }
+        self.installer.run_weighted_step(self.weight, || {
+            if !p.exists() {
+                return Ok(());
+            }
+            if p.is_dir() {
+                std::fs::remove_dir_all(&p)
+                    .with_context(|| format!("failed to remove directory: {}", p.display()))
+            } else {
+                std::fs::remove_file(&p)
+                    .with_context(|| format!("failed to remove file: {}", p.display()))
+            }
+        })
     }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-fn sum_embedded_bytes(entries: &[EmbeddedEntry]) -> u64 {
-    let mut total = 0u64;
-    for e in entries {
-        match e {
-            EmbeddedEntry::File { data, .. } => total += data.len() as u64,
-            EmbeddedEntry::Dir { children, .. } => total += sum_children_bytes(children),
-        }
-    }
-    total
-}
-
-fn sum_children_bytes(children: &[DirChild]) -> u64 {
-    let mut total = 0u64;
-    for c in children {
-        match &c.kind {
-            DirChildKind::File { data, .. } => total += data.len() as u64,
-            DirChildKind::Dir { children } => total += sum_children_bytes(children),
-        }
-    }
-    total
-}
 
 fn find_file(
     entries: &'static [EmbeddedEntry],
@@ -1427,6 +1503,7 @@ fn install_children(
     mode: Option<u32>,
     filter: Option<&(dyn Fn(&str) -> bool + 'static)>,
     on_error: Option<&(dyn Fn(&str, &anyhow::Error) -> ErrorAction + 'static)>,
+    per_file_weight: u32,
 ) -> Result<()> {
     for child in children {
         installer.check_cancelled()?;
@@ -1444,7 +1521,9 @@ fn install_children(
                         continue;
                     }
                 }
-                let res = install_one_file(data, compression, &target, overwrite, mode, installer);
+                let res = installer.run_weighted_step(per_file_weight, || {
+                    install_one_file(data, compression, &target, overwrite, mode)
+                });
                 if let Err(e) = res {
                     match on_error {
                         Some(h) => match h(&rel, &e) {
@@ -1459,7 +1538,15 @@ fn install_children(
                 std::fs::create_dir_all(&target)
                     .with_context(|| format!("failed to create dir: {}", target.display()))?;
                 install_children(
-                    children, &target, &rel, installer, overwrite, mode, filter, on_error,
+                    children,
+                    &target,
+                    &rel,
+                    installer,
+                    overwrite,
+                    mode,
+                    filter,
+                    on_error,
+                    per_file_weight,
                 )?;
             }
         }
@@ -1473,13 +1560,11 @@ fn install_one_file(
     dest: &Path,
     overwrite: OverwriteMode,
     mode: Option<u32>,
-    installer: &Installer,
 ) -> Result<()> {
     match overwrite {
         OverwriteMode::Overwrite => {}
         OverwriteMode::Skip => {
             if dest.exists() {
-                installer.advance_bytes(data.len() as u64);
                 return Ok(());
             }
         }
@@ -1498,7 +1583,6 @@ fn install_one_file(
     let bytes = Installer::decompress(data, compression)?;
     write_file(dest, &bytes)?;
     apply_mode(dest, mode)?;
-    installer.advance_bytes(data.len() as u64);
     Ok(())
 }
 
@@ -1980,7 +2064,7 @@ mod tests {
             }
         }
         i.set_progress_sink(Box::new(Forward(sink.clone())));
-        i.set_total_bytes(5);
+        i.component("core", "Core", "", 1).required();
         i.file(src("a.txt"), "out.txt")
             .status("installing")
             .log("copying a.txt")
@@ -1990,20 +2074,20 @@ mod tests {
         assert_eq!(sink.statuses.lock().unwrap().as_slice(), &["installing"]);
         assert_eq!(sink.logs.lock().unwrap().as_slice(), &["copying a.txt"]);
         let progs = sink.progresses.lock().unwrap();
-        assert_eq!(progs.len(), 1);
-        assert!((progs[0] - 1.0).abs() < f64::EPSILON);
+        // begin_step emits once at 0.0, end_step emits once at 1.0
+        assert!(progs.len() >= 2);
+        assert!((progs.last().unwrap() - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn bytes_of_sums_file_and_dir() {
-        let entries = vec![
-            file_entry("a.txt", b"ABC"),
-            dir_entry("d", vec![child_file("x", b"12"), child_file("y", b"34567")]),
-        ];
-        let i = Installer::new(leak_entries(entries), leak_bytes(vec![]), "");
-        assert_eq!(i.bytes_of(&[src("a.txt")]), 3);
-        assert_eq!(i.bytes_of(&[src("d")]), 7);
-        assert_eq!(i.bytes_of(&[src("a.txt"), src("d")]), 10);
+    fn total_steps_sums_selected_components() {
+        let mut i = make_bare_installer();
+        i.component("core", "Core", "", 5).required();
+        i.component("docs", "Docs", "", 3);
+        i.component("extras", "Extras", "", 2).default_off();
+        assert_eq!(i.total_steps(), 8);
+        i.set_component_selected("extras", true);
+        assert_eq!(i.total_steps(), 10);
     }
 
     fn make_bare_installer() -> Installer {
@@ -2013,9 +2097,9 @@ mod tests {
     #[test]
     fn component_register_and_query() {
         let mut i = make_bare_installer();
-        i.component("core", "Core").required(true);
-        i.component("docs", "Docs").default(false);
-        i.component("extras", "Extras");
+        i.component("core", "Core", "", 1).required();
+        i.component("docs", "Docs", "", 1).default_off();
+        i.component("extras", "Extras", "", 1);
 
         assert_eq!(i.components().len(), 3);
         assert!(i.is_component_selected("core"));
@@ -2027,7 +2111,7 @@ mod tests {
     #[test]
     fn component_required_cannot_be_deselected() {
         let mut i = make_bare_installer();
-        i.component("core", "Core").required(true);
+        i.component("core", "Core", "", 1).required();
         i.set_component_selected("core", false);
         assert!(i.is_component_selected("core"));
     }
@@ -2035,8 +2119,8 @@ mod tests {
     #[test]
     fn component_reregistration_updates_in_place() {
         let mut i = make_bare_installer();
-        i.component("docs", "v1");
-        i.component("docs", "v2").default(false);
+        i.component("docs", "v1", "", 1);
+        i.component("docs", "v2", "", 1).default_off();
         assert_eq!(i.components().len(), 1);
         assert_eq!(i.components()[0].label, "v2");
         assert!(!i.is_component_selected("docs"));
@@ -2045,9 +2129,9 @@ mod tests {
     #[test]
     fn cli_exact_components_selects_only_listed() {
         let mut i = make_bare_installer();
-        i.component("a", "A");
-        i.component("b", "B");
-        i.component("c", "C");
+        i.component("a", "A", "", 1);
+        i.component("b", "B", "", 1);
+        i.component("c", "C", "", 1);
         let args = vec![
             "installer".into(),
             "--components".into(),
@@ -2062,8 +2146,8 @@ mod tests {
     #[test]
     fn cli_exact_components_keeps_required() {
         let mut i = make_bare_installer();
-        i.component("core", "Core").required(true);
-        i.component("docs", "Docs");
+        i.component("core", "Core", "", 1).required();
+        i.component("docs", "Docs", "", 1);
         let args = vec!["installer".into(), "--components=docs".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("core"));
@@ -2073,8 +2157,8 @@ mod tests {
     #[test]
     fn cli_with_and_without_delta() {
         let mut i = make_bare_installer();
-        i.component("a", "A").default(false);
-        i.component("b", "B");
+        i.component("a", "A", "", 1).default_off();
+        i.component("b", "B", "", 1);
         let args = vec![
             "installer".into(),
             "--with".into(),
@@ -2090,7 +2174,7 @@ mod tests {
     #[test]
     fn cli_unknown_component_errors() {
         let mut i = make_bare_installer();
-        i.component("a", "A");
+        i.component("a", "A", "", 1);
         let args = vec!["installer".into(), "--with=bogus".into()];
         assert!(i.process_commandline_from(&args).is_err());
     }
@@ -2098,7 +2182,7 @@ mod tests {
     #[test]
     fn cli_without_cannot_disable_required() {
         let mut i = make_bare_installer();
-        i.component("core", "Core").required(true);
+        i.component("core", "Core", "", 1).required();
         let args = vec!["installer".into(), "--without=core".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("core"));

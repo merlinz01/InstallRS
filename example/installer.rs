@@ -60,15 +60,28 @@ pub fn install(i: &mut Installer) -> Result<()> {
     }
 
     // Register selectable components. "core" is required; "docs" is on by
-    // default; "extras" is off by default.
-    i.component("core", t!("installer.components.core"))
-        .description(t!("installer.components.core_desc"))
-        .required(true);
-    i.component("docs", t!("installer.components.docs"))
-        .description(t!("installer.components.docs_desc"));
-    i.component("extras", t!("installer.components.extras"))
-        .description(t!("installer.components.extras_desc"))
-        .default(false);
+    // default; "extras" is off by default. Progress weights approximate the
+    // number of operations each component performs during install.
+    i.component(
+        "core",
+        t!("installer.components.core"),
+        t!("installer.components.core_desc"),
+        6,
+    )
+    .required();
+    i.component(
+        "docs",
+        t!("installer.components.docs"),
+        t!("installer.components.docs_desc"),
+        1,
+    );
+    i.component(
+        "extras",
+        t!("installer.components.extras"),
+        t!("installer.components.extras_desc"),
+        1,
+    )
+    .default_off();
 
     // Register custom CLI options. `--yes` skips every confirmation prompt
     // (handy for CI / unattended installs); `--install-dir` overrides the
@@ -148,11 +161,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.account.heading"),
             &t!("installer.account.label"),
             |p| {
-                p.text(
-                    "username",
-                    &t!("installer.account.username"),
-                    "admin",
-                );
+                p.text("username", &t!("installer.account.username"), "admin");
                 p.password("password", &t!("installer.account.password"));
                 p.number("port", &t!("installer.account.port"), 8080);
             },
@@ -225,10 +234,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
             i.set_out_dir(&out_dir);
 
             // core: always installed (required component)
-            i.dir(
-                installrs::source!("testdir", ignore = ["*.bak"]),
-                "testdir",
-            )
+            i.dir(installrs::source!("testdir", ignore = ["*.bak"]), "testdir")
                 .status(t!("installer.install.status_installing"))
                 .log(t!("installer.install.log_testdir"))
                 .install()?;
@@ -246,11 +252,17 @@ pub fn install(i: &mut Installer) -> Result<()> {
             }
 
             // Simulate a long-running step to demonstrate the progress bar and cancellation.
-            for step in 1..=5 {
+            // Opens a single weighted step (contributes 2 units to the core component's
+            // budget) and interpolates progress across 5 × 200 ms sub-ticks.
+            const TICKS: u32 = 5;
+            i.begin_step(&t!("installer.install.status_longrunning"), 2);
+            for step in 1..=TICKS {
                 ctx.set_status(&t!("installer.install.status_step", step = step));
-                std::thread::sleep(std::time::Duration::from_secs(1));
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                i.set_step_progress(step as f64 / TICKS as f64);
                 i.check_cancelled()?;
             }
+            i.end_step();
 
             #[cfg(windows)]
             i.uninstaller("uninstall.exe")
@@ -268,10 +280,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.finish.title"),
             &t!("installer.finish.message"),
         )
-        .error_page(
-            &t!("installer.error.title"),
-            &t!("installer.error.message"),
-        )
+        .error_page(&t!("installer.error.title"), &t!("installer.error.message"))
         .run(i)?;
 
     Ok(())

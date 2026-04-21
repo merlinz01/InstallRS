@@ -32,7 +32,9 @@ InstallRS is here to revolutionize the way you create software installers.
 - Embeds those files into a self-contained executable using `include_bytes!`
 - Fluent builder API for installing files and directories, with options for
   overwrite behavior, Unix permissions, directory filters, and error handlers
-- Automatic byte-weighted progress tracking with pluggable sinks
+- Step-weighted progress tracking with pluggable sinks: each component
+  declares a `progress_weight`; builder ops and manual `step()` calls
+  advance a shared cursor, with a streaming API for sub-step updates
 - Automatically generates both installer and uninstaller binaries
 - Supports file compression (lzma, gzip, bzip2) to reduce binary size
 - Small binaries — no runtime overhead
@@ -132,55 +134,71 @@ i.dir(source!("data"), "data")
 
 ### Progress reporting
 
-The `Installer` has a byte-weighted progress counter. By default the total is
-the sum of all embedded bytes (plus the uninstaller size if present). Override
-with `set_total_bytes(n)` or compute partial totals via `bytes_of(&[sources])`.
+Progress is **step-weighted per component**. Each component you register
+declares a `progress_weight` — the number of step units it contributes to
+the bar when selected. The total is the sum of selected components'
+weights. Every builder op (`.file().install()`, `.dir().install()`, etc.)
+advances the cursor by its own weight (default 1, override with
+`.weight(n)`). If your actual op count differs from the declared
+`progress_weight`, the bar just over- or undershoots — it's an estimate,
+not a contract.
 
-Attach any `ProgressSink` via `set_progress_sink`; the GUI wizard attaches one
-automatically. All `.status()`, `.log()`, and progress updates flow through
-the sink.
+For custom work that isn't a builder op (downloads, service registration,
+etc.) use:
+
+- `i.step("msg", weight)` — one-shot advance + status message
+- `i.begin_step("msg", weight)` + `i.set_step_progress(fraction)` +
+  `i.end_step()` — for streaming within a single step (e.g. download
+  progress advances the bar smoothly from step-start to step-end)
+
+Attach any `ProgressSink` via `set_progress_sink`; the GUI wizard attaches
+one automatically. All `.status()`, `.log()`, and progress updates flow
+through the sink.
 
 ## Installer API
 
-| Method                           | Description                                            |
-| -------------------------------- | ------------------------------------------------------ |
-| `set_out_dir(dir)`               | Set the base directory for relative output paths       |
-| `file(src, dest)`                | Install a single embedded file                         |
-| `dir(src, dest)`                 | Install an embedded directory tree                     |
-| `mkdir(dir)`                     | Create a directory                                     |
-| `uninstaller(dest)`              | Write the uninstaller executable                       |
-| `remove(path)`                   | Remove a file or directory                             |
-| `exists(path)`                   | Check whether a path exists                            |
-| `exec_shell(cmd)`                | Run a shell command                                    |
-| `set_progress_sink(sink)`        | Attach a `ProgressSink` for status & progress          |
-| `set_total_bytes(n)`             | Override the progress bar's total                      |
-| `reset_progress()`               | Reset `bytes_installed` to zero                        |
-| `enable_self_delete()`           | Windows: relaunch from copy so original can be deleted |
-| `component(id, label)`           | Register an optional component                         |
-| `is_component_selected(id)`      | Check whether a component is currently selected        |
-| `set_component_selected(id, on)` | Enable/disable a component                             |
-| `process_commandline()`          | **Required.** Parse registered CLI args                |
-| `set_log_file(path)`             | Tee status messages to a file (see `--log` option)     |
-| `log_error(&err)`                | Manually record an error line to the log file          |
-| `option(name, kind)`             | Register a user-defined CLI option                     |
-| `get_option::<T>(name)`          | Typed accessor for a parsed user option                |
-| `option_value(name)`             | Raw `&OptionValue` for a parsed user option            |
-| `cancel()` / `check_cancelled()` | Set / error-if-set the cancellation flag               |
+| Method                               | Description                                            |
+| ------------------------------------ | ------------------------------------------------------ |
+| `set_out_dir(dir)`                   | Set the base directory for relative output paths       |
+| `file(src, dest)`                    | Install a single embedded file                         |
+| `dir(src, dest)`                     | Install an embedded directory tree                     |
+| `mkdir(dir)`                         | Create a directory                                     |
+| `uninstaller(dest)`                  | Write the uninstaller executable                       |
+| `remove(path)`                       | Remove a file or directory                             |
+| `exists(path)`                       | Check whether a path exists                            |
+| `exec_shell(cmd)`                    | Run a shell command                                    |
+| `set_progress_sink(sink)`            | Attach a `ProgressSink` for status & progress          |
+| `total_steps()`                      | Sum of selected components' `progress_weight`          |
+| `step(msg, weight)`                  | One-shot: advance cursor + emit status                 |
+| `begin_step(msg, weight)`            | Open a weighted step for streaming sub-updates         |
+| `set_step_progress(fraction)`        | Update position within the open step (0.0..=1.0)       |
+| `end_step()`                         | Close the open step (jump to its end)                  |
+| `reset_progress()`                   | Reset the step cursor to zero                          |
+| `enable_self_delete()`               | Windows: relaunch from copy so original can be deleted |
+| `component(id, label, desc, weight)` | Register an optional component                         |
+| `is_component_selected(id)`          | Check whether a component is currently selected        |
+| `set_component_selected(id, on)`     | Enable/disable a component                             |
+| `process_commandline()`              | **Required.** Parse registered CLI args                |
+| `set_log_file(path)`                 | Tee status messages to a file (see `--log` option)     |
+| `log_error(&err)`                    | Manually record an error line to the log file          |
+| `option(name, kind)`                 | Register a user-defined CLI option                     |
+| `get_option::<T>(name)`              | Typed accessor for a parsed user option                |
+| `option_value(name)`                 | Raw `&OptionValue` for a parsed user option            |
+| `cancel()` / `check_cancelled()`     | Set / error-if-set the cancellation flag               |
 
 ## Components
 
-Register optional features with `i.component(id, label)` and chain builder
-methods on the returned `&mut Component`:
+Register optional features with
+`i.component(id, label, description, progress_weight)`. Components start
+selected by default; call `.default_off()` on ones the user has to opt
+into, and `.required()` on ones that can't be unchecked:
 
 ```rust
-i.component("core", "Core files")
-    .description("Always installed")
-    .required(true);
-i.component("docs", "Documentation")
-    .description("User manual and readme");
-i.component("extras", "Extra samples")
-    .description("Optional example files")
-    .default(false);
+i.component("core", "Core files", "Always installed", 10)
+    .required();
+i.component("docs", "Documentation", "User manual and readme", 3);
+i.component("extras", "Extra samples", "Optional example files", 1)
+    .default_off();
 ```
 
 Branch on selection inside the install callback:

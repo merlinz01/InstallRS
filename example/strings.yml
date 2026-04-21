@@ -150,6 +150,11 @@ installer.install.log_testfile:
   de: "Testdatei wird installiert..."
   es: "Instalando archivo de prueba..."
 
+installer.install.status_longrunning:
+  en: "Simulating a long-running step..."
+  de: "Simuliere lang andauernden Schritt..."
+  es: "Simulando un paso que tarda mucho..."
+
 installer.install.status_step:
   en: "Simulating long-running installation step (%{step})..."
   de: "Simuliere lang andauernden Installationsschritt (%{step})..."

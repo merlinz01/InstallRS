@@ -37,6 +37,9 @@ We can do better in 2026.
 - Component system: let users pick optional features via wizard checkboxes or
   `--components` / `--with` / `--without` CLI flags
 - Built-in native dialog helpers (`info`, `warn`, `error`, `confirm`)
+- Built-in payload integrity check: a SHA-256 of the embedded compressed
+  blobs is baked into the installer at build time and verified at startup,
+  so a corrupted download is detected before any file operations run
 - Windows resource support: icons (PNG auto-converted to ICO), version info, manifests
 - Separate configuration for installer and uninstaller binaries
 

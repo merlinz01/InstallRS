@@ -252,10 +252,7 @@ fn choose_language_win32(
         title,
         size: wgui::dpi(W, H),
         class_icon,
-        style: wco::WS::CAPTION
-            | wco::WS::SYSMENU
-            | wco::WS::VISIBLE
-            | wco::WS::CLIPCHILDREN,
+        style: wco::WS::CAPTION | wco::WS::SYSMENU | wco::WS::VISIBLE | wco::WS::CLIPCHILDREN,
         ..Default::default()
     });
 

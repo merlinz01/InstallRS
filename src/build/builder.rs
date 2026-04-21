@@ -988,9 +988,7 @@ fn compression_feature(method: &str) -> Option<&str> {
 
 /// Generate the statics and ENTRIES code for a set of gathered files.
 /// Returns (statics_code, entries_code, unique_storage_names_in_order).
-fn generate_embedded_code(
-    gathered: &[GatheredFile],
-) -> Result<(String, String, Vec<String>)> {
+fn generate_embedded_code(gathered: &[GatheredFile]) -> Result<(String, String, Vec<String>)> {
     // One named static per unique storage file
     let mut seen_statics: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut unique_order: Vec<String> = Vec::new();

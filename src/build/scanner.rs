@@ -172,7 +172,10 @@ fn parse_source_macro(mac: &syn::Macro) -> Option<SourceRef> {
                         );
                     }
                 }
-                _ => log::warn!("source!({:?}, {key} = ...): unknown option, ignoring", out.path),
+                _ => log::warn!(
+                    "source!({:?}, {key} = ...): unknown option, ignoring",
+                    out.path
+                ),
             }
         }
     }

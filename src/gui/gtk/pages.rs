@@ -390,8 +390,14 @@ enum CustomControl {
     Number(gtk::Entry),
     Multiline(gtk::TextBuffer),
     Checkbox(gtk::CheckButton),
-    Dropdown { combo: gtk::ComboBoxText, values: Vec<String> },
-    Radio { buttons: Vec<gtk::RadioButton>, values: Vec<String> },
+    Dropdown {
+        combo: gtk::ComboBoxText,
+        values: Vec<String>,
+    },
+    Radio {
+        buttons: Vec<gtk::RadioButton>,
+        values: Vec<String>,
+    },
     PathPicker(gtk::Entry),
 }
 
@@ -458,9 +464,7 @@ impl CustomPage {
                 } => {
                     let check = gtk::CheckButton::with_label(lbl);
                     let initial_val = match initial.get(key) {
-                        Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => {
-                            *b
-                        }
+                        Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => *b,
                         _ => *default,
                     };
                     check.set_active(initial_val);
@@ -487,16 +491,10 @@ impl CustomPage {
                         Some(crate::OptionValue::String(s)) => s.clone(),
                         _ => default.clone(),
                     };
-                    let idx = values
-                        .iter()
-                        .position(|v| v == &current)
-                        .unwrap_or(0);
+                    let idx = values.iter().position(|v| v == &current).unwrap_or(0);
                     combo.set_active(Some(idx as u32));
                     inner.pack_start(&combo, false, false, 0);
-                    controls.push((
-                        key.clone(),
-                        CustomControl::Dropdown { combo, values },
-                    ));
+                    controls.push((key.clone(), CustomControl::Dropdown { combo, values }));
                 }
                 CustomWidget::Radio {
                     key,

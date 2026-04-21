@@ -63,11 +63,7 @@ macro_rules! source {
 /// storage file, in `D_*` declaration order); `uninstaller_data` is the
 /// embedded uninstaller (empty slice for an uninstaller binary). Call at
 /// process start — the generated `main()` invokes it before anything else.
-pub fn verify_payload(
-    blobs: &[&[u8]],
-    uninstaller_data: &[u8],
-    expected: &[u8; 32],
-) -> Result<()> {
+pub fn verify_payload(blobs: &[&[u8]], uninstaller_data: &[u8], expected: &[u8; 32]) -> Result<()> {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     for b in blobs {
@@ -501,9 +497,7 @@ impl Installer {
                 let n = counter.fetch_add(1, Ordering::Relaxed) + 1;
                 if n == 1 {
                     flag_h.store(true, Ordering::Relaxed);
-                    eprintln!(
-                        "\nCancellation requested. Press Ctrl+C again to exit immediately."
-                    );
+                    eprintln!("\nCancellation requested. Press Ctrl+C again to exit immediately.");
                 } else {
                     std::process::exit(130);
                 }
@@ -710,9 +704,7 @@ impl Installer {
         // Flags default to `false` so `get_option::<bool>("flag")` always
         // returns `Some(...)` for registered flags, regardless of presence.
         for opt in &self.options {
-            if matches!(opt.kind, OptionKind::Flag)
-                && !self.option_values.contains_key(&opt.name)
-            {
+            if matches!(opt.kind, OptionKind::Flag) && !self.option_values.contains_key(&opt.name) {
                 self.option_values
                     .insert(opt.name.clone(), OptionValue::Flag(false));
             }
@@ -739,7 +731,12 @@ impl Installer {
 
         let known: std::collections::HashSet<String> =
             self.components.iter().map(|c| c.id.clone()).collect();
-        for id in exact.iter().flatten().chain(with.iter()).chain(without.iter()) {
+        for id in exact
+            .iter()
+            .flatten()
+            .chain(with.iter())
+            .chain(without.iter())
+        {
             if !id.is_empty() && !known.contains(id) {
                 return Err(anyhow!("unknown component: {id}"));
             }
@@ -2132,11 +2129,7 @@ mod tests {
         i.component("a", "A", "", 1);
         i.component("b", "B", "", 1);
         i.component("c", "C", "", 1);
-        let args = vec![
-            "installer".into(),
-            "--components".into(),
-            "a,c".into(),
-        ];
+        let args = vec!["installer".into(), "--components".into(), "a,c".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("a"));
         assert!(!i.is_component_selected("b"));

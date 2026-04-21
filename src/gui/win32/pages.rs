@@ -564,11 +564,7 @@ impl ComponentsPage {
             list.on_subclass().wm_mouse_move(move |p| {
                 let mut hti = LVHITTESTINFO::default();
                 hti.pt = p.coords;
-                let idx = unsafe {
-                    list_c
-                        .hwnd()
-                        .SendMessage(lvm::HitTest { info: &mut hti })
-                };
+                let idx = unsafe { list_c.hwnd().SendMessage(lvm::HitTest { info: &mut hti }) };
                 let text = match idx {
                     Some(i) if (i as usize) < descriptions.len() => {
                         descriptions[i as usize].as_str()
@@ -722,13 +718,29 @@ impl InstallPage {
 // ── Custom Page ─────────────────────────────────────────────────────────────
 
 enum CustomControl {
-    Text { edit: gui::Edit },
-    Number { edit: gui::Edit },
-    Multiline { edit: gui::Edit },
-    Checkbox { check: gui::CheckBox },
-    Dropdown { combo: gui::ComboBox, values: Vec<String> },
-    Radio { group: gui::RadioGroup, values: Vec<String> },
-    PathPicker { edit: gui::Edit },
+    Text {
+        edit: gui::Edit,
+    },
+    Number {
+        edit: gui::Edit,
+    },
+    Multiline {
+        edit: gui::Edit,
+    },
+    Checkbox {
+        check: gui::CheckBox,
+    },
+    Dropdown {
+        combo: gui::ComboBox,
+        values: Vec<String>,
+    },
+    Radio {
+        group: gui::RadioGroup,
+        values: Vec<String>,
+    },
+    PathPicker {
+        edit: gui::Edit,
+    },
 }
 
 pub struct CustomPage {
@@ -832,9 +844,7 @@ impl CustomPage {
                     default,
                 } => {
                     let initial_val = match initial.get(key) {
-                        Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => {
-                            *b
-                        }
+                        Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => *b,
                         _ => *default,
                     };
                     let check = gui::CheckBox::new(
@@ -871,13 +881,9 @@ impl CustomPage {
                         Some(crate::OptionValue::String(s)) => s.clone(),
                         _ => default.clone(),
                     };
-                    let idx = choices
-                        .iter()
-                        .position(|(v, _)| *v == current)
-                        .unwrap_or(0);
+                    let idx = choices.iter().position(|(v, _)| *v == current).unwrap_or(0);
                     let items: Vec<&str> = choices.iter().map(|(_, d)| d.as_str()).collect();
-                    let values: Vec<String> =
-                        choices.iter().map(|(v, _)| v.clone()).collect();
+                    let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
                     let (cw, _) = gui::dpi(row_w, 0);
                     let combo = gui::ComboBox::new(
                         parent,
@@ -914,8 +920,7 @@ impl CustomPage {
                         Some(crate::OptionValue::String(s)) => s.clone(),
                         _ => default.clone(),
                     };
-                    let values: Vec<String> =
-                        choices.iter().map(|(v, _)| v.clone()).collect();
+                    let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
                     let opts: Vec<gui::RadioButtonOpts> = choices
                         .iter()
                         .enumerate()
@@ -1069,8 +1074,7 @@ impl CustomPage {
                     let parent_c = parent.clone();
                     let filters_owned: Vec<(String, String)> = filters.clone();
                     browse.on().bn_clicked(move || {
-                        let _guard =
-                            winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
+                        let _guard = winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
                         let dlg = winsafe::CoCreateInstance::<winsafe::IFileOpenDialog>(
                             &co::CLSID::FileOpenDialog,
                             None::<&winsafe::IUnknown>,
@@ -1143,8 +1147,7 @@ impl CustomPage {
                     let edit_c = edit.clone();
                     let parent_c = parent.clone();
                     browse.on().bn_clicked(move || {
-                        let _guard =
-                            winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
+                        let _guard = winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
                         let dlg = winsafe::CoCreateInstance::<winsafe::IFileOpenDialog>(
                             &co::CLSID::FileOpenDialog,
                             None::<&winsafe::IUnknown>,

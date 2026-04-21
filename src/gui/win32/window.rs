@@ -646,9 +646,9 @@ pub fn run(
                                 // Find an error page anywhere in the wizard.
                                 let error_idx = {
                                     let pages_guard = pages_timer.lock().unwrap();
-                                    pages_guard.iter().position(|p| {
-                                        matches!(&p.kind, PageKind::Error(_))
-                                    })
+                                    pages_guard
+                                        .iter()
+                                        .position(|p| matches!(&p.kind, PageKind::Error(_)))
                                 };
                                 if let Some(new_idx) = error_idx {
                                     let pages_guard = pages_timer.lock().unwrap();
@@ -669,10 +669,7 @@ pub fn run(
                                         }
                                     }
                                 } else {
-                                    let _ = crate::gui::error(
-                                        "Installation failed",
-                                        &err_msg,
-                                    );
+                                    let _ = crate::gui::error("Installation failed", &err_msg);
                                 }
                             }
 

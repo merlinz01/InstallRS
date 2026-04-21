@@ -818,6 +818,7 @@ dependencies = [
  "image",
  "log",
  "lzma-rs",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

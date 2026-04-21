@@ -25,6 +25,60 @@ const INSTALLRS_CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// crate — useful for end-to-end testing changes to the runtime before a
 /// release. Unset (the default), generated crates depend on
 /// `installrs = "<version>"` from crates.io.
+/// Compare the `installrs` version req declared in the user's installer
+/// crate's `Cargo.toml` against this CLI's version. Errors if they're
+/// semver-incompatible — catches the "user's crate says `0.3`, CLI is
+/// `0.4`" mismatch here, at `installrs --target ...` time, instead of
+/// letting it surface as a cryptic `expected Installer, found Installer`
+/// type error deep in cargo's downstream compile.
+///
+/// Silent pass-through cases:
+/// - No `installrs` dep in the user's `Cargo.toml` (rare — they'd have
+///   nothing to call, but we don't force a dependency).
+/// - Dep is `{ path = ... }` or `{ git = ... }` without a version req — the
+///   user is pointing at a specific source on disk or a ref, and the usual
+///   crates.io version check doesn't apply.
+fn check_installrs_version_compat(target_dir: &Path) -> Result<()> {
+    let cargo_toml_path = target_dir.join("Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)
+        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
+    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
+
+    let user_req_str = value
+        .get("dependencies")
+        .and_then(|d| d.get("installrs"))
+        .and_then(|dep| match dep {
+            toml::Value::String(s) => Some(s.clone()),
+            toml::Value::Table(t) => t
+                .get("version")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            _ => None,
+        });
+
+    let user_req_str = match user_req_str {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
+    let user_req: semver::VersionReq = user_req_str.parse().with_context(|| {
+        format!("invalid `installrs` version requirement in Cargo.toml: {user_req_str:?}")
+    })?;
+    let cli_version: semver::Version = INSTALLRS_CRATE_VERSION
+        .parse()
+        .context("failed to parse CLI version (compile-time bug)")?;
+
+    if !user_req.matches(&cli_version) {
+        return Err(anyhow!(
+            "`installrs` version mismatch: your installer crate's Cargo.toml declares \
+             `installrs = \"{user_req_str}\"`, but this CLI is {cli_version}. Update the \
+             version requirement in your Cargo.toml to include {cli_version}, or install \
+             a matching CLI with `cargo install installrs@{user_req_str}`."
+        ));
+    }
+    Ok(())
+}
+
 fn installrs_dep_spec(features_suffix: &str) -> String {
     if std::env::var_os("INSTALLRS_LOCAL_PATH").is_some() {
         format!(
@@ -32,8 +86,13 @@ fn installrs_dep_spec(features_suffix: &str) -> String {
             path = INSTALLRS_CRATE_PATH,
         )
     } else {
+        // Exact-version pin (`=X.Y.Z`) — the generated crate compiles against
+        // precisely the runtime the CLI was built from, not just any
+        // semver-compatible release. Removes the "latest 0.3.x at build time"
+        // variance in exchange for requiring a CLI reinstall to pick up
+        // runtime bug fixes.
         format!(
-            "installrs = {{ version = {version:?}{features_suffix} }}",
+            "installrs = {{ version = \"={version}\"{features_suffix} }}",
             version = INSTALLRS_CRATE_VERSION,
         )
     }
@@ -123,6 +182,11 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     }
 
     compress::validate_method(&params.compression)?;
+
+    // Preflight: user's installer crate must declare an `installrs` version
+    // compatible with this CLI. Fails fast with a clear message instead of
+    // letting cargo discover the mismatch later.
+    check_installrs_version_compat(&params.target_dir)?;
 
     // ── Prepare directories ──────────────────────────────────────────────────
     log::trace!("Creating build directory: {}", params.build_dir.display());

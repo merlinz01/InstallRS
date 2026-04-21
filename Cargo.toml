@@ -2,6 +2,20 @@
 name = "installrs"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
+description = "Build self-contained software installers in plain Rust, with an optional native wizard GUI (Win32 / GTK3), component selection, progress, cancellation, and compression."
+license = "MIT"
+repository = "https://github.com/merlinz01/InstallRS"
+homepage = "https://github.com/merlinz01/InstallRS"
+documentation = "https://docs.rs/installrs"
+readme = "README.md"
+keywords = ["installer", "setup", "wizard", "gui", "uninstaller"]
+categories = ["development-tools", "command-line-utilities", "gui"]
+exclude = [
+    "target/**",
+    ".github/**",
+    "*.png",
+]
 
 [[bin]]
 name = "installrs"

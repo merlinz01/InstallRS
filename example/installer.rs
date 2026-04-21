@@ -13,18 +13,6 @@ fn init_locale() {
     rust_i18n::set_locale(lang);
 }
 
-/// Translated wizard button labels.
-fn button_labels() -> installrs::gui::ButtonLabels {
-    installrs::gui::ButtonLabels {
-        back: t!("wizard.back").into(),
-        next: t!("wizard.next").into(),
-        install: t!("wizard.install").into(),
-        uninstall: t!("wizard.uninstall").into(),
-        finish: t!("wizard.finish").into(),
-        cancel: t!("wizard.cancel").into(),
-    }
-}
-
 /// Default installation directory, e.g. "C:\Program Files\MyApp" on Windows or "/opt/myapp" on Unix.
 fn default_install_dir() -> &'static str {
     #[cfg(windows)]
@@ -101,7 +89,14 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     InstallerGui::wizard()
         .title(&t!("installer.title"))
-        .buttons(button_labels())
+        .buttons(installrs::gui::ButtonLabels {
+            back: t!("wizard.back").into(),
+            next: t!("wizard.next").into(),
+            install: t!("wizard.install").into(),
+            uninstall: t!("wizard.uninstall").into(),
+            finish: t!("wizard.finish").into(),
+            cancel: t!("wizard.cancel").into(),
+        })
         .on_start(|i| {
             let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
             if i.headless && !auto_yes {
@@ -306,7 +301,14 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 
     InstallerGui::wizard()
         .title(&t!("uninstaller.title"))
-        .buttons(button_labels())
+        .buttons(installrs::gui::ButtonLabels {
+            back: t!("wizard.back").into(),
+            next: t!("wizard.next").into(),
+            install: t!("wizard.install").into(),
+            uninstall: t!("wizard.uninstall").into(),
+            finish: t!("wizard.finish").into(),
+            cancel: t!("wizard.cancel").into(),
+        })
         .on_start(|i| {
             let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
             if i.headless && !auto_yes {

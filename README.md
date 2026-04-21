@@ -277,13 +277,26 @@ installer option by key:
 .custom_page("Settings", "Configure your install:", |p| {
     p.text("username", "Username:", "admin");
     p.password("password", "Password:");
+    p.number("port", "Port:", 8080);
     p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
+    p.radio(
+        "install_type",
+        "Install type:",
+        &[("typical", "Typical"), ("minimal", "Minimal"), ("custom", "Custom")],
+        "typical",
+    );
     p.dropdown(
         "db_backend",
         "Database:",
         &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
         "sqlite",
     );
+    p.file_picker(
+        "license_file", "License file:", "",
+        &[("License", "*.lic;*.key"), ("All files", "*.*")],
+    );
+    p.dir_picker("data_dir", "Data directory:", "");
+    p.multiline("notes", "Notes:", "", 3);
 })
 .on_before_leave(|ctx| {
     let user: String = ctx.installer().get_option("username").unwrap_or_default();

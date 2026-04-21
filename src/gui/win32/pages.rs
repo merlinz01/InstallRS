@@ -723,8 +723,12 @@ impl InstallPage {
 
 enum CustomControl {
     Text { edit: gui::Edit },
+    Number { edit: gui::Edit },
+    Multiline { edit: gui::Edit },
     Checkbox { check: gui::CheckBox },
     Dropdown { combo: gui::ComboBox, values: Vec<String> },
+    Radio { group: gui::RadioGroup, values: Vec<String> },
+    PathPicker { edit: gui::Edit },
 }
 
 pub struct CustomPage {
@@ -732,6 +736,7 @@ pub struct CustomPage {
     _label: gui::Label,
     controls: Vec<(String, CustomControl)>,
     _extras: Vec<gui::Label>,
+    _browse_btns: Vec<gui::Button>,
 }
 
 impl CustomPage {
@@ -770,6 +775,7 @@ impl CustomPage {
         let row_w = width - 2 * PAD;
         let mut controls: Vec<(String, CustomControl)> = Vec::new();
         let mut extras: Vec<gui::Label> = Vec::new();
+        let mut browse_btns: Vec<gui::Button> = Vec::new();
         // Collect per-widget initial states to apply in a single wm_create
         // handler — winsafe only keeps one wm_create registration per parent.
         let mut initial_checks: Vec<(gui::CheckBox, bool)> = Vec::new();
@@ -888,6 +894,276 @@ impl CustomPage {
                     extras.push(lbl_ctl);
                     y += 52;
                 }
+                CustomWidget::Radio {
+                    key,
+                    label: lbl,
+                    choices,
+                    default,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let current = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let values: Vec<String> =
+                        choices.iter().map(|(v, _)| v.clone()).collect();
+                    let opts: Vec<gui::RadioButtonOpts> = choices
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, (val, disp))| gui::RadioButtonOpts {
+                            text: disp.as_str(),
+                            position: gui::dpi(PAD + 8, y + 20 + (idx as i32) * 22),
+                            size: gui::dpi(row_w - 8, 20),
+                            selected: *val == current,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        })
+                        .collect();
+                    let group = gui::RadioGroup::new(parent, &opts);
+                    let row_h = 20 + 22 * choices.len() as i32 + 6;
+                    controls.push((key.clone(), CustomControl::Radio { group, values }));
+                    extras.push(lbl_ctl);
+                    y += row_h;
+                }
+                CustomWidget::Number {
+                    key,
+                    label: lbl,
+                    default,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::Int(n)) => n.to_string(),
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.to_string(),
+                    };
+                    let (ew, eh) = gui::dpi(row_w, 24);
+                    let edit = gui::Edit::new(
+                        parent,
+                        gui::EditOpts {
+                            text: &initial_text,
+                            position: gui::dpi(PAD, y + 20),
+                            width: ew,
+                            height: eh,
+                            control_style: co::ES::AUTOHSCROLL | co::ES::NUMBER,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    controls.push((key.clone(), CustomControl::Number { edit }));
+                    extras.push(lbl_ctl);
+                    y += 52;
+                }
+                CustomWidget::Multiline {
+                    key,
+                    label: lbl,
+                    default,
+                    rows,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    }
+                    .replace("\r\n", "\n")
+                    .replace('\n', "\r\n");
+                    let h = (*rows as i32).max(2) * 18 + 8;
+                    let (ew, eh) = gui::dpi(row_w, h);
+                    let edit = gui::Edit::new(
+                        parent,
+                        gui::EditOpts {
+                            text: &initial_text,
+                            position: gui::dpi(PAD, y + 20),
+                            width: ew,
+                            height: eh,
+                            control_style: co::ES::MULTILINE
+                                | co::ES::AUTOVSCROLL
+                                | co::ES::WANTRETURN,
+                            window_style: co::WS::CHILD
+                                | co::WS::GROUP
+                                | co::WS::TABSTOP
+                                | co::WS::VISIBLE
+                                | co::WS::VSCROLL
+                                | co::WS::BORDER,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    controls.push((key.clone(), CustomControl::Multiline { edit }));
+                    extras.push(lbl_ctl);
+                    y += 20 + h + 6;
+                }
+                CustomWidget::FilePicker {
+                    key,
+                    label: lbl,
+                    default,
+                    filters,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let browse_w = 80;
+                    let edit_w = row_w - browse_w - 10;
+                    let (ew, eh) = gui::dpi(edit_w, 24);
+                    let edit = gui::Edit::new(
+                        parent,
+                        gui::EditOpts {
+                            text: &initial_text,
+                            position: gui::dpi(PAD, y + 20),
+                            width: ew,
+                            height: eh,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let (bw, bh) = gui::dpi(browse_w, 26);
+                    let browse = gui::Button::new(
+                        parent,
+                        gui::ButtonOpts {
+                            text: "Browse...",
+                            position: gui::dpi(PAD + edit_w + 10, y + 19),
+                            width: bw,
+                            height: bh,
+                            resize_behavior: (gui::Horz::Repos, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let edit_c = edit.clone();
+                    let parent_c = parent.clone();
+                    let filters_owned: Vec<(String, String)> = filters.clone();
+                    browse.on().bn_clicked(move || {
+                        let _guard =
+                            winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
+                        let dlg = winsafe::CoCreateInstance::<winsafe::IFileOpenDialog>(
+                            &co::CLSID::FileOpenDialog,
+                            None::<&winsafe::IUnknown>,
+                            co::CLSCTX::INPROC_SERVER,
+                        )?;
+                        if !filters_owned.is_empty() {
+                            let specs: Vec<(&str, &str)> = filters_owned
+                                .iter()
+                                .map(|(d, p)| (d.as_str(), p.as_str()))
+                                .collect();
+                            let _ = dlg.SetFileTypes(&specs);
+                        }
+                        if dlg.Show(parent_c.hwnd())? {
+                            let item = dlg.GetResult()?;
+                            let path = item.GetDisplayName(co::SIGDN::FILESYSPATH)?;
+                            edit_c.set_text(&path)?;
+                        }
+                        Ok(())
+                    });
+                    controls.push((key.clone(), CustomControl::PathPicker { edit }));
+                    extras.push(lbl_ctl);
+                    browse_btns.push(browse);
+                    y += 52;
+                }
+                CustomWidget::DirPicker {
+                    key,
+                    label: lbl,
+                    default,
+                } => {
+                    let lbl_ctl = gui::Label::new(
+                        parent,
+                        gui::LabelOpts {
+                            text: lbl,
+                            position: gui::dpi(PAD, y),
+                            size: gui::dpi(row_w, 18),
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let browse_w = 80;
+                    let edit_w = row_w - browse_w - 10;
+                    let (ew, eh) = gui::dpi(edit_w, 24);
+                    let edit = gui::Edit::new(
+                        parent,
+                        gui::EditOpts {
+                            text: &initial_text,
+                            position: gui::dpi(PAD, y + 20),
+                            width: ew,
+                            height: eh,
+                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let (bw, bh) = gui::dpi(browse_w, 26);
+                    let browse = gui::Button::new(
+                        parent,
+                        gui::ButtonOpts {
+                            text: "Browse...",
+                            position: gui::dpi(PAD + edit_w + 10, y + 19),
+                            width: bw,
+                            height: bh,
+                            resize_behavior: (gui::Horz::Repos, gui::Vert::None),
+                            ..Default::default()
+                        },
+                    );
+                    let edit_c = edit.clone();
+                    let parent_c = parent.clone();
+                    browse.on().bn_clicked(move || {
+                        let _guard =
+                            winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
+                        let dlg = winsafe::CoCreateInstance::<winsafe::IFileOpenDialog>(
+                            &co::CLSID::FileOpenDialog,
+                            None::<&winsafe::IUnknown>,
+                            co::CLSCTX::INPROC_SERVER,
+                        )?;
+                        let opts = dlg.GetOptions()?;
+                        dlg.SetOptions(opts | co::FOS::PICKFOLDERS)?;
+                        if dlg.Show(parent_c.hwnd())? {
+                            let item = dlg.GetResult()?;
+                            let path = item.GetDisplayName(co::SIGDN::FILESYSPATH)?;
+                            edit_c.set_text(&path)?;
+                        }
+                        Ok(())
+                    });
+                    controls.push((key.clone(), CustomControl::PathPicker { edit }));
+                    extras.push(lbl_ctl);
+                    browse_btns.push(browse);
+                    y += 52;
+                }
             }
         }
 
@@ -934,6 +1210,7 @@ impl CustomPage {
             _label: label,
             controls,
             _extras: extras,
+            _browse_btns: browse_btns,
         }
     }
 
@@ -947,11 +1224,27 @@ impl CustomPage {
                 CustomControl::Text { edit } => {
                     crate::OptionValue::String(edit.text().unwrap_or_default())
                 }
+                CustomControl::Number { edit } => {
+                    let t = edit.text().unwrap_or_default();
+                    crate::OptionValue::Int(t.trim().parse::<i64>().unwrap_or(0))
+                }
+                CustomControl::Multiline { edit } => {
+                    let raw = edit.text().unwrap_or_default();
+                    crate::OptionValue::String(raw.replace("\r\n", "\n"))
+                }
                 CustomControl::Checkbox { check } => crate::OptionValue::Bool(check.is_checked()),
                 CustomControl::Dropdown { combo, values } => {
                     let idx = combo.items().selected_index().unwrap_or(0) as usize;
                     let v = values.get(idx).cloned().unwrap_or_default();
                     crate::OptionValue::String(v)
+                }
+                CustomControl::Radio { group, values } => {
+                    let idx = group.selected_index().unwrap_or(0);
+                    let v = values.get(idx).cloned().unwrap_or_default();
+                    crate::OptionValue::String(v)
+                }
+                CustomControl::PathPicker { edit } => {
+                    crate::OptionValue::String(edit.text().unwrap_or_default())
                 }
             };
             out.push((key.clone(), val));

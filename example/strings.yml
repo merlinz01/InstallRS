@@ -180,6 +180,116 @@ installer.error.message:
   de: "Die Installation wurde nicht abgeschlossen. Einzelheiten sind unten aufgeführt."
   es: "La instalación no se completó. Los detalles se muestran a continuación."
 
+installer.account.heading:
+  en: "Administrator Account"
+  de: "Administratorkonto"
+  es: "Cuenta de administrador"
+
+installer.account.label:
+  en: "Create the initial administrator account:"
+  de: "Legen Sie das erste Administratorkonto an:"
+  es: "Cree la cuenta de administrador inicial:"
+
+installer.account.username:
+  en: "Administrator username:"
+  de: "Administrator-Benutzername:"
+  es: "Nombre de usuario del administrador:"
+
+installer.account.password:
+  en: "Administrator password:"
+  de: "Administrator-Passwort:"
+  es: "Contraseña del administrador:"
+
+installer.account.port:
+  en: "Service port:"
+  de: "Dienstport:"
+  es: "Puerto del servicio:"
+
+installer.account.missing_title:
+  en: "Missing field"
+  de: "Fehlendes Feld"
+  es: "Campo obligatorio"
+
+installer.account.missing_message:
+  en: "Please enter an administrator username."
+  de: "Bitte geben Sie einen Administrator-Benutzernamen ein."
+  es: "Por favor, introduzca un nombre de usuario de administrador."
+
+installer.options.heading:
+  en: "Install Options"
+  de: "Installationsoptionen"
+  es: "Opciones de instalación"
+
+installer.options.label:
+  en: "Choose how to configure this install:"
+  de: "Wählen Sie, wie diese Installation konfiguriert werden soll:"
+  es: "Elija cómo configurar esta instalación:"
+
+installer.options.install_type:
+  en: "Install type:"
+  de: "Installationstyp:"
+  es: "Tipo de instalación:"
+
+installer.options.install_type_typical:
+  en: "Typical"
+  de: "Typisch"
+  es: "Típica"
+
+installer.options.install_type_minimal:
+  en: "Minimal"
+  de: "Minimal"
+  es: "Mínima"
+
+installer.options.install_type_custom:
+  en: "Custom"
+  de: "Benutzerdefiniert"
+  es: "Personalizada"
+
+installer.options.desktop_shortcut:
+  en: "Create a desktop shortcut"
+  de: "Desktopverknüpfung erstellen"
+  es: "Crear un acceso directo en el escritorio"
+
+installer.options.db_backend:
+  en: "Database backend:"
+  de: "Datenbank-Backend:"
+  es: "Motor de base de datos:"
+
+installer.paths.heading:
+  en: "Paths & Notes"
+  de: "Pfade und Notizen"
+  es: "Rutas y notas"
+
+installer.paths.label:
+  en: "Extra files and free-form notes:"
+  de: "Zusätzliche Dateien und freie Notizen:"
+  es: "Archivos adicionales y notas libres:"
+
+installer.paths.license_file:
+  en: "License file (optional):"
+  de: "Lizenzdatei (optional):"
+  es: "Archivo de licencia (opcional):"
+
+installer.paths.license_filter:
+  en: "License files"
+  de: "Lizenzdateien"
+  es: "Archivos de licencia"
+
+installer.paths.all_files_filter:
+  en: "All files"
+  de: "Alle Dateien"
+  es: "Todos los archivos"
+
+installer.paths.data_dir:
+  en: "Data directory:"
+  de: "Datenverzeichnis:"
+  es: "Directorio de datos:"
+
+installer.paths.notes:
+  en: "Notes:"
+  de: "Notizen:"
+  es: "Notas:"
+
 uninstaller.title:
   en: "InstallRS Example — Uninstall"
   de: "InstallRS-Beispiel — Deinstallation"

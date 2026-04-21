@@ -387,8 +387,12 @@ impl InstallPage {
 
 enum CustomControl {
     Text(gtk::Entry),
+    Number(gtk::Entry),
+    Multiline(gtk::TextBuffer),
     Checkbox(gtk::CheckButton),
     Dropdown { combo: gtk::ComboBoxText, values: Vec<String> },
+    Radio { buttons: Vec<gtk::RadioButton>, values: Vec<String> },
+    PathPicker(gtk::Entry),
 }
 
 pub struct CustomPage {
@@ -413,15 +417,10 @@ impl CustomPage {
         label.set_halign(gtk::Align::Start);
         vbox.pack_start(&label, false, false, 0);
 
-        let scrolled = gtk::ScrolledWindow::builder()
-            .vexpand(true)
-            .hexpand(true)
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .vscrollbar_policy(gtk::PolicyType::Automatic)
-            .build();
         let inner = gtk::Box::new(gtk::Orientation::Vertical, 6);
         inner.set_margin_top(6);
         inner.set_margin_bottom(6);
+        inner.set_valign(gtk::Align::Start);
 
         let mut controls: Vec<(String, CustomControl)> = Vec::new();
 
@@ -499,11 +498,216 @@ impl CustomPage {
                         CustomControl::Dropdown { combo, values },
                     ));
                 }
+                CustomWidget::Radio {
+                    key,
+                    label: lbl,
+                    choices,
+                    default,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let current = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
+                    let mut buttons: Vec<gtk::RadioButton> = Vec::new();
+                    let rb_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
+                    rb_box.set_margin_start(8);
+                    for (idx, (val, disp)) in choices.iter().enumerate() {
+                        let rb = if idx == 0 {
+                            gtk::RadioButton::with_label(disp)
+                        } else {
+                            gtk::RadioButton::with_label_from_widget(&buttons[0], disp)
+                        };
+                        if *val == current {
+                            rb.set_active(true);
+                        }
+                        rb_box.pack_start(&rb, false, false, 0);
+                        buttons.push(rb);
+                    }
+                    inner.pack_start(&rb_box, false, false, 0);
+                    controls.push((key.clone(), CustomControl::Radio { buttons, values }));
+                }
+                CustomWidget::Number {
+                    key,
+                    label: lbl,
+                    default,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let entry = gtk::Entry::new();
+                    // Restrict to optional sign + digits.
+                    entry.connect_insert_text(|entry, text, position| {
+                        if !text.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                            gtk::glib::signal::signal_stop_emission_by_name(entry, "insert-text");
+                            let _ = position;
+                        }
+                    });
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::Int(n)) => n.to_string(),
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.to_string(),
+                    };
+                    entry.set_text(&initial_text);
+                    inner.pack_start(&entry, false, false, 0);
+                    controls.push((key.clone(), CustomControl::Number(entry)));
+                }
+                CustomWidget::Multiline {
+                    key,
+                    label: lbl,
+                    default,
+                    rows,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let sw = gtk::ScrolledWindow::builder()
+                        .hexpand(true)
+                        .shadow_type(gtk::ShadowType::In)
+                        .min_content_height((*rows as i32).max(2) * 22)
+                        .build();
+                    let tv = gtk::TextView::new();
+                    tv.set_wrap_mode(gtk::WrapMode::WordChar);
+                    tv.set_left_margin(6);
+                    tv.set_right_margin(6);
+                    tv.set_top_margin(4);
+                    tv.set_bottom_margin(4);
+                    let buffer = tv.buffer().expect("TextView has no buffer");
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    buffer.set_text(&initial_text);
+                    sw.add(&tv);
+                    inner.pack_start(&sw, false, false, 0);
+                    controls.push((key.clone(), CustomControl::Multiline(buffer)));
+                }
+                CustomWidget::FilePicker {
+                    key,
+                    label: lbl,
+                    default,
+                    filters,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+                    let entry = gtk::Entry::new();
+                    entry.set_hexpand(true);
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    entry.set_text(&initial_text);
+                    hbox.pack_start(&entry, true, true, 0);
+                    let browse_btn = gtk::Button::with_label("Browse...");
+                    hbox.pack_start(&browse_btn, false, false, 0);
+                    inner.pack_start(&hbox, false, false, 0);
+
+                    let entry_c = entry.clone();
+                    let filters_owned: Vec<(String, String)> = filters.clone();
+                    browse_btn.connect_clicked(move |btn| {
+                        let parent = btn
+                            .toplevel()
+                            .and_then(|w| w.downcast::<gtk::Window>().ok());
+                        let dialog = gtk::FileChooserDialog::with_buttons(
+                            Some("Select File"),
+                            parent.as_ref(),
+                            gtk::FileChooserAction::Open,
+                            &[
+                                ("Cancel", gtk::ResponseType::Cancel),
+                                ("Select", gtk::ResponseType::Accept),
+                            ],
+                        );
+                        for (name, glob) in &filters_owned {
+                            let f = gtk::FileFilter::new();
+                            f.set_name(Some(name));
+                            for pat in glob.split(';') {
+                                let pat = pat.trim();
+                                if !pat.is_empty() {
+                                    f.add_pattern(pat);
+                                }
+                            }
+                            dialog.add_filter(f);
+                        }
+                        if dialog.run() == gtk::ResponseType::Accept {
+                            if let Some(path) = dialog.filename() {
+                                entry_c.set_text(&path.to_string_lossy());
+                            }
+                        }
+                        unsafe {
+                            dialog.destroy();
+                        }
+                    });
+                    controls.push((key.clone(), CustomControl::PathPicker(entry)));
+                }
+                CustomWidget::DirPicker {
+                    key,
+                    label: lbl,
+                    default,
+                } => {
+                    let lbl_ctl = gtk::Label::new(Some(lbl));
+                    lbl_ctl.set_xalign(0.0);
+                    lbl_ctl.set_halign(gtk::Align::Start);
+                    inner.pack_start(&lbl_ctl, false, false, 0);
+
+                    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+                    let entry = gtk::Entry::new();
+                    entry.set_hexpand(true);
+                    let initial_text = match initial.get(key) {
+                        Some(crate::OptionValue::String(s)) => s.clone(),
+                        _ => default.clone(),
+                    };
+                    entry.set_text(&initial_text);
+                    hbox.pack_start(&entry, true, true, 0);
+                    let browse_btn = gtk::Button::with_label("Browse...");
+                    hbox.pack_start(&browse_btn, false, false, 0);
+                    inner.pack_start(&hbox, false, false, 0);
+
+                    let entry_c = entry.clone();
+                    browse_btn.connect_clicked(move |btn| {
+                        let parent = btn
+                            .toplevel()
+                            .and_then(|w| w.downcast::<gtk::Window>().ok());
+                        let dialog = gtk::FileChooserDialog::with_buttons(
+                            Some("Select Folder"),
+                            parent.as_ref(),
+                            gtk::FileChooserAction::SelectFolder,
+                            &[
+                                ("Cancel", gtk::ResponseType::Cancel),
+                                ("Select", gtk::ResponseType::Accept),
+                            ],
+                        );
+                        let current = entry_c.text().to_string();
+                        if !current.is_empty() {
+                            let _ = dialog.set_current_folder(&current);
+                        }
+                        if dialog.run() == gtk::ResponseType::Accept {
+                            if let Some(path) = dialog.filename() {
+                                entry_c.set_text(&path.to_string_lossy());
+                            }
+                        }
+                        unsafe {
+                            dialog.destroy();
+                        }
+                    });
+                    controls.push((key.clone(), CustomControl::PathPicker(entry)));
+                }
             }
         }
 
-        scrolled.add(&inner);
-        vbox.pack_start(&scrolled, true, true, 0);
+        vbox.pack_start(&inner, true, true, 0);
 
         Self {
             widget: vbox,
@@ -521,11 +725,28 @@ impl CustomPage {
         for (key, ctl) in &self.controls {
             let val = match ctl {
                 CustomControl::Text(entry) => crate::OptionValue::String(entry.text().to_string()),
+                CustomControl::Number(entry) => {
+                    let t = entry.text().to_string();
+                    crate::OptionValue::Int(t.trim().parse::<i64>().unwrap_or(0))
+                }
+                CustomControl::Multiline(buffer) => {
+                    let (start, end) = (buffer.start_iter(), buffer.end_iter());
+                    let text = buffer.text(&start, &end, false);
+                    crate::OptionValue::String(text.map(|s| s.to_string()).unwrap_or_default())
+                }
                 CustomControl::Checkbox(check) => crate::OptionValue::Bool(check.is_active()),
                 CustomControl::Dropdown { combo, values } => {
                     let idx = combo.active().unwrap_or(0) as usize;
                     let v = values.get(idx).cloned().unwrap_or_default();
                     crate::OptionValue::String(v)
+                }
+                CustomControl::Radio { buttons, values } => {
+                    let idx = buttons.iter().position(|b| b.is_active()).unwrap_or(0);
+                    let v = values.get(idx).cloned().unwrap_or_default();
+                    crate::OptionValue::String(v)
+                }
+                CustomControl::PathPicker(entry) => {
+                    crate::OptionValue::String(entry.text().to_string())
                 }
             };
             out.push((key.clone(), val));

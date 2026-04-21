@@ -145,18 +145,16 @@ pub fn install(i: &mut Installer) -> Result<()> {
             )
         })
         .custom_page(
-            "Additional Settings",
-            "Tell us a bit more about this install:",
+            &t!("installer.account.heading"),
+            &t!("installer.account.label"),
             |p| {
-                p.text("username", "Administrator username:", "admin");
-                p.password("password", "Administrator password:");
-                p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
-                p.dropdown(
-                    "db_backend",
-                    "Database backend:",
-                    &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
-                    "sqlite",
+                p.text(
+                    "username",
+                    &t!("installer.account.username"),
+                    "admin",
                 );
+                p.password("password", &t!("installer.account.password"));
+                p.number("port", &t!("installer.account.port"), 8080);
             },
         )
         .on_before_leave(|ctx| {
@@ -164,13 +162,62 @@ pub fn install(i: &mut Installer) -> Result<()> {
             let user: String = i.get_option("username").unwrap_or_default();
             if user.trim().is_empty() {
                 let _ = installrs::gui::error(
-                    "Missing field",
-                    "Please enter an administrator username.",
+                    &t!("installer.account.missing_title"),
+                    &t!("installer.account.missing_message"),
                 );
                 return Ok(false);
             }
             Ok(true)
         })
+        .custom_page(
+            &t!("installer.options.heading"),
+            &t!("installer.options.label"),
+            |p| {
+                let typical = t!("installer.options.install_type_typical").to_string();
+                let minimal = t!("installer.options.install_type_minimal").to_string();
+                let custom = t!("installer.options.install_type_custom").to_string();
+                p.radio(
+                    "install_type",
+                    &t!("installer.options.install_type"),
+                    &[
+                        ("typical", typical.as_str()),
+                        ("minimal", minimal.as_str()),
+                        ("custom", custom.as_str()),
+                    ],
+                    "typical",
+                );
+                p.checkbox(
+                    "desktop_shortcut",
+                    &t!("installer.options.desktop_shortcut"),
+                    true,
+                );
+                p.dropdown(
+                    "db_backend",
+                    &t!("installer.options.db_backend"),
+                    &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
+                    "sqlite",
+                );
+            },
+        )
+        .custom_page(
+            &t!("installer.paths.heading"),
+            &t!("installer.paths.label"),
+            |p| {
+                let license_filter = t!("installer.paths.license_filter").to_string();
+                let all_files_filter = t!("installer.paths.all_files_filter").to_string();
+                p.file_picker(
+                    "license_file",
+                    &t!("installer.paths.license_file"),
+                    "",
+                    &[
+                        (license_filter.as_str(), "*.lic;*.key"),
+                        (all_files_filter.as_str(), "*.*"),
+                    ],
+                );
+                p.dir_picker("data_dir", &t!("installer.paths.data_dir"), "");
+                p.multiline("notes", &t!("installer.paths.notes"), "", 3);
+            },
+        )
         .install_page(|ctx| {
             let mut i = ctx.installer();
 

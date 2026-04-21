@@ -72,11 +72,12 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     // Register custom CLI options. `--yes` skips every confirmation prompt
     // (handy for CI / unattended installs); `--install-dir` overrides the
-    // default install location. Both work in GUI and headless modes.
+    // default install location. `--log <path>` is built-in — no need to
+    // register it. All work in GUI and headless modes.
     i.option("yes", OptionKind::Flag);
     i.option("install-dir", OptionKind::String);
 
-    // Parse CLI (--headless, --list-components, --components, etc.).
+    // Parse CLI (--headless, --list-components, --components, --log, etc.).
     i.process_commandline()?;
 
     // Seed the directory picker's default from --install-dir when provided,

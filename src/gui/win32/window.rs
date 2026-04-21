@@ -546,6 +546,7 @@ pub fn run(
             let install_result_timer = install_result.clone();
             let update_timer = update_buttons.clone();
             let make_ctx = make_page_ctx.clone();
+            let installer_log_err = installer.clone();
 
             wnd.on().wm_timer(TIMER_ID, move || {
                 // Drain all pending messages.
@@ -613,6 +614,9 @@ pub fn run(
                                     if let PageKind::Install(ref ip) = pages_guard[idx].kind {
                                         ip.append_log(&format!("Error: {err_msg}"));
                                     }
+                                }
+                                if let Err(ref e) = result {
+                                    installer_log_err.lock().unwrap().log_error(e);
                                 }
                                 *install_result_timer.lock().unwrap() = Some(result);
 

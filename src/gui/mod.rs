@@ -351,6 +351,11 @@ impl InstallerGui {
             Ok(())
         })();
 
+        // If the install failed, mirror the error to the log file (if any).
+        if let Err(ref e) = result {
+            installer_arc.lock().unwrap().log_error(e);
+        }
+
         // Detach sink and close the channel so the drainer exits.
         installer_arc.lock().unwrap().clear_progress_sink();
         drop(tx);

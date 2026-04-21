@@ -421,6 +421,7 @@ pub fn run(
         let update = update_buttons.clone();
         let make_ctx_c = make_ctx.clone();
         let stack_c = stack.clone();
+        let installer_log_err = installer.clone();
 
         glib::timeout_add_local(Duration::from_millis(50), move || {
             loop {
@@ -477,6 +478,9 @@ pub fn run(
                                 if let PageKind::Install(ref ip) = pages_b[idx].kind {
                                     ip.append_log(&format!("Error: {err_msg}"));
                                 }
+                            }
+                            if let Err(ref e) = result {
+                                installer_log_err.lock().unwrap().log_error(e);
                             }
                             *install_result_c.borrow_mut() = Some(result);
 

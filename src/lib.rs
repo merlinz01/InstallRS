@@ -136,6 +136,7 @@ pub struct Installer {
     cancelled: Arc<AtomicBool>,
     options: Vec<CmdOption>,
     option_values: std::collections::HashMap<String, OptionValue>,
+    log_file: Option<Mutex<std::fs::File>>,
 }
 
 /// Declared shape of a user-defined command-line option. Register via
@@ -316,6 +317,53 @@ impl Installer {
             cancelled: Arc::new(AtomicBool::new(false)),
             options: Vec::new(),
             option_values: std::collections::HashMap::new(),
+            log_file: None,
+        }
+    }
+
+    /// Open a log file. Every subsequent `status` / `log` / error surfaced
+    /// by the installer (via [`ProgressSink`] or the wizard) is also
+    /// appended to this file, in the same format used by `--headless`
+    /// stderr output (`[*] <status>`, `    <log>`, `[ERROR] <msg>`).
+    ///
+    /// The file is opened with `create + append`, so repeated runs build a
+    /// chronological history. Call [`Installer::clear_log_file`] to stop
+    /// logging. Errors only on file-open failure; subsequent write errors
+    /// are silently swallowed so a broken log pipe can't derail an install.
+    pub fn set_log_file(&mut self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        use std::fs::OpenOptions;
+        let path = path.as_ref();
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .with_context(|| format!("failed to open log file {}", path.display()))?;
+        self.log_file = Some(Mutex::new(file));
+        // Write a session-start marker so multiple runs are easy to tell apart.
+        self.write_log_line(&format!(
+            "--- install session started (pid {}) ---",
+            std::process::id()
+        ));
+        Ok(())
+    }
+
+    /// Stop writing to the log file (if one was opened).
+    pub fn clear_log_file(&mut self) {
+        self.log_file = None;
+    }
+
+    /// Record an error to the log file (no-op if no file is set). Called
+    /// automatically by the wizard and headless runner on install failure.
+    pub fn log_error(&self, err: &anyhow::Error) {
+        self.write_log_line(&format!("[ERROR] {err:#}"));
+    }
+
+    fn write_log_line(&self, line: &str) {
+        if let Some(f) = &self.log_file {
+            if let Ok(mut f) = f.lock() {
+                use std::io::Write;
+                let _ = writeln!(f, "{line}");
+            }
         }
     }
 
@@ -496,6 +544,8 @@ impl Installer {
     /// - `--components a,b,c` — install exactly this set (plus required)
     /// - `--with a,b` — enable these in addition to defaults
     /// - `--without a,b` — disable these (required cannot be disabled)
+    /// - `--log <path>` — tee all status / log / error messages to a file
+    ///   (append mode; see [`Installer::set_log_file`])
     ///
     /// Returns an error on unknown component ids or unknown flags. Register
     /// custom flags via [`Installer::option`] before calling this.
@@ -543,6 +593,10 @@ impl Installer {
                 "--without" => {
                     let v = take_val(&mut i)?;
                     without.extend(v.split(',').map(|s| s.trim().to_string()));
+                }
+                "--log" => {
+                    let v = take_val(&mut i)?;
+                    self.set_log_file(&v)?;
                 }
                 _ => {
                     // User-defined option? Strip the leading `--`.
@@ -758,14 +812,20 @@ impl Installer {
     }
 
     fn emit_status(&self, status: &Option<String>) {
-        if let (Some(sink), Some(s)) = (self.sink.as_ref(), status.as_ref()) {
-            sink.set_status(s);
+        if let Some(s) = status.as_ref() {
+            if let Some(sink) = self.sink.as_ref() {
+                sink.set_status(s);
+            }
+            self.write_log_line(&format!("[*] {s}"));
         }
     }
 
     fn emit_log(&self, log: &Option<String>) {
-        if let (Some(sink), Some(l)) = (self.sink.as_ref(), log.as_ref()) {
-            sink.log(l);
+        if let Some(l) = log.as_ref() {
+            if let Some(sink) = self.sink.as_ref() {
+                sink.log(l);
+            }
+            self.write_log_line(&format!("    {l}"));
         }
     }
 
@@ -2055,5 +2115,29 @@ mod tests {
         i.option("verbose", OptionKind::Flag);
         let args = vec!["installer".into(), "--verbose=true".into()];
         assert!(i.process_commandline_from(&args).is_err());
+    }
+
+    #[test]
+    fn log_file_captures_status_log_and_error() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let log_path = tmp.path().join("install.log");
+        let mut i = make_bare_installer();
+        let args = vec![
+            "installer".into(),
+            "--log".into(),
+            log_path.to_str().unwrap().into(),
+        ];
+        i.process_commandline_from(&args).unwrap();
+
+        i.emit_status(&Some("Installing foo".into()));
+        i.emit_log(&Some("wrote foo.exe".into()));
+        i.log_error(&anyhow!("disk full"));
+        i.clear_log_file();
+
+        let contents = std::fs::read_to_string(&log_path).unwrap();
+        assert!(contents.contains("install session started"));
+        assert!(contents.contains("[*] Installing foo"));
+        assert!(contents.contains("    wrote foo.exe"));
+        assert!(contents.contains("[ERROR] disk full"));
     }
 }

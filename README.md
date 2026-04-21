@@ -133,7 +133,9 @@ the sink.
 | `component(id, label)`                              | Register an optional component (returns `&mut Component` for chaining)                                             |
 | `is_component_selected(id)`                         | Check whether a component is currently selected                                                                    |
 | `set_component_selected(id, on)`                    | Force a component on/off (required components ignore off)                                                          |
-| `process_commandline()`                             | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without` + any registered user options from argv; errors on unknown flags |
+| `process_commandline()`                             | **Required.** Parse `--headless`/`--list-components`/`--components`/`--with`/`--without`/`--log` + any registered user options from argv; errors on unknown flags |
+| `set_log_file(path)` / `clear_log_file()`           | Tee status / log / error messages to a file (or stop). Built-in `--log <path>` calls `set_log_file` for you                                         |
+| `log_error(&err)`                                   | Manually record an error line to the log file (wizard + headless runners call this automatically on install failure)                                |
 | `option(name, kind)`                                | Register a user-defined CLI option (`OptionKind::Flag`/`String`/`Int`/`Bool`). Read after parse with `get_option`   |
 | `get_option::<T>(name)`                             | Typed accessor for a parsed user option; `T: FromOptionValue` (`bool`, `String`, `i64`, `i32`, `u64`, `u32`)         |
 | `option_value(name)`                                | Raw `&OptionValue` for a parsed user option, or `None`                                                              |
@@ -173,6 +175,9 @@ command line:
 - `--list-components` — print available components and exit 0
 - `--components a,b,c` — install exactly this set (required always included)
 - `--with a,b` / `--without c` — delta from defaults
+- `--log <path>` — tee every `status` / `log` / error message to a file
+  (append mode). Format: `[*] <status>`, `    <log>`, `[ERROR] <msg>` — the
+  same format used for `--headless` stderr output
 
 **All installers must call `i.process_commandline()?`** after registering
 components (before running the wizard or doing headless work). This parses

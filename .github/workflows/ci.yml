@@ -119,6 +119,11 @@ jobs:
           version: 1.0-example
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: |
+            . -> target
+            example/build/installer -> target
+            example/build/uninstaller -> target
       - name: Build CLI
         run: cargo build --release
       - name: Build example installer

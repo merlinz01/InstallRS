@@ -12,6 +12,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Removed
+
+- `Installer::exec_shell()`. Use `std::process::Command` directly;
+  call `i.step("label", weight)` beforehand if you want a labeled
+  progress step.
+
 ## [0.1.0-rc5] — 2026-04-22
 
 ### Fixed

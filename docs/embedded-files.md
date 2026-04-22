@@ -50,7 +50,6 @@ Every install operation returns a builder that terminates with
 | `mkdir(dest)`         | Create a directory.                  |
 | `uninstaller(dest)`   | Write the uninstaller executable.    |
 | `remove(path)`        | Remove a file or directory.          |
-| `exec_shell(cmd)`     | Run a shell command (blocking).      |
 
 Common chainable options on the builders:
 

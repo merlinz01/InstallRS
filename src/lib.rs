@@ -1042,24 +1042,6 @@ impl Installer {
         Ok(p.exists())
     }
 
-    /// Run a shell command via the system shell and wait for it to complete.
-    pub fn exec_shell(&self, command: &str) -> Result<()> {
-        let status = if cfg!(target_os = "windows") {
-            std::process::Command::new("cmd")
-                .args(["/C", command])
-                .status()
-        } else {
-            std::process::Command::new("sh")
-                .args(["-c", command])
-                .status()
-        };
-        let status = status.with_context(|| format!("failed to spawn: {command}"))?;
-        if !status.success() {
-            return Err(anyhow!("command exited with {status}: {command}"));
-        }
-        Ok(())
-    }
-
     /// Enable self-deletion of the executable after it finishes.
     ///
     /// On Windows this copies the running executable to a temporary directory and

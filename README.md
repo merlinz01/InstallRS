@@ -102,7 +102,7 @@ and headless mode — the best way to see the whole system in action.
 - [Building for production](docs/building.md) — cross-compilation, size and speed tuning,
   reproducibility, code signing, release CI.
 - [Embedded files, builder ops, and progress](docs/embedded-files.md) — the `source!` macro,
-  the fluent `file` / `dir` / `remove` / `exec_shell` / `step` API, and the progress model.
+  the fluent `file` / `dir` / `remove` / `step` API, and the progress model.
 - [GUI Wizard](docs/gui-wizard.md) — wizard builder, custom pages, dialogs, headless mode.
 - [Components and CLI options](docs/components-and-cli.md) — selectable features plus custom `--flags`.
 - [Internationalization](docs/internationalization.md) — translating wizard strings,

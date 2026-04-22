@@ -98,6 +98,7 @@ and headless mode — the best way to see the whole system in action.
 - [Windows Resources](docs/windows-resources.md) — icons, version info, UAC manifests.
 - [Architecture](docs/architecture.md) — how the codebase is organized and what the generated installer crates look like.
 - [API reference on docs.rs](https://docs.rs/installrs) — every public type and method.
+- [Changelog](CHANGELOG.md) — release history.
 
 ## Requirements
 

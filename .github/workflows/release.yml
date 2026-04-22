@@ -131,10 +131,25 @@ jobs:
           pattern: binary-*
           merge-multiple: true
           path: dist
+      - name: Extract changelog section for this tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Pull everything between `## [X.Y.Z]` and the next `## [...]` heading.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::No CHANGELOG.md section found for version $VERSION" >&2
+            exit 1
+          fi
+          cat release-notes.md
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
             --generate-notes

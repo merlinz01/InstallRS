@@ -1,0 +1,233 @@
+<!-- markdownlint-configure-file { "MD013": { "line_length": 100 } } -->
+
+# GUI Wizard
+
+InstallRS ships an optional native wizard — Win32 on Windows, GTK3 on
+Linux — with welcome / license / components / directory picker / install
+/ finish / error pages, plus custom pages for arbitrary text inputs,
+checkboxes, dropdowns, and file pickers. The same wizard definition runs
+headless with `--headless`, so you have one code path for both modes.
+
+## Enabling the wizard
+
+Set `gui = true` in your installer crate's `Cargo.toml`:
+
+```toml
+[package.metadata.installrs]
+gui = true
+```
+
+That injects the `gui` feature plus the platform backend (`gui-win32` on
+Windows targets, `gui-gtk` on Linux).
+
+On Linux, the **build host** needs GTK3 dev headers:
+
+- Debian/Ubuntu: `libgtk-3-dev`
+- Fedora/RHEL: `gtk3-devel`
+
+Target systems need the GTK3 runtime (`libgtk-3-0` on Debian/Ubuntu, or
+equivalent) — present by default on virtually all desktop distros.
+
+Windows has no extra system dependency at build or runtime.
+
+## Wizard builder
+
+Build the wizard with `InstallerGui::wizard()` and chain page methods:
+
+```rust
+use installrs::gui::*;
+
+InstallerGui::wizard()
+    .title("My App Installer")
+    .welcome("Welcome!", "Click Next to continue.")
+    .license("License Agreement", include_str!("../LICENSE"), "I accept")
+    .components_page("Select Components", "Choose features to install:")
+    .directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
+    .on_before_leave(|ctx| {
+        confirm("Confirm", &format!("Install to {}?", ctx.install_dir()))
+    })
+    .install_page(|ctx| {
+        let mut i = ctx.installer();
+        i.file(source!("app.exe"), "app.exe").install()?;
+        if i.is_component_selected("docs") {
+            i.dir(source!("docs"), "docs").install()?;
+        }
+        i.uninstaller("uninstall.exe").install()?;
+        Ok(())
+    })
+    .finish_page("Done!", "Click Finish to exit.")
+    .error_page(
+        "Installation Failed",
+        "The installation did not complete. Details are shown below.",
+    )
+    .run(i)?;
+```
+
+Pages appear in the order you add them. Each page method returns the
+builder, so you can chain `.on_enter(...)` and `.on_before_leave(...)`
+callbacks on the just-added page.
+
+### Error page
+
+If the install callback returns `Err` (including cancellation via the
+Cancel button or Ctrl+C), the wizard navigates to the error page. The
+provided `message` sits above an auto-populated text area showing the
+actual error string. Without an `.error_page(...)`, failures fall back to
+a native modal error dialog.
+
+### Uninstall flow
+
+For uninstallers, use `.uninstall_page(cb)` instead of `.install_page(cb)`.
+Behaves identically but the preceding Next button renders
+`ButtonLabels::uninstall` (default `"Uninstall"`) instead of
+`ButtonLabels::install` — so users see "Uninstall" rather than "Install"
+on the button that kicks off the operation.
+
+### Forward-only callbacks
+
+`on_enter` and `on_before_leave` fire only on forward navigation. The
+Back button walks backwards without re-running either callback, so you
+won't prompt the user for confirmation when they're just retreating.
+
+### Translatable buttons
+
+Customize button labels via `.buttons(...)`:
+
+```rust
+.buttons(ButtonLabels {
+    back: "Atrás".into(),
+    next: "Siguiente".into(),
+    install: "Instalar".into(),
+    uninstall: "Desinstalar".into(),
+    finish: "Finalizar".into(),
+    cancel: "Cancelar".into(),
+})
+```
+
+## Custom pages
+
+`.custom_page(heading, label, |p| { ... })` lays out a column of simple
+widgets — text fields, passwords, numbers, multiline, checkboxes, radio
+groups, dropdowns, and file/directory pickers — each bound to an
+installer option by key:
+
+```rust
+.custom_page("Settings", "Configure your install:", |p| {
+    p.text("username", "Username:", "admin");
+    p.password("password", "Password:");
+    p.number("port", "Port:", 8080);
+    p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
+    p.radio(
+        "install_type",
+        "Install type:",
+        &[("typical", "Typical"), ("minimal", "Minimal"), ("custom", "Custom")],
+        "typical",
+    );
+    p.dropdown(
+        "db_backend",
+        "Database:",
+        &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
+        "sqlite",
+    );
+    p.file_picker(
+        "license_file",
+        "License file:",
+        "",
+        &[("License", "*.lic;*.key"), ("All files", "*.*")],
+    );
+    p.dir_picker("data_dir", "Data directory:", "");
+    p.multiline("notes", "Notes:", "", 3);
+})
+.on_before_leave(|ctx| {
+    let user: String = ctx.installer().get_option("username").unwrap_or_default();
+    if user.trim().is_empty() {
+        let _ = installrs::gui::error("Required", "Please enter a username.");
+        return Ok(false);
+    }
+    Ok(true)
+})
+```
+
+Widgets pre-fill from the options store on entry and write back on
+forward navigation — so `--username=alice` on the command line pre-fills
+the field (as long as you registered the option via
+`i.option("username", OptionKind::String)` before `process_commandline`).
+Validation lives in `on_before_leave`: return `Ok(false)` to keep the
+user on the page.
+
+Splitting widgets across multiple custom pages is fine — each
+`.custom_page(...)` call adds a new page.
+
+## Native dialogs
+
+For one-off prompts outside the wizard flow:
+
+```rust
+installrs::gui::info("Done", "Installation complete.")?;
+installrs::gui::warn("Heads up", "Restarting in 30s...")?;
+installrs::gui::error("Failed", "Couldn't write to registry.")?;
+let ok = installrs::gui::confirm("Really?", "Proceed with uninstall?")?;
+```
+
+These wrap `MessageBox` (Win32) or `gtk::MessageDialog` (GTK3), parented
+to the current active window if any.
+
+## Pre-wizard language selector
+
+For i18n setups where you want the user to pick a language _before_ the
+wizard builds (page strings get captured eagerly, so the locale must be
+final):
+
+```rust
+init_locale(); // read system locale
+if let Some(code) = installrs::gui::choose_language(
+    &t!("installer.language.title"), // already localized
+    &t!("installer.language.prompt"),
+    &[("en", "English"), ("es", "Español"), ("de", "Deutsch")],
+    Some(&rust_i18n::locale()),
+)? {
+    rust_i18n::set_locale(&code);
+}
+InstallerGui::wizard()
+    .title(&t!("installer.title")) // now uses chosen locale
+    // ...
+```
+
+Returns the selected code, or `None` if the user cancelled the dialog.
+
+## Headless mode
+
+When the user passes `--headless`, `i.process_commandline()` flips
+`installer.headless = true`, and `InstallerGui::run()` skips the window
+entirely — running the `install_page` callback inline on the current
+thread. Status and log messages stream to stderr instead of an in-window
+log.
+
+The same wizard definition serves both modes. Use `.on_start(...)` and
+`.on_exit(...)` for setup and cleanup that must happen either way:
+
+```rust
+InstallerGui::wizard()
+    .on_start(|i| {
+        if i.headless {
+            eprintln!("Running headless install...");
+        }
+        Ok(())
+    })
+    .on_exit(|i| {
+        if i.headless {
+            eprintln!("Done.");
+        }
+        Ok(())
+    })
+    // ... pages ...
+    .install_page(|ctx| {
+        // runs in both modes
+        Ok(())
+    })
+    .run(i)?;
+```
+
+`on_start` runs before the window opens (or before the install callback
+in headless mode). `on_exit` runs after the window closes (or after
+install in headless mode) — **even if the install failed**.

@@ -165,6 +165,16 @@ installer.install.log_uninstaller:
   de: "Deinstallationsprogramm wird geschrieben..."
   es: "Escribiendo el desinstalador..."
 
+installer.install.log_shortcut:
+  en: "Creating Start Menu shortcut..."
+  de: "Verknüpfung im Startmenü wird erstellt..."
+  es: "Creando acceso directo en el menú Inicio..."
+
+installer.install.log_registry:
+  en: "Registering with Add/Remove Programs..."
+  de: "Registrierung in Programme und Features..."
+  es: "Registrando en Agregar o quitar programas..."
+
 installer.finish.title:
   en: "Installation Complete!"
   de: "Installation abgeschlossen!"

@@ -282,6 +282,71 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 .log(t!("installer.install.log_uninstaller"))
                 .install()?;
 
+            // Windows polish: Start Menu shortcut + Add/Remove Programs
+            // registration. The shortcut points at the uninstaller so the
+            // example is clickable; a real installer would point it at the
+            // installed app's main executable.
+            #[cfg(windows)]
+            {
+                use installrs::RegistryHive::LocalMachine;
+
+                let program_data =
+                    std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
+                let start_menu = format!(
+                    r"{program_data}\Microsoft\Windows\Start Menu\Programs\InstallRS Example"
+                );
+                let shortcut_path = format!(r"{start_menu}\InstallRS Example.lnk");
+                let uninstaller_path = format!(r"{out_dir}\uninstall.exe");
+
+                i.shortcut(&shortcut_path, &uninstaller_path)
+                    .description("Uninstall InstallRS Example")
+                    .working_dir(&out_dir)
+                    .log(t!("installer.install.log_shortcut"))
+                    .install()?;
+
+                const UNINSTALL_KEY: &str =
+                    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
+                let quoted_uninstaller = format!("\"{uninstaller_path}\"");
+
+                i.registry()
+                    .set(
+                        LocalMachine,
+                        UNINSTALL_KEY,
+                        "DisplayName",
+                        "InstallRS Example",
+                    )
+                    .log(t!("installer.install.log_registry"))
+                    .install()?;
+                i.registry()
+                    .set(LocalMachine, UNINSTALL_KEY, "DisplayVersion", "0.1.0")
+                    .install()?;
+                i.registry()
+                    .set(LocalMachine, UNINSTALL_KEY, "Publisher", "InstallRS")
+                    .install()?;
+                i.registry()
+                    .set(
+                        LocalMachine,
+                        UNINSTALL_KEY,
+                        "InstallLocation",
+                        out_dir.as_str(),
+                    )
+                    .install()?;
+                i.registry()
+                    .set(
+                        LocalMachine,
+                        UNINSTALL_KEY,
+                        "UninstallString",
+                        quoted_uninstaller.as_str(),
+                    )
+                    .install()?;
+                i.registry()
+                    .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoModify", 1)
+                    .install()?;
+                i.registry()
+                    .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoRepair", 1)
+                    .install()?;
+            }
+
             ctx.set_status(&t!("installer.install.status_complete"));
             Ok(())
         })
@@ -344,6 +409,26 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         )
         .uninstall_page(|ctx| {
             let mut i = ctx.installer();
+
+            #[cfg(windows)]
+            {
+                use installrs::RegistryHive::LocalMachine;
+
+                let program_data =
+                    std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
+                let shortcut_dir = format!(
+                    r"{program_data}\Microsoft\Windows\Start Menu\Programs\InstallRS Example"
+                );
+                i.remove(shortcut_dir).install()?;
+
+                i.registry()
+                    .remove(
+                        LocalMachine,
+                        r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample",
+                    )
+                    .recursive()
+                    .install()?;
+            }
 
             i.remove(install_dir)
                 .status(t!("uninstaller.status_removing"))

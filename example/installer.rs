@@ -203,6 +203,20 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 );
             },
         )
+        // Extra info page, only shown when the user selected "custom" on
+        // the install-type radio. Demonstrates `.skip_if(|ctx| bool)` —
+        // evaluated each time the wizard navigates past, so the page
+        // appears or hides based on the live option value.
+        .welcome(
+            &t!("installer.custom_info.title"),
+            &t!("installer.custom_info.message"),
+        )
+        .skip_if(|ctx| {
+            ctx.installer()
+                .get_option::<String>("install_type")
+                .as_deref()
+                != Some("custom")
+        })
         .custom_page(
             &t!("installer.paths.heading"),
             &t!("installer.paths.label"),

@@ -15,6 +15,12 @@ pub type OnEnterCallback = Box<dyn Fn(&mut PageContext) -> Result<()> + 'static>
 /// fire this callback.
 pub type OnBeforeLeaveCallback = Box<dyn Fn(&mut PageContext) -> Result<bool> + 'static>;
 
+/// Pure predicate: returns `true` to hide the page. Evaluated every time
+/// the wizard navigates past it, so the outcome can change mid-wizard as
+/// installer state (options, component selection, etc.) evolves. Must not
+/// mutate state — run side effects from `on_enter` instead.
+pub type SkipIfCallback = Box<dyn Fn(&PageContext) -> bool + 'static>;
+
 /// Callback that runs at wizard startup (before the window is shown, or
 /// before the install callback fires in headless mode). Inspect
 /// `installer.headless` to branch on mode.
@@ -39,6 +45,7 @@ pub struct ConfiguredPage {
     pub page: WizardPage,
     pub on_enter: Option<OnEnterCallback>,
     pub on_before_leave: Option<OnBeforeLeaveCallback>,
+    pub skip_if: Option<SkipIfCallback>,
 }
 
 impl ConfiguredPage {
@@ -47,6 +54,7 @@ impl ConfiguredPage {
             page,
             on_enter: None,
             on_before_leave: None,
+            skip_if: None,
         }
     }
 }

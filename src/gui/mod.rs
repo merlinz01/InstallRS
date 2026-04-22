@@ -352,6 +352,33 @@ impl InstallerGui {
         self
     }
 
+    /// Attach a `skip_if` predicate to the most recently added page.
+    ///
+    /// The predicate is evaluated every time the wizard navigates past the
+    /// page. Returning `true` hides it — the user never sees it, and
+    /// `on_enter` / `on_before_leave` don't fire for hidden pages. Must be
+    /// pure: side effects belong in `on_enter`.
+    ///
+    /// Works in both directions: if you hide a page on forward nav, the
+    /// Back button also skips over it.
+    ///
+    /// ```rust,ignore
+    /// .license("License", include_str!("../LICENSE"), "I accept")
+    /// .skip_if(|ctx| ctx.installer().get_option::<bool>("accept-license").unwrap_or(false))
+    ///
+    /// .directory_picker("Install Location", "Install to:", default_dir)
+    /// .skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some())
+    /// ```
+    pub fn skip_if<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&PageContext) -> bool + 'static,
+    {
+        if let Some(last) = self.config.pages.last_mut() {
+            last.skip_if = Some(Box::new(f));
+        }
+        self
+    }
+
     /// Run the wizard GUI. This blocks until the user closes the window.
     ///
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.

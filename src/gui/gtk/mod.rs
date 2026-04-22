@@ -70,6 +70,7 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
             page,
             on_enter,
             on_before_leave,
+            skip_if,
         } = configured;
         let page = match page {
             WizardPage::Install {
@@ -88,6 +89,7 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
             page,
             on_enter,
             on_before_leave,
+            skip_if,
         });
     }
 

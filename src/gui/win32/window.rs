@@ -23,12 +23,41 @@ const BUTTON_WIDTH: i32 = 80;
 const BUTTON_HEIGHT: i32 = 26;
 const MARGIN: i32 = 10;
 
+/// Find the next visible page strictly after `from`. Evaluates each
+/// candidate's `skip_if` predicate; returns None if every remaining page
+/// is hidden or `from` is already at the end.
+fn next_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<usize> {
+    let mut i = from.checked_add(1)?;
+    while i < pages.len() {
+        if pages[i].skip_if.as_ref().is_some_and(|p| p(ctx)) {
+            i = i.checked_add(1)?;
+        } else {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Find the previous visible page strictly before `from`. Returns None
+/// when every earlier page is hidden or `from` is already at the start.
+fn prev_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<usize> {
+    let mut i = from.checked_sub(1)?;
+    loop {
+        if pages[i].skip_if.as_ref().is_some_and(|p| p(ctx)) {
+            i = i.checked_sub(1)?;
+        } else {
+            return Some(i);
+        }
+    }
+}
+
 /// Page wrapper that holds the panel, its kind, and navigation callbacks.
 struct Page {
     panel: gui::WindowControl,
     kind: PageKind,
     on_enter: Option<OnEnterCallback>,
     on_before_leave: Option<OnBeforeLeaveCallback>,
+    skip_if: Option<crate::gui::types::SkipIfCallback>,
     /// Only meaningful for `PageKind::Install` — when true, the Next button
     /// leading into / shown on this page uses `buttons.uninstall`.
     is_uninstall: bool,
@@ -81,6 +110,7 @@ pub fn run(
             page: page_cfg,
             on_enter,
             on_before_leave,
+            skip_if,
         } = configured;
         let visible = idx == 0;
         let panel = gui::WindowControl::new(
@@ -193,6 +223,7 @@ pub fn run(
             kind,
             on_enter,
             on_before_leave,
+            skip_if,
             is_uninstall: page_is_uninstall,
         });
     }
@@ -238,7 +269,6 @@ pub fn run(
         },
     );
 
-    let page_count = pages.len();
     let current_page = Arc::new(Mutex::new(0usize));
     let pages = Rc::new(Mutex::new(pages));
     let install_callback = Arc::new(Mutex::new(install_callback));
@@ -246,6 +276,21 @@ pub fn run(
     let install_result: Arc<Mutex<Option<Result<()>>>> = Arc::new(Mutex::new(None));
     let install_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>> =
         Arc::new(Mutex::new(None));
+
+    // Helper: build a fresh PageContext for callbacks. Defined early so
+    // `update_buttons` can use it when evaluating `skip_if` predicates.
+    let make_page_ctx = {
+        let installer_c = installer.clone();
+        let install_dir_c = install_dir.clone();
+        let cancelled_c = cancelled.clone();
+        Arc::new(move || {
+            PageContext::new(
+                installer_c.clone(),
+                install_dir_c.clone(),
+                cancelled_c.clone(),
+            )
+        })
+    };
 
     // Helper: update button states for the current page.
     {
@@ -259,6 +304,7 @@ pub fn run(
         let label_install = config.buttons.install.clone();
         let label_uninstall = config.buttons.uninstall.clone();
         let label_finish = config.buttons.finish.clone();
+        let make_ctx_btn = make_page_ctx.clone();
 
         let update_buttons = move || {
             let idx = *current_c.lock().unwrap();
@@ -268,15 +314,18 @@ pub fn run(
             let is_finish = matches!(&pages_guard[idx].kind, PageKind::Finish(_));
             let is_error = matches!(&pages_guard[idx].kind, PageKind::Error(_));
             let is_terminal = is_finish || is_error;
-            let next_is_install = idx + 1 < pages_guard.len()
-                && matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
+            let ctx = make_ctx_btn();
+            let next_idx = next_visible_page(&pages_guard, idx, &ctx);
+            let next_is_install = next_idx
+                .map(|i| matches!(&pages_guard[i].kind, PageKind::Install(_)))
+                .unwrap_or(false);
             // Pull the uninstall flag off whichever install page the button
             // currently refers to (the current one, or the one we're about
             // to advance into).
             let install_is_uninstall = if is_install {
                 pages_guard[idx].is_uninstall
-            } else if next_is_install {
-                pages_guard[idx + 1].is_uninstall
+            } else if let Some(i) = next_idx.filter(|_| next_is_install) {
+                pages_guard[i].is_uninstall
             } else {
                 false
             };
@@ -366,25 +415,12 @@ pub fn run(
             }
         }
 
-        // Helper to build a fresh PageContext for callbacks.
-        let make_page_ctx = {
-            let installer_c = installer.clone();
-            let install_dir_c = install_dir.clone();
-            let cancelled_c = cancelled.clone();
-            Arc::new(move || {
-                PageContext::new(
-                    installer_c.clone(),
-                    install_dir_c.clone(),
-                    cancelled_c.clone(),
-                )
-            })
-        };
-
         // Wire up button clicks.
         {
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let update = update_buttons.clone();
+            let make_ctx = make_page_ctx.clone();
             btn_back.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
                 if idx == 0 {
@@ -394,8 +430,11 @@ pub fn run(
                 // on_before_leave / on_enter are intentionally skipped on
                 // backward navigation — they fire only on forward moves.
                 let pages_guard = pages_c.lock().unwrap();
+                let ctx = make_ctx();
+                let Some(new_idx) = prev_visible_page(&pages_guard, idx, &ctx) else {
+                    return Ok(());
+                };
                 pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
-                let new_idx = idx - 1;
                 pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                 drop(pages_guard);
                 *current_c.lock().unwrap() = new_idx;
@@ -469,12 +508,12 @@ pub fn run(
                     return Ok(());
                 }
 
-                // Advance to next page.
-                if idx + 1 < page_count {
+                // Advance to next visible page.
+                let ctx_tmp = make_ctx();
+                if let Some(new_idx) = next_visible_page(&pages_guard, idx, &ctx_tmp) {
                     let next_is_install =
-                        matches!(&pages_guard[idx + 1].kind, PageKind::Install(_));
+                        matches!(&pages_guard[new_idx].kind, PageKind::Install(_));
                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
-                    let new_idx = idx + 1;
                     pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                     drop(pages_guard);
                     *current_c.lock().unwrap() = new_idx;
@@ -604,12 +643,14 @@ pub fn run(
 
                             if is_ok {
                                 *install_result_timer.lock().unwrap() = Some(result);
-                                // Advance to the next page (finish page).
+                                // Advance to the next visible page (finish page).
                                 let pages_guard = pages_timer.lock().unwrap();
                                 let idx = *current_timer.lock().unwrap();
-                                if idx + 1 < page_count {
+                                let ctx_tmp = make_ctx();
+                                if let Some(new_idx) =
+                                    next_visible_page(&pages_guard, idx, &ctx_tmp)
+                                {
                                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
-                                    let new_idx = idx + 1;
                                     pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                                     drop(pages_guard);
                                     *current_timer.lock().unwrap() = new_idx;

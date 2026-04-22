@@ -89,6 +89,35 @@ on the button that kicks off the operation.
 Back button walks backwards without re-running either callback, so you
 won't prompt the user for confirmation when they're just retreating.
 
+### Dynamic page skipping
+
+Chain `.skip_if(|ctx| bool)` on any page to hide it when the predicate
+returns `true`. The wizard evaluates the predicate each time it
+navigates past the page, so the outcome can change mid-install as
+options or component selections evolve. Both the Next and Back buttons
+respect the skip — a page hidden on forward nav is also skipped on
+backward nav, so the user can't get stranded on it.
+
+Common pattern: skip pages whose input has already been supplied via
+CLI flags:
+
+```rust
+.license("License", include_str!("../LICENSE"), "I accept")
+.skip_if(|ctx| ctx.installer().get_option::<bool>("accept-license").unwrap_or(false))
+
+.directory_picker("Install Location", "Install to:", default_dir)
+.skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some())
+```
+
+The predicate must be **pure** — no side effects, no I/O. Side effects
+belong in `on_enter`, which only fires for pages the user actually
+sees. Skipped pages don't fire `on_enter` or `on_before_leave`.
+
+Next-button label computation accounts for skipped pages too: if the
+page immediately after the current one is skipped and the _next visible_
+page is the install page, the Next button reads "Install" (or
+"Uninstall") as expected.
+
 ### Translatable buttons
 
 Customize button labels via `.buttons(...)`:

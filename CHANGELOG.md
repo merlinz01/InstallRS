@@ -11,6 +11,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- `.skip_if(|ctx| bool)` on any wizard page to hide it dynamically.
+
 ### Fixed
 
 - Generated `Cargo.toml` now uses the user crate's real `[package].name`

@@ -25,9 +25,38 @@ struct Page {
     kind: PageKind,
     on_enter: Option<OnEnterCallback>,
     on_before_leave: Option<OnBeforeLeaveCallback>,
+    skip_if: Option<crate::gui::types::SkipIfCallback>,
     /// Only meaningful for `PageKind::Install` — when true, the Next button
     /// leading into / shown on this page uses `buttons.uninstall`.
     is_uninstall: bool,
+}
+
+/// Find the next visible page strictly after `from`. Evaluates each
+/// candidate's `skip_if` predicate; returns None if every remaining page
+/// is hidden or `from` is already at the end.
+fn next_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<usize> {
+    let mut i = from.checked_add(1)?;
+    while i < pages.len() {
+        if pages[i].skip_if.as_ref().is_some_and(|p| p(ctx)) {
+            i = i.checked_add(1)?;
+        } else {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Find the previous visible page strictly before `from`. Returns None
+/// when every earlier page is hidden or `from` is already at the start.
+fn prev_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<usize> {
+    let mut i = from.checked_sub(1)?;
+    loop {
+        if pages[i].skip_if.as_ref().is_some_and(|p| p(ctx)) {
+            i = i.checked_sub(1)?;
+        } else {
+            return Some(i);
+        }
+    }
 }
 
 pub fn run(
@@ -71,6 +100,7 @@ pub fn run(
             page: page_cfg,
             on_enter,
             on_before_leave,
+            skip_if,
         } = configured;
 
         let page_is_uninstall = matches!(
@@ -144,6 +174,7 @@ pub fn run(
             kind,
             on_enter,
             on_before_leave,
+            skip_if,
             is_uninstall: page_is_uninstall,
         });
     }
@@ -170,7 +201,6 @@ pub fn run(
     vbox.pack_start(&btn_bar, false, false, 0);
 
     // Shared state. Rc/RefCell is fine — GTK is single-threaded on the main thread.
-    let page_count = pages.len();
     let pages = Rc::new(RefCell::new(pages));
     let current_page = Rc::new(RefCell::new(0usize));
     let install_callback: Rc<RefCell<Option<InstallCallback>>> =
@@ -185,6 +215,21 @@ pub fn run(
         stack.set_visible_child(&first.widget);
     }
 
+    // Factory for fresh PageContext instances. Defined before
+    // `update_buttons` so that closure can evaluate `skip_if` predicates.
+    let make_ctx: Rc<dyn Fn() -> PageContext> = {
+        let installer_c = installer.clone();
+        let install_dir_c = install_dir.clone();
+        let cancelled_c = cancelled.clone();
+        Rc::new(move || {
+            PageContext::new(
+                installer_c.clone(),
+                install_dir_c.clone(),
+                cancelled_c.clone(),
+            )
+        })
+    };
+
     // update_buttons: refresh sensitivity + next-button label based on current page.
     let update_buttons: Rc<dyn Fn()> = {
         let pages = pages.clone();
@@ -197,6 +242,7 @@ pub fn run(
         let label_install = config.buttons.install.clone();
         let label_uninstall = config.buttons.uninstall.clone();
         let label_finish = config.buttons.finish.clone();
+        let make_ctx_btn = make_ctx.clone();
 
         Rc::new(move || {
             let idx = *current.borrow();
@@ -206,12 +252,15 @@ pub fn run(
             let is_finish = matches!(&pages_b[idx].kind, PageKind::Finish(_));
             let is_error = matches!(&pages_b[idx].kind, PageKind::Error(_));
             let is_terminal = is_finish || is_error;
-            let next_is_install =
-                idx + 1 < pages_b.len() && matches!(&pages_b[idx + 1].kind, PageKind::Install(_));
+            let ctx = make_ctx_btn();
+            let next_idx = next_visible_page(&pages_b, idx, &ctx);
+            let next_is_install = next_idx
+                .map(|i| matches!(&pages_b[i].kind, PageKind::Install(_)))
+                .unwrap_or(false);
             let install_is_uninstall = if is_install {
                 pages_b[idx].is_uninstall
-            } else if next_is_install {
-                pages_b[idx + 1].is_uninstall
+            } else if let Some(i) = next_idx.filter(|_| next_is_install) {
+                pages_b[i].is_uninstall
             } else {
                 false
             };
@@ -246,20 +295,6 @@ pub fn run(
             }
         }
     }
-
-    // Factory for fresh PageContext instances.
-    let make_ctx: Rc<dyn Fn() -> PageContext> = {
-        let installer_c = installer.clone();
-        let install_dir_c = install_dir.clone();
-        let cancelled_c = cancelled.clone();
-        Rc::new(move || {
-            PageContext::new(
-                installer_c.clone(),
-                install_dir_c.clone(),
-                cancelled_c.clone(),
-            )
-        })
-    };
 
     // start_install: consume the install callback and spawn the bg thread.
     let start_install: Rc<dyn Fn()> = {
@@ -307,6 +342,7 @@ pub fn run(
         let current_c = current_page.clone();
         let update = update_buttons.clone();
         let stack_c = stack.clone();
+        let make_ctx_back = make_ctx.clone();
 
         btn_back.connect_clicked(move |_| {
             let idx = *current_c.borrow();
@@ -316,8 +352,13 @@ pub fn run(
 
             // on_before_leave / on_enter are intentionally skipped on
             // backward navigation — they fire only on forward moves.
-            let new_idx = idx - 1;
-            stack_c.set_visible_child(&pages_c.borrow()[new_idx].widget);
+            let ctx = make_ctx_back();
+            let pages_b = pages_c.borrow();
+            let Some(new_idx) = prev_visible_page(&pages_b, idx, &ctx) else {
+                return;
+            };
+            stack_c.set_visible_child(&pages_b[new_idx].widget);
+            drop(pages_b);
             *current_c.borrow_mut() = new_idx;
             update();
         });
@@ -382,8 +423,9 @@ pub fn run(
                 return;
             }
 
-            if idx + 1 < page_count {
-                let new_idx = idx + 1;
+            let ctx_tmp = make_ctx_c();
+            let next_idx = next_visible_page(&pages_c.borrow(), idx, &ctx_tmp);
+            if let Some(new_idx) = next_idx {
                 let next_is_install =
                     matches!(&pages_c.borrow()[new_idx].kind, PageKind::Install(_));
 
@@ -472,8 +514,9 @@ pub fn run(
                         if is_ok {
                             *install_result_c.borrow_mut() = Some(result);
                             let idx = *current_c.borrow();
-                            if idx + 1 < page_count {
-                                let new_idx = idx + 1;
+                            let ctx_tmp = make_ctx_c();
+                            let next_idx = next_visible_page(&pages_c.borrow(), idx, &ctx_tmp);
+                            if let Some(new_idx) = next_idx {
                                 stack_c.set_visible_child(&pages_c.borrow()[new_idx].widget);
                                 *current_c.borrow_mut() = new_idx;
 

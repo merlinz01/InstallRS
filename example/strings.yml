@@ -260,6 +260,16 @@ installer.options.db_backend:
   de: "Datenbank-Backend:"
   es: "Motor de base de datos:"
 
+installer.custom_info.title:
+  en: "Custom installation"
+  de: "Benutzerdefinierte Installation"
+  es: "Instalación personalizada"
+
+installer.custom_info.message:
+  en: "You chose a custom install. The next page asks for advanced configuration — licence file, data directory, and free-form notes. Click Next to continue."
+  de: "Sie haben eine benutzerdefinierte Installation gewählt. Auf der nächsten Seite werden erweiterte Einstellungen abgefragt: Lizenzdatei, Datenverzeichnis und freie Notizen. Klicken Sie auf Weiter, um fortzufahren."
+  es: "Has elegido una instalación personalizada. La próxima página te pedirá configuración avanzada — archivo de licencia, directorio de datos y notas libres. Haz clic en Siguiente para continuar."
+
 installer.paths.heading:
   en: "Paths & Notes"
   de: "Pfade und Notizen"

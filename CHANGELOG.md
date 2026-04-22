@@ -11,4 +11,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Fixed
+
+- Generated installer / uninstaller `Cargo.toml` now uses the user
+  installer crate's real `[package].name` verbatim instead of
+  reconstructing it from the lib crate name via `.replace('_', "-")`.
+
 [Unreleased]: https://github.com/merlinz01/InstallRS/commits/main

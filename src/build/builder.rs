@@ -315,6 +315,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     write_uninstaller_sources(
         &uninstaller_dir,
         &user_crate_name,
+        &user_package_name,
         &params.target_dir,
         uninstall_compression,
         &uninstall_gathered,
@@ -393,6 +394,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     write_installer_sources(
         &installer_dir,
         &user_crate_name,
+        &user_package_name,
         &params.target_dir,
         &install_gathered,
         &install_files_dir,
@@ -1264,6 +1266,7 @@ fn write_build_rs(dir: &Path, config: &WinResourceConfig, gui_enabled: bool) -> 
 fn write_uninstaller_sources(
     uninstaller_dir: &Path,
     user_crate_name: &str,
+    user_package_name: &str,
     user_crate_path: &Path,
     compression: &str,
     gathered: &[GatheredFile],
@@ -1324,7 +1327,6 @@ codegen-units = 1
 "#,
         installrs_dep = installrs_dep_spec(&features_str),
         user_path = user_crate_path,
-        user_package_name = user_crate_name.replace('_', "-"),
     );
 
     let subsystem_attr = match win_resource {
@@ -1396,6 +1398,7 @@ fn main() {{
 fn write_installer_sources(
     installer_dir: &Path,
     user_crate_name: &str,
+    user_package_name: &str,
     user_crate_path: &Path,
     gathered: &[GatheredFile],
     files_dir: &Path,
@@ -1457,7 +1460,6 @@ codegen-units = 1
 "#,
         installrs_dep = installrs_dep_spec(&features_str),
         user_path = user_crate_path,
-        user_package_name = user_crate_name.replace('_', "-"),
     );
 
     let (statics_code, entries_code, unique_order) = generate_embedded_code(gathered)?;

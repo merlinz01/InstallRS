@@ -1,3 +1,41 @@
+//! Optional native wizard GUI and dialog helpers.
+//!
+//! Gated behind the `gui` feature. The backend is picked at compile time
+//! via `gui-win32` (Win32 on Windows, using `winsafe`) or `gui-gtk`
+//! (GTK3 on Linux, using `gtk-rs`). Both backends present the same
+//! high-level API via [`InstallerGui`] and its page builders.
+//!
+//! Typical usage:
+//!
+//! ```rust,ignore
+//! use installrs::gui::*;
+//!
+//! InstallerGui::wizard()
+//!     .title("My App Installer")
+//!     .welcome("Welcome!", "Click Next to continue.")
+//!     .license("License", include_str!("../LICENSE"), "I accept")
+//!     .components_page("Components", "Choose features:")
+//!     .directory_picker("Install Location", "Install to:", "C:/MyApp")
+//!     .install_page(|ctx| {
+//!         let mut i = ctx.installer();
+//!         i.file(installrs::source!("app.exe"), "app.exe").install()?;
+//!         i.uninstaller("uninstall.exe").install()?;
+//!         Ok(())
+//!     })
+//!     .finish_page("Done!", "Click Finish to exit.")
+//!     .run(i)?;
+//! ```
+//!
+//! The same wizard definition runs headless (no window) when the user
+//! passes `--headless` — [`InstallerGui::run`] checks `installer.headless`
+//! and dispatches accordingly.
+//!
+//! See the repository's [GUI Wizard guide] for the full walkthrough —
+//! custom pages, error page, native dialogs, pre-wizard language
+//! selector, and headless mode.
+//!
+//! [GUI Wizard guide]: https://github.com/merlinz01/InstallRS/blob/main/docs/gui-wizard.md
+
 pub mod dialog;
 mod types;
 

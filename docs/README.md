@@ -18,7 +18,7 @@ relevant guide below.
 
 - **[Embedded files, builder ops, and progress](embedded-files.md)** —
   the `source!` macro, the fluent `file` / `dir` / `mkdir` / `remove` /
-  `uninstaller` / `step` API, and the step-weighted
+  `uninstaller` / `shortcut` / `step` API, and the step-weighted
   progress model.
 - **[GUI Wizard](gui-wizard.md)** — wizard builder, custom pages,
   error page, native dialogs, pre-wizard language selector, and headless

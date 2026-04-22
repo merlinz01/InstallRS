@@ -12,6 +12,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- `Installer::shortcut(dst, target)` for creating Windows `.lnk` files.
+
 ### Removed
 
 - `Installer::exec_shell()`. Use `std::process::Command` directly;

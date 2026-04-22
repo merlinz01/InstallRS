@@ -1036,6 +1036,34 @@ impl Installer {
         }
     }
 
+    /// Create a Windows `.lnk` shortcut. `dst` is the shortcut file path
+    /// (relative paths resolve against `out_dir`, same as `file` / `dir`).
+    /// `target` is what the shortcut points to (also resolved against
+    /// `out_dir` when relative).
+    ///
+    /// Windows-only. On other targets this method does not exist — gate
+    /// calls with `#[cfg(target_os = "windows")]` if your installer is
+    /// cross-platform.
+    #[cfg(target_os = "windows")]
+    pub fn shortcut<'i>(
+        &'i mut self,
+        dst: impl Into<String>,
+        target: impl Into<String>,
+    ) -> ShortcutOp<'i> {
+        ShortcutOp {
+            installer: self,
+            dst: dst.into(),
+            target: target.into(),
+            arguments: None,
+            working_dir: None,
+            description: None,
+            icon: None,
+            weight: 1,
+            status: None,
+            log: None,
+        }
+    }
+
     /// Check whether a path exists on the target system.
     pub fn exists(&self, path: &str) -> Result<bool> {
         let p = self.resolve_out_path(path)?;
@@ -1445,6 +1473,115 @@ impl<'i> RemoveOp<'i> {
                 std::fs::remove_file(&p)
                     .with_context(|| format!("failed to remove file: {}", p.display()))
             }
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub struct ShortcutOp<'i> {
+    installer: &'i mut Installer,
+    dst: String,
+    target: String,
+    arguments: Option<String>,
+    working_dir: Option<String>,
+    description: Option<String>,
+    icon: Option<(String, i32)>,
+    status: Option<String>,
+    log: Option<String>,
+    weight: u32,
+}
+
+#[cfg(target_os = "windows")]
+impl<'i> ShortcutOp<'i> {
+    pub fn status(mut self, s: impl Into<String>) -> Self {
+        self.status = Some(s.into());
+        self
+    }
+    pub fn log(mut self, s: impl Into<String>) -> Self {
+        self.log = Some(s.into());
+        self
+    }
+    /// Command-line arguments passed to the target when the shortcut runs.
+    pub fn arguments(mut self, s: impl Into<String>) -> Self {
+        self.arguments = Some(s.into());
+        self
+    }
+    /// Working directory the target launches in. Resolved against
+    /// `out_dir` when relative.
+    pub fn working_dir(mut self, s: impl Into<String>) -> Self {
+        self.working_dir = Some(s.into());
+        self
+    }
+    /// Tooltip / comment shown by Explorer.
+    pub fn description(mut self, s: impl Into<String>) -> Self {
+        self.description = Some(s.into());
+        self
+    }
+    /// Icon path (resolved against `out_dir` when relative) and resource
+    /// index within it. Use index `0` for single-icon files.
+    pub fn icon(mut self, path: impl Into<String>, index: i32) -> Self {
+        self.icon = Some((path.into(), index));
+        self
+    }
+    /// Step weight this op consumes from the component budget. Default 1.
+    pub fn weight(mut self, w: u32) -> Self {
+        self.weight = w;
+        self
+    }
+    pub fn install(self) -> Result<()> {
+        self.installer.check_cancelled()?;
+        self.installer.emit_status(&self.status);
+        self.installer.emit_log(&self.log);
+        let dst = self.installer.resolve_out_path(&self.dst)?;
+        let target = self.installer.resolve_out_path(&self.target)?;
+        let working_dir = match self.working_dir {
+            Some(ref w) => Some(self.installer.resolve_out_path(w)?),
+            None => None,
+        };
+        let icon = match self.icon {
+            Some((ref p, idx)) => Some((self.installer.resolve_out_path(p)?, idx)),
+            None => None,
+        };
+        let arguments = self.arguments;
+        let description = self.description;
+        self.installer.run_weighted_step(self.weight, || {
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent).with_context(|| {
+                    format!("failed to create shortcut parent: {}", parent.display())
+                })?;
+            }
+            let target_str = target
+                .to_str()
+                .ok_or_else(|| anyhow!("shortcut target path is not valid UTF-8"))?;
+            let mut link = mslnk::ShellLink::new(target_str)
+                .with_context(|| format!("failed to build shortcut for {}", target.display()))?;
+            if let Some(a) = arguments {
+                link.set_arguments(Some(a));
+            }
+            if let Some(w) = working_dir {
+                let w = w
+                    .to_str()
+                    .ok_or_else(|| anyhow!("shortcut working_dir is not valid UTF-8"))?
+                    .to_string();
+                link.set_working_dir(Some(w));
+            }
+            if let Some(d) = description {
+                link.set_name(Some(d));
+            }
+            if let Some((p, idx)) = icon {
+                let p = p
+                    .to_str()
+                    .ok_or_else(|| anyhow!("shortcut icon path is not valid UTF-8"))?;
+                let loc = if idx == 0 {
+                    p.to_string()
+                } else {
+                    format!("{p},{idx}")
+                };
+                link.set_icon_location(Some(loc));
+            }
+            link.create_lnk(&dst)
+                .with_context(|| format!("failed to write shortcut: {}", dst.display()))?;
+            Ok(())
         })
     }
 }

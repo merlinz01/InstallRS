@@ -50,6 +50,7 @@ Every install operation returns a builder that terminates with
 | `mkdir(dest)`         | Create a directory.                  |
 | `uninstaller(dest)`   | Write the uninstaller executable.    |
 | `remove(path)`        | Remove a file or directory.          |
+| `shortcut(dst, tgt)`  | Create a Windows `.lnk` (Windows-only). |
 
 Common chainable options on the builders:
 
@@ -74,6 +75,29 @@ i.dir(source!("data"), "data")
 - `Skip` — leave the existing file in place.
 - `Error` — fail the install if the file already exists.
 - `Backup` — rename the existing file to `<name>.bak` before writing.
+
+## Windows shortcuts
+
+On Windows, create `.lnk` shortcuts with `shortcut(dst, target)`. Both
+paths resolve against `out_dir` when relative, like every other op.
+The method is gated behind `#[cfg(target_os = "windows")]` — wrap
+calls with the same cfg if your installer is cross-platform.
+
+```rust
+#[cfg(target_os = "windows")]
+i.shortcut("shortcuts/MyApp.lnk", "app.exe")
+    .arguments("--flag")
+    .working_dir(".")                   // launch in the install dir
+    .description("Launch MyApp")
+    .icon("app.exe", 0)                 // path + icon resource index
+    .install()?;
+```
+
+The target must exist at the time the shortcut is created — install
+files first, then their shortcuts. To place shortcuts on the Desktop
+or Start Menu, pass an absolute path (e.g. via `std::env::var` of
+`USERPROFILE` / `APPDATA`); `out_dir` resolution only kicks in for
+relative paths.
 
 ## Progress reporting
 

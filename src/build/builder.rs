@@ -1215,7 +1215,7 @@ fn generate_manifest_xml(
 
 fn write_build_rs(dir: &Path, config: &WinResourceConfig, gui_enabled: bool) -> Result<()> {
     let mut code =
-        String::from("fn main() {\n    let mut res = winresource::WindowsResource::new();\n");
+        String::from("fn main() {\n    #[allow(unused_mut)]\n    let mut res = winresource::WindowsResource::new();\n");
 
     if let Some(icon) = &config.icon {
         let icon_str = icon.display().to_string().replace('\\', "/");

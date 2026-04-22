@@ -16,5 +16,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Generated installer / uninstaller `Cargo.toml` now uses the user
   installer crate's real `[package].name` verbatim instead of
   reconstructing it from the lib crate name via `.replace('_', "-")`.
+- Generated `build.rs` suppresses the spurious `unused_mut` warning on
+  `let mut res = …` when no resource-modifying config keys are set.
 
 [Unreleased]: https://github.com/merlinz01/InstallRS/commits/main

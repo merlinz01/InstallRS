@@ -19,6 +19,13 @@ Do you want the full power of Rust's ecosystem at your fingertips?
 
 InstallRS is here to revolutionize the way you create software installers.
 
+> **Note:**
+> This project has been written to a large degree with AI coding tools.
+> While the author has remained in the loop for design decisions,
+> architecture, and testing, the code may reflect the limitations
+> of the AI tools used. Contributions to refine and
+> improve the codebase are welcome.
+
 ## Highlights
 
 - **Write installer logic in plain Rust**, with the full standard

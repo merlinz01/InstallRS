@@ -63,3 +63,7 @@ tempfile = "3"
 
 [package.metadata]
 # resolver = "2" applies at workspace level; not needed for single-package crates
+
+[package.metadata.docs.rs]
+features = ["gui-gtk", "lzma", "gzip", "bzip2"]
+rustdoc-args = ["--cfg", "docsrs"]

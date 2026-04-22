@@ -1,4 +1,7 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 #[cfg(feature = "gui")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gui")))]
 pub mod gui;
 
 use std::path::{Path, PathBuf};

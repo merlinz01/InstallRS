@@ -100,7 +100,7 @@ pub enum WizardPage {
         callback: InstallCallback,
         /// When true, the Next button preceding this page (and visible while
         /// on it) renders `buttons.uninstall` instead of `buttons.install`.
-        /// Set via [`InstallerGui::uninstall_page`].
+        /// Set via [`crate::gui::InstallerGui::uninstall_page`].
         is_uninstall: bool,
     },
     Finish {

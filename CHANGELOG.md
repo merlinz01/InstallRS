@@ -12,6 +12,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+## [0.1.0-rc6] — 2026-04-22
+
 ### Added
 
 - `Installer::shortcut(dst, target)` for creating Windows `.lnk` files.
@@ -45,6 +47,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Generated `build.rs` no longer warns `unused_mut` on `res` when no
   resource keys are set.
 
-[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc5...HEAD
+[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc6...HEAD
+[0.1.0-rc6]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc5...v0.1.0-rc6
 [0.1.0-rc5]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc4...v0.1.0-rc5
 [0.1.0-rc4]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc3...v0.1.0-rc4

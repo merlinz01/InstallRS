@@ -11,6 +11,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Fixed
+
+- Subsystem `"auto"` resolution now runs before the uninstaller sources
+  are generated, so both installer and uninstaller get `"windows"` as
+  intended in GUI builds.
+
 ## [0.1.0-rc4] — 2026-04-22
 
 ### Added

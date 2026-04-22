@@ -307,6 +307,23 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         }
     }
 
+    let auto_resolved = if params.gui_enabled {
+        "windows"
+    } else {
+        "console"
+    };
+    for cfg in [
+        &mut params.installer_win_resource,
+        &mut params.uninstaller_win_resource,
+    ] {
+        if let Some(cfg) = cfg.as_mut() {
+            if cfg.windows_subsystem == "auto" {
+                log::debug!("Resolved subsystem \"auto\" → {auto_resolved:?}");
+                cfg.windows_subsystem = auto_resolved.to_string();
+            }
+        }
+    }
+
     let uninstall_compression = if uninstall_gathered.is_empty() {
         "none"
     } else {
@@ -372,24 +389,6 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     prune_files_dir(&uninstall_files_dir, &uninstall_gathered)?;
 
     // ── Write installer sources and compile ──────────────────────────────────
-
-    // Resolve "auto" subsystem: "windows" when GUI is enabled, "console" otherwise.
-    let auto_resolved = if params.gui_enabled {
-        "windows"
-    } else {
-        "console"
-    };
-    for cfg in [
-        &mut params.installer_win_resource,
-        &mut params.uninstaller_win_resource,
-    ] {
-        if let Some(cfg) = cfg.as_mut() {
-            if cfg.windows_subsystem == "auto" {
-                log::debug!("Resolved subsystem \"auto\" → {auto_resolved:?}");
-                cfg.windows_subsystem = auto_resolved.to_string();
-            }
-        }
-    }
 
     write_installer_sources(
         &installer_dir,

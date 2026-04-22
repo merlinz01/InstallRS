@@ -368,6 +368,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     i.option("yes", OptionKind::Flag);
     i.process_commandline()?;
 
+    #[cfg(not(windows))]
     let install_dir = std::env::current_exe()?
         .parent()
         .expect("Executable must be in a directory")
@@ -409,6 +410,27 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         )
         .uninstall_page(|ctx| {
             let mut i = ctx.installer();
+
+            // On Windows, `enable_self_delete` relaunches from a temp dir, so
+            // `current_exe()` no longer points to the real install location.
+            // Read it back from the registry instead (InstallLocation is what
+            // Add/Remove Programs uses). On other platforms, fall back to the
+            // value captured before the wizard ran.
+            #[cfg(windows)]
+            let install_dir: String = {
+                use installrs::RegistryHive::LocalMachine;
+                const UNINSTALL_KEY: &str =
+                    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
+                i.registry()
+                    .get::<String>(LocalMachine, UNINSTALL_KEY, "InstallLocation")
+                    .unwrap_or_else(|_| {
+                        std::env::current_exe()
+                            .ok()
+                            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                            .and_then(|p| p.to_str().map(String::from))
+                            .unwrap_or_default()
+                    })
+            };
 
             #[cfg(windows)]
             {

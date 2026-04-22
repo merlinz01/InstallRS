@@ -8,6 +8,18 @@
 
 **A Rust-based framework for building self-contained software installers.**
 
+![CI](https://img.shields.io/github/actions/workflow/status/merlinz01/InstallRS/ci.yml)
+![docs.rs](https://img.shields.io/docsrs/installrs)
+![GitHub Issues](https://img.shields.io/github/issues/merlinz01/InstallRS)
+![GitHub Pull Requests](https://img.shields.io/github/issues-pr/merlinz01/InstallRS)
+
+![MIT License](https://img.shields.io/badge/license-MIT-blue)
+![GitHub Stars](https://img.shields.io/github/stars/merlinz01/InstallRS?style=badge)
+![GitHub last commit](https://img.shields.io/github/last-commit/merlinz01/InstallRS?color=blue)
+![GitHub Repo Size](https://img.shields.io/github/repo-size/merlinz01/InstallRS)
+
+![Crates.io](https://img.shields.io/crates/v/installrs)
+
 </div>
 
 Are you tired of wrestling with clunky installer frameworks?
@@ -96,7 +108,8 @@ and headless mode — the best way to see the whole system in action.
 - [Internationalization](docs/internationalization.md) — translating wizard strings,
   locale detection, and the pre-wizard language picker.
 - [Windows Resources](docs/windows-resources.md) — icons, version info, UAC manifests.
-- [Architecture](docs/architecture.md) — how the codebase is organized and what the generated installer crates look like.
+- [Architecture](docs/architecture.md) — how the codebase is organized
+  and what the generated installer crates look like.
 - [API reference on docs.rs](https://docs.rs/installrs) — every public type and method.
 - [Changelog](CHANGELOG.md) — release history.
 

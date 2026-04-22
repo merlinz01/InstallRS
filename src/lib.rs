@@ -1589,8 +1589,43 @@ impl<'i> ShortcutOp<'i> {
             }
             link.create_lnk(&dst)
                 .with_context(|| format!("failed to write shortcut: {}", dst.display()))?;
+            // Notify the shell so the new shortcut shows up immediately in
+            // Explorer / Start Menu / Desktop without needing a refresh.
+            notify_shell_create(&dst);
             Ok(())
         })
+    }
+}
+
+#[cfg(target_os = "windows")]
+extern "system" {
+    fn SHChangeNotify(
+        w_event_id: std::os::raw::c_long,
+        u_flags: std::os::raw::c_uint,
+        dw_item1: *const std::ffi::c_void,
+        dw_item2: *const std::ffi::c_void,
+    );
+}
+
+#[cfg(target_os = "windows")]
+fn notify_shell_create(path: &std::path::Path) {
+    use std::os::windows::ffi::OsStrExt;
+    const SHCNE_CREATE: std::os::raw::c_long = 0x0000_0002;
+    const SHCNF_PATHW: std::os::raw::c_uint = 0x0005;
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: SHChangeNotify accepts a null-terminated wide path as dwItem1
+    // when SHCNF_PATHW is set, and a null dwItem2 is valid for SHCNE_CREATE.
+    unsafe {
+        SHChangeNotify(
+            SHCNE_CREATE,
+            SHCNF_PATHW,
+            wide.as_ptr() as *const std::ffi::c_void,
+            std::ptr::null(),
+        );
     }
 }
 

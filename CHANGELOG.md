@@ -1,4 +1,5 @@
 <!-- markdownlint-configure-file { "MD013": { "line_length": 100 } } -->
+<!-- markdownlint-disable-file MD024 -->
 
 # Changelog
 
@@ -16,6 +17,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Subsystem `"auto"` resolution now runs before the uninstaller sources
   are generated, so both installer and uninstaller get `"windows"` as
   intended in GUI builds.
+- `process_commandline()` silently accepts `--self-delete` on Windows
+  when it's the first arg (used by `enable_self_delete` relaunch).
 
 ## [0.1.0-rc4] — 2026-04-22
 

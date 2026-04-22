@@ -626,6 +626,12 @@ impl Installer {
         let mut list = false;
 
         let mut i = 1;
+        #[cfg(windows)]
+        // `--self-delete` is recognized only as the very first argument
+        // so we don't have to worry about it appearing as a value later on.
+        if args.get(i).map(|s| s.as_str()) == Some("--self-delete") {
+            i += 1;
+        }
         while i < args.len() {
             let a = &args[i];
             let (flag, inline_val): (&str, Option<&str>) = if let Some(eq) = a.find('=') {
@@ -1062,7 +1068,7 @@ impl Installer {
     /// PowerShell process cleans up the temp copy.
     #[cfg(target_os = "windows")]
     pub fn enable_self_delete(&mut self) {
-        if std::env::args().any(|a| a == "--self-delete") {
+        if std::env::args().nth(1).as_deref() == Some("--self-delete") {
             self.self_delete = true;
             return;
         }
@@ -1087,8 +1093,10 @@ impl Installer {
             std::process::exit(1);
         }
 
+        // Pass all original args through, plus `--self-delete` to trigger the
+        // self-deletion logic in the relaunched copy
         let mut args: Vec<String> = std::env::args().skip(1).collect();
-        args.push("--self-delete".to_string());
+        args.insert(0, "--self-delete".to_string());
 
         // Run the temp copy from the temp dir so the install directory isn't
         // locked as the child's cwd (Windows refuses to delete a directory

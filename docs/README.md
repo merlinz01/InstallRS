@@ -41,6 +41,14 @@ relevant guide below.
 - **[Windows Resources](windows-resources.md)** — icons (PNG
   auto-converted to ICO), VERSIONINFO, UAC manifests, DPI awareness.
 
+## Under the hood
+
+- **[Architecture](architecture.md)** — how the codebase is organized,
+  what the generated installer crates look like, path hashing, content
+  deduplication, payload integrity, self-deletion, cancellation — the
+  mechanisms that span multiple source files. For contributors and
+  curious users.
+
 ## Outside this folder
 
 - **[API reference on docs.rs](https://docs.rs/installrs)** — every

@@ -26,7 +26,7 @@ Paths are relative to your installer crate's root (next to `Cargo.toml`).
 
 The macro accepts build-time-only keyword arguments. The runtime
 expansion still evaluates to a `Source(u64)`; the options are parsed by
-the scanner and affect *how* the file/dir is gathered, not the runtime
+the scanner and affect _how_ the file/dir is gathered, not the runtime
 behavior.
 
 - `ignore = ["glob", ...]` — extra glob patterns applied when gathering
@@ -43,14 +43,15 @@ i.dir(source!("assets", ignore = ["*.bak", "scratch"]), "assets").install()?;
 Every install operation returns a builder that terminates with
 `.install()`. Available ops on `Installer`:
 
-| Method                | Purpose                              |
-| --------------------- | ------------------------------------ |
-| `file(src, dest)`     | Install a single embedded file.      |
-| `dir(src, dest)`      | Install an embedded directory tree.  |
-| `mkdir(dest)`         | Create a directory.                  |
-| `uninstaller(dest)`   | Write the uninstaller executable.    |
-| `remove(path)`        | Remove a file or directory.          |
-| `shortcut(dst, tgt)`  | Create a Windows `.lnk` (Windows-only). |
+| Method               | Purpose                                 |
+| -------------------- | --------------------------------------- |
+| `file(src, dest)`    | Install a single embedded file.         |
+| `dir(src, dest)`     | Install an embedded directory tree.     |
+| `mkdir(dest)`        | Create a directory.                     |
+| `uninstaller(dest)`  | Write the uninstaller executable.       |
+| `remove(path)`       | Remove a file or directory.             |
+| `shortcut(dst, tgt)` | Create a Windows `.lnk` (Windows-only). |
+| `registry()`         | Windows registry ops (Windows-only).    |
 
 Common chainable options on the builders:
 
@@ -71,7 +72,7 @@ i.dir(source!("data"), "data")
 
 `OverwriteMode` options:
 
-- `Overwrite` *(default)* — replace any existing file at the destination.
+- `Overwrite` _(default)_ — replace any existing file at the destination.
 - `Skip` — leave the existing file in place.
 - `Error` — fail the install if the file already exists.
 - `Backup` — rename the existing file to `<name>.bak` before writing.
@@ -98,6 +99,55 @@ files first, then their shortcuts. To place shortcuts on the Desktop
 or Start Menu, pass an absolute path (e.g. via `std::env::var` of
 `USERPROFILE` / `APPDATA`); `out_dir` resolution only kicks in for
 relative paths.
+
+## Windows registry
+
+`i.registry()` returns a short-lived handle for registry ops. Like
+`shortcut`, this is Windows-only — wrap with
+`#[cfg(target_os = "windows")]` in cross-platform installers.
+
+```rust
+use installrs::RegistryHive::*;
+
+// Set named values (intermediate keys are created automatically).
+i.registry()
+    .set(LocalMachine, r"Software\MyApp", "InstallDir", "C:\\MyApp")
+    .install()?;
+i.registry()
+    .set::<u32>(CurrentUser, r"Software\MyApp", "Version", 42)
+    .install()?;
+i.registry()
+    .set(LocalMachine, r"Software\MyApp", "Tags",
+         vec!["alpha".to_string(), "beta".to_string()])
+    .install()?;
+
+// Set the (unnamed) default value.
+i.registry()
+    .default(ClassesRoot, r"myapp\shell\open\command",
+             "\"C:\\MyApp\\app.exe\" \"%1\"")
+    .install()?;
+
+// Read a value.
+let dir: String = i.registry()
+    .get(LocalMachine, r"Software\MyApp", "InstallDir")?;
+
+// Uninstall: remove the whole subtree.
+i.registry()
+    .remove(LocalMachine, r"Software\MyApp")
+    .recursive()
+    .install()?;
+
+// Or delete a specific named value.
+i.registry()
+    .delete(CurrentUser, r"Software\MyApp", "Version")
+    .install()?;
+```
+
+Value type is inferred from the argument; supported types are anything
+implementing `winreg::types::ToRegValue` — `&str`, `String`, `u32`,
+`u64`, `Vec<String>` (REG_MULTI_SZ), `OsString`, etc. `get::<T>`
+takes any `winreg::types::FromRegValue`. Missing keys or values on
+`remove` / `delete` are treated as success (idempotent uninstalls).
 
 ## Progress reporting
 

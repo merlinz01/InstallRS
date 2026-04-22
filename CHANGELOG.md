@@ -12,6 +12,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- `Installer::registry()` for Windows registry operations.
+
 ## [0.1.0-rc6] — 2026-04-22
 
 ### Added

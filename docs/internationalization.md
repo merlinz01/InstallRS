@@ -252,3 +252,12 @@ mistakes are missing keys (show up as `"installer.welcome.title"`
 verbatim instead of the translated string) and missing language codes
 in a particular `.yml` entry (fall back to the configured fallback
 language, often English — worth checking in a German-only run).
+
+## See also
+
+- [GUI Wizard](gui-wizard.md) — the `ButtonLabels` struct and the
+  eager-string-capture pattern referenced in §5.
+- [Components and CLI options](components-and-cli.md) — component
+  labels and descriptions that need localizing at registration time.
+- [`example/`](../example) — the repository's reference installer,
+  translated into English, German, and Spanish.

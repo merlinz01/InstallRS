@@ -231,3 +231,15 @@ InstallerGui::wizard()
 `on_start` runs before the window opens (or before the install callback
 in headless mode). `on_exit` runs after the window closes (or after
 install in headless mode) — **even if the install failed**.
+
+## See also
+
+- [Components and CLI options](components-and-cli.md) — the
+  `components_page` renders registered components; custom-page widgets
+  bind to registered CLI options by key.
+- [Internationalization](internationalization.md) — translating page
+  strings, button labels, and the pre-wizard language picker.
+- [Embedded files, builder ops, and progress](embedded-files.md) — the
+  `install_page` callback uses these ops to do the actual work.
+- [Windows Resources](windows-resources.md) — icons and manifests that
+  affect wizard appearance on Windows.

@@ -128,3 +128,15 @@ i.set_progress_sink(Box::new(StderrSink));
 ```
 
 All `.status()`, `.log()`, and progress updates flow through the sink.
+
+## See also
+
+- [Components and CLI options](components-and-cli.md) — the
+  `progress_weight` declared on each component, and how it interacts
+  with per-op weights.
+- [GUI Wizard](gui-wizard.md) — the install page consumes the status
+  and log messages emitted by builder ops.
+- [Getting Started](getting-started.md) — a walkthrough that uses the
+  `source!` macro and builder ops end-to-end.
+- [Builder CLI reference](builder-cli.md) — `--compression` and
+  `--ignore` flags that affect what and how files are embedded.

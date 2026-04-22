@@ -122,3 +122,13 @@ text widget on the custom page.
 
 See [GUI wizard — custom pages](gui-wizard.md#custom-pages) for the
 widget API.
+
+## See also
+
+- [GUI Wizard](gui-wizard.md) — the components page and custom pages
+  that render the components and custom options registered here.
+- [Embedded files, builder ops, and progress](embedded-files.md) —
+  each component declares a `progress_weight`; this page explains how
+  it maps to the progress bar.
+- [Internationalization](internationalization.md) — translating
+  component labels and descriptions.

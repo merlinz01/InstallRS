@@ -87,3 +87,10 @@ Options for Windows version compatibility declarations (`supported-os`):
   all Windows resource config is ignored — the icon may still be used
   for the GTK wizard if it's a PNG, since the `[package.metadata.installrs].icon`
   key is also read on Linux.
+
+## See also
+
+- [Building for production](building.md) — cross-compiling to Windows
+  from Linux, and Authenticode code signing with signtool.
+- [GUI Wizard](gui-wizard.md) — the icon configured here also appears
+  in the wizard's title bar and taskbar entry.

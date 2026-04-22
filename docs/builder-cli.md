@@ -74,3 +74,10 @@ installrs --target my-installer
 
 Expect a 3–5× speedup at the cost of a larger binary. Drop these for
 the real release build.
+
+## See also
+
+- [Building for production](building.md) — cross-compilation,
+  reproducibility, payload integrity, code signing.
+- [Getting Started](getting-started.md) — the walkthrough that uses
+  these flags in context.

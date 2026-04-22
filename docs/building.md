@@ -275,3 +275,14 @@ tree, that's a bug — please file an issue.
   directory). Often a single large dep dominates.
 - Ensure `opt-level = "z"` and `strip = true` are still active — your
   env-var overrides from iteration might be lingering.
+
+## See also
+
+- [Builder CLI reference](builder-cli.md) — every flag the `installrs`
+  command accepts.
+- [Windows Resources](windows-resources.md) — icon, manifest, and
+  VERSIONINFO config relevant to the Windows cross-compile path.
+- [Embedded files, builder ops, and progress](embedded-files.md) —
+  `--compression` choice has a big impact on build time and binary
+  size; see the compression tradeoffs above plus this doc for runtime
+  decompression details.

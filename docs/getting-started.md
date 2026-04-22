@@ -242,3 +242,15 @@ CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
 CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
 installrs --target .
 ```
+
+## See also
+
+- [Embedded files, builder ops, and progress](embedded-files.md) — the
+  full API reference for everything you call inside `install` /
+  `uninstall`.
+- [GUI Wizard](gui-wizard.md) — beyond the quick snippet in §6, covers
+  custom pages, error page, dialogs, and headless mode.
+- [Components and CLI options](components-and-cli.md) — selectable
+  components plus registering your own `--flags`.
+- [Building for production](building.md) — cross-compilation, size and
+  speed tuning, code signing, release CI.

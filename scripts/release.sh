@@ -132,20 +132,23 @@ cargo test --release --test integration || die "integration tests failed"
 bold "Running cargo build --release (lockfile sync)"
 cargo build --release >/dev/null
 
+bold "Syncing example/Cargo.lock"
+(cd example && INSTALLRS_LOCAL_PATH=1 cargo update -p installrs >/dev/null)
+
 # ── Review ──────────────────────────────────────────────────────────────────
 
 bold "Diff to be committed:"
-git --no-pager diff -- Cargo.toml Cargo.lock CHANGELOG.md
+git --no-pager diff -- Cargo.toml Cargo.lock CHANGELOG.md example/Cargo.lock
 echo
 confirm "Commit, tag $tag, and push to origin?" || {
     yellow "Aborting. Discarding changes with git checkout ..."
-    git checkout -- Cargo.toml Cargo.lock CHANGELOG.md
+    git checkout -- Cargo.toml Cargo.lock CHANGELOG.md example/Cargo.lock
     exit 1
 }
 
 # ── Commit, tag, push ───────────────────────────────────────────────────────
 
-git add Cargo.toml Cargo.lock CHANGELOG.md
+git add Cargo.toml Cargo.lock CHANGELOG.md example/Cargo.lock
 git commit -m "$tag"
 git tag -a "$tag" -m "$tag"
 

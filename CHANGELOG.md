@@ -14,11 +14,14 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
-- **Breaking:** `InstallerGui` builder methods now take `&mut self` and
-  return `&mut Self` instead of consuming by value. Bind the wizard to
-  a `let mut` first, then call `run(i)` on the binding — chaining
-  straight off `InstallerGui::wizard()` to `.run(i)` no longer
-  compiles.
+- **Breaking:** `InstallerGui` builder methods now take `&mut self`
+  instead of consuming by value. Bind the wizard with `let mut w =
+  InstallerGui::wizard();`, configure it, then call `w.run(i)`.
+- **Breaking:** `on_enter`, `on_before_leave`, and `skip_if` are no
+  longer methods on `InstallerGui`. They live on the `PageHandle`
+  returned by each page-adding method (`welcome`, `license`,
+  `custom_page`, etc.) — so they always attach to the page you just
+  added, with no silent drop when you forget to add a page first.
 
 ## [0.1.0-rc8] — 2026-04-23
 

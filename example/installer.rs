@@ -123,120 +123,120 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 eprintln!("Headless install complete.");
             }
             Ok(())
-        })
-        .welcome(
-            &t!("installer.welcome.title"),
-            &t!("installer.welcome.message"),
+        });
+    w.welcome(
+        &t!("installer.welcome.title"),
+        &t!("installer.welcome.message"),
+    );
+    w.license(
+        &t!("installer.license.heading"),
+        include_str!("../LICENSE.txt"),
+        &t!("installer.license.accept"),
+    );
+    w.components_page(
+        &t!("installer.components.heading"),
+        &t!("installer.components.label"),
+    );
+    w.directory_picker(
+        &t!("installer.directory.heading"),
+        &t!("installer.directory.label"),
+        &default_dir,
+    )
+    .on_before_leave(|ctx| {
+        // --yes skips the confirmation dialog.
+        if ctx.installer().get_option::<bool>("yes").unwrap_or(false) {
+            return Ok(true);
+        }
+        installrs::gui::confirm(
+            &t!("installer.confirm.title"),
+            &t!("installer.confirm.message", dir = ctx.install_dir()),
         )
-        .license(
-            &t!("installer.license.heading"),
-            include_str!("../LICENSE.txt"),
-            &t!("installer.license.accept"),
-        )
-        .components_page(
-            &t!("installer.components.heading"),
-            &t!("installer.components.label"),
-        )
-        .directory_picker(
-            &t!("installer.directory.heading"),
-            &t!("installer.directory.label"),
-            &default_dir,
-        )
-        .on_before_leave(|ctx| {
-            // --yes skips the confirmation dialog.
-            if ctx.installer().get_option::<bool>("yes").unwrap_or(false) {
-                return Ok(true);
-            }
-            installrs::gui::confirm(
-                &t!("installer.confirm.title"),
-                &t!("installer.confirm.message", dir = ctx.install_dir()),
-            )
-        })
-        .custom_page(
-            &t!("installer.account.heading"),
-            &t!("installer.account.label"),
-            |p| {
-                p.text("username", &t!("installer.account.username"), "admin");
-                p.password("password", &t!("installer.account.password"));
-                p.number("port", &t!("installer.account.port"), 8080);
-            },
-        )
-        .on_before_leave(|ctx| {
-            let i = ctx.installer();
-            let user: String = i.get_option("username").unwrap_or_default();
-            if user.trim().is_empty() {
-                let _ = installrs::gui::error(
-                    &t!("installer.account.missing_title"),
-                    &t!("installer.account.missing_message"),
-                );
-                return Ok(false);
-            }
-            Ok(true)
-        })
-        .custom_page(
-            &t!("installer.options.heading"),
-            &t!("installer.options.label"),
-            |p| {
-                let typical = t!("installer.options.install_type_typical").to_string();
-                let minimal = t!("installer.options.install_type_minimal").to_string();
-                let custom = t!("installer.options.install_type_custom").to_string();
-                p.radio(
-                    "install_type",
-                    &t!("installer.options.install_type"),
-                    &[
-                        ("typical", typical.as_str()),
-                        ("minimal", minimal.as_str()),
-                        ("custom", custom.as_str()),
-                    ],
-                    "typical",
-                );
-                p.checkbox(
-                    "desktop_shortcut",
-                    &t!("installer.options.desktop_shortcut"),
-                    true,
-                );
-                p.dropdown(
-                    "db_backend",
-                    &t!("installer.options.db_backend"),
-                    &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
-                    "sqlite",
-                );
-            },
-        )
-        // Extra info page, only shown when the user selected "custom" on
-        // the install-type radio. Demonstrates `.skip_if(|ctx| bool)` —
-        // evaluated each time the wizard navigates past, so the page
-        // appears or hides based on the live option value.
-        .welcome(
-            &t!("installer.custom_info.title"),
-            &t!("installer.custom_info.message"),
-        )
-        .skip_if(|ctx| {
-            ctx.installer()
-                .get_option::<String>("install_type")
-                .as_deref()
-                != Some("custom")
-        })
-        .custom_page(
-            &t!("installer.paths.heading"),
-            &t!("installer.paths.label"),
-            |p| {
-                let license_filter = t!("installer.paths.license_filter").to_string();
-                let all_files_filter = t!("installer.paths.all_files_filter").to_string();
-                p.file_picker(
-                    "license_file",
-                    &t!("installer.paths.license_file"),
-                    "",
-                    &[
-                        (license_filter.as_str(), "*.lic;*.key"),
-                        (all_files_filter.as_str(), "*.*"),
-                    ],
-                );
-                p.dir_picker("data_dir", &t!("installer.paths.data_dir"), "");
-                p.multiline("notes", &t!("installer.paths.notes"), "", 3);
-            },
-        )
-        .install_page(|ctx| {
+    });
+    w.custom_page(
+        &t!("installer.account.heading"),
+        &t!("installer.account.label"),
+        |p| {
+            p.text("username", &t!("installer.account.username"), "admin");
+            p.password("password", &t!("installer.account.password"));
+            p.number("port", &t!("installer.account.port"), 8080);
+        },
+    )
+    .on_before_leave(|ctx| {
+        let i = ctx.installer();
+        let user: String = i.get_option("username").unwrap_or_default();
+        if user.trim().is_empty() {
+            let _ = installrs::gui::error(
+                &t!("installer.account.missing_title"),
+                &t!("installer.account.missing_message"),
+            );
+            return Ok(false);
+        }
+        Ok(true)
+    });
+    w.custom_page(
+        &t!("installer.options.heading"),
+        &t!("installer.options.label"),
+        |p| {
+            let typical = t!("installer.options.install_type_typical").to_string();
+            let minimal = t!("installer.options.install_type_minimal").to_string();
+            let custom = t!("installer.options.install_type_custom").to_string();
+            p.radio(
+                "install_type",
+                &t!("installer.options.install_type"),
+                &[
+                    ("typical", typical.as_str()),
+                    ("minimal", minimal.as_str()),
+                    ("custom", custom.as_str()),
+                ],
+                "typical",
+            );
+            p.checkbox(
+                "desktop_shortcut",
+                &t!("installer.options.desktop_shortcut"),
+                true,
+            );
+            p.dropdown(
+                "db_backend",
+                &t!("installer.options.db_backend"),
+                &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
+                "sqlite",
+            );
+        },
+    );
+    // Extra info page, only shown when the user selected "custom" on
+    // the install-type radio. Demonstrates `.skip_if(|ctx| bool)` —
+    // evaluated each time the wizard navigates past, so the page
+    // appears or hides based on the live option value.
+    w.welcome(
+        &t!("installer.custom_info.title"),
+        &t!("installer.custom_info.message"),
+    )
+    .skip_if(|ctx| {
+        ctx.installer()
+            .get_option::<String>("install_type")
+            .as_deref()
+            != Some("custom")
+    });
+    w.custom_page(
+        &t!("installer.paths.heading"),
+        &t!("installer.paths.label"),
+        |p| {
+            let license_filter = t!("installer.paths.license_filter").to_string();
+            let all_files_filter = t!("installer.paths.all_files_filter").to_string();
+            p.file_picker(
+                "license_file",
+                &t!("installer.paths.license_file"),
+                "",
+                &[
+                    (license_filter.as_str(), "*.lic;*.key"),
+                    (all_files_filter.as_str(), "*.*"),
+                ],
+            );
+            p.dir_picker("data_dir", &t!("installer.paths.data_dir"), "");
+            p.multiline("notes", &t!("installer.paths.notes"), "", 3);
+        },
+    );
+    w.install_page(|ctx| {
             let mut i = ctx.installer();
 
             let out_dir = ctx.install_dir();
@@ -362,12 +362,12 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
             ctx.set_status(&t!("installer.install.status_complete"));
             Ok(())
-        })
-        .finish_page(
-            &t!("installer.finish.title"),
-            &t!("installer.finish.message"),
-        )
-        .error_page(&t!("installer.error.title"), &t!("installer.error.message"));
+        });
+    w.finish_page(
+        &t!("installer.finish.title"),
+        &t!("installer.finish.message"),
+    );
+    w.error_page(&t!("installer.error.title"), &t!("installer.error.message"));
     w.run(i)?;
 
     Ok(())
@@ -416,12 +416,12 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
                 }
             }
             Ok(())
-        })
-        .welcome(
-            &t!("uninstaller.welcome.title"),
-            &t!("uninstaller.welcome.message"),
-        )
-        .uninstall_page(|ctx| {
+        });
+    w.welcome(
+        &t!("uninstaller.welcome.title"),
+        &t!("uninstaller.welcome.message"),
+    );
+    w.uninstall_page(|ctx| {
             let mut i = ctx.installer();
 
             // On Windows, `enable_self_delete` relaunches from a temp dir, so
@@ -472,15 +472,15 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 
             ctx.set_status(&t!("uninstaller.status_complete"));
             Ok(())
-        })
-        .finish_page(
-            &t!("uninstaller.finish.title"),
-            &t!("uninstaller.finish.message"),
-        )
-        .error_page(
-            &t!("uninstaller.error.title"),
-            &t!("uninstaller.error.message"),
-        );
+        });
+    w.finish_page(
+        &t!("uninstaller.finish.title"),
+        &t!("uninstaller.finish.message"),
+    );
+    w.error_page(
+        &t!("uninstaller.error.title"),
+        &t!("uninstaller.error.message"),
+    );
     w.run(i)?;
 
     Ok(())

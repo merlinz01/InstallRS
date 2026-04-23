@@ -39,38 +39,42 @@ builder methods, then call `run`:
 use installrs::gui::*;
 
 let mut w = InstallerGui::wizard();
-w.title("My App Installer")
-    .welcome("Welcome!", "Click Next to continue.")
-    .license("License Agreement", include_str!("../LICENSE"), "I accept")
-    .components_page("Select Components", "Choose features to install:")
-    .directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
+w.title("My App Installer");
+w.welcome("Welcome!", "Click Next to continue.");
+w.license("License Agreement", include_str!("../LICENSE"), "I accept");
+w.components_page("Select Components", "Choose features to install:");
+w.directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
     .on_before_leave(|ctx| {
         confirm("Confirm", &format!("Install to {}?", ctx.install_dir()))
-    })
-    .install_page(|ctx| {
-        let mut i = ctx.installer();
-        i.file(source!("app.exe"), "app.exe").install()?;
-        if i.is_component_selected("docs") {
-            i.dir(source!("docs"), "docs").install()?;
-        }
-        i.uninstaller("uninstall.exe").install()?;
-        Ok(())
-    })
-    .finish_page("Done!", "Click Finish to exit.")
-    .error_page(
-        "Installation Failed",
-        "The installation did not complete. Details are shown below.",
-    );
+    });
+w.install_page(|ctx| {
+    let mut i = ctx.installer();
+    i.file(source!("app.exe"), "app.exe").install()?;
+    if i.is_component_selected("docs") {
+        i.dir(source!("docs"), "docs").install()?;
+    }
+    i.uninstaller("uninstall.exe").install()?;
+    Ok(())
+});
+w.finish_page("Done!", "Click Finish to exit.");
+w.error_page(
+    "Installation Failed",
+    "The installation did not complete. Details are shown below.",
+);
 w.run(i)?;
 ```
 
-Builder methods take `&mut self` and return `&mut Self`, so you can
-chain them off the binding or call them as separate statements —
-whichever reads best for conditional / looped configuration:
+Wizard-level methods (`title`, `buttons`, `on_start`, `on_exit`) take
+`&mut self` and return `&mut Self`, so they chain. Page-adding methods
+(`welcome`, `license`, `custom_page`, …) instead return a `PageHandle`
+that scopes the page-specific callbacks `on_enter`, `on_before_leave`,
+and `skip_if` — so those attach to the page you just added without any
+positional coupling. One page per statement reads naturally, and
+conditional / looped configuration drops in cleanly:
 
 ```rust
 let mut w = InstallerGui::wizard();
-w.title("My App");
+w.title("My App").on_start(|i| { /* ... */ Ok(()) });
 w.welcome("Welcome!", "...");
 if include_license {
     w.license("License", LICENSE, "I accept");
@@ -81,9 +85,7 @@ for page in custom_pages {
 w.run(i)?;
 ```
 
-Pages appear in the order you add them. `.on_enter(...)`,
-`.on_before_leave(...)`, and `.skip_if(...)` attach to the
-most-recently-added page.
+Pages appear in the order you add them.
 
 ### Error page
 
@@ -268,9 +270,9 @@ w.on_start(|i| {
         eprintln!("Done.");
     }
     Ok(())
-})
+});
 // ... pages ...
-.install_page(|ctx| {
+w.install_page(|ctx| {
     // runs in both modes
     Ok(())
 });

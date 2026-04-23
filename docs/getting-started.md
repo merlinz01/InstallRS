@@ -157,22 +157,22 @@ pub fn install(i: &mut Installer) -> Result<()> {
     i.process_commandline()?;
 
     let mut w = InstallerGui::wizard();
-    w.title("My App Installer")
-        .welcome("Welcome", "This wizard will install My App.")
-        .license("License", include_str!("../LICENSE.txt"), "I accept")
-        .components_page("Components", "Select features:")
-        .directory_picker("Install Location", "Install to:", "/opt/my-app")
-        .install_page(|ctx| {
-            let mut i = ctx.installer();
-            i.set_out_dir(ctx.install_dir());
-            i.file(source!("app"), "app").mode(0o755).install()?;
-            if i.is_component_selected("docs") {
-                i.dir(source!("docs"), "docs").install()?;
-            }
-            i.uninstaller("uninstall").install()?;
-            Ok(())
-        })
-        .finish_page("Done!", "Click Finish to exit.");
+    w.title("My App Installer");
+    w.welcome("Welcome", "This wizard will install My App.");
+    w.license("License", include_str!("../LICENSE.txt"), "I accept");
+    w.components_page("Components", "Select features:");
+    w.directory_picker("Install Location", "Install to:", "/opt/my-app");
+    w.install_page(|ctx| {
+        let mut i = ctx.installer();
+        i.set_out_dir(ctx.install_dir());
+        i.file(source!("app"), "app").mode(0o755).install()?;
+        if i.is_component_selected("docs") {
+            i.dir(source!("docs"), "docs").install()?;
+        }
+        i.uninstaller("uninstall").install()?;
+        Ok(())
+    });
+    w.finish_page("Done!", "Click Finish to exit.");
     w.run(i)?;
 
     Ok(())

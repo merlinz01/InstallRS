@@ -11,18 +11,18 @@
 //! use installrs::gui::*;
 //!
 //! let mut w = InstallerGui::wizard();
-//! w.title("My App Installer")
-//!     .welcome("Welcome!", "Click Next to continue.")
-//!     .license("License", include_str!("../LICENSE"), "I accept")
-//!     .components_page("Components", "Choose features:")
-//!     .directory_picker("Install Location", "Install to:", "C:/MyApp")
-//!     .install_page(|ctx| {
-//!         let mut i = ctx.installer();
-//!         i.file(installrs::source!("app.exe"), "app.exe").install()?;
-//!         i.uninstaller("uninstall.exe").install()?;
-//!         Ok(())
-//!     })
-//!     .finish_page("Done!", "Click Finish to exit.");
+//! w.title("My App Installer");
+//! w.welcome("Welcome!", "Click Next to continue.");
+//! w.license("License", include_str!("../LICENSE"), "I accept");
+//! w.components_page("Components", "Choose features:");
+//! w.directory_picker("Install Location", "Install to:", "C:/MyApp");
+//! w.install_page(|ctx| {
+//!     let mut i = ctx.installer();
+//!     i.file(installrs::source!("app.exe"), "app.exe").install()?;
+//!     i.uninstaller("uninstall.exe").install()?;
+//!     Ok(())
+//! });
+//! w.finish_page("Done!", "Click Finish to exit.");
 //! w.run(i)?;
 //! ```
 //!
@@ -82,19 +82,19 @@ use crate::{Installer, ProgressSink};
 /// use installrs::gui::*;
 ///
 /// let mut w = InstallerGui::wizard();
-/// w.title("My App Installer")
-///     .welcome("Welcome!", "Click Next to continue.")
-///     .license(include_str!("../LICENSE"))
-///     .directory_picker("C:/Program Files/MyApp")
-///     .install_page(|ctx| {
-///         ctx.set_status("Installing...");
-///         ctx.installer().set_out_dir(&ctx.install_dir());
-///         // ... install files ...
-///         ctx.set_progress(1.0);
-///         ctx.set_status("Done!");
-///         Ok(())
-///     })
-///     .finish_page("Complete!", "Click Finish to exit.");
+/// w.title("My App Installer");
+/// w.welcome("Welcome!", "Click Next to continue.");
+/// w.license(include_str!("../LICENSE"));
+/// w.directory_picker("C:/Program Files/MyApp");
+/// w.install_page(|ctx| {
+///     ctx.set_status("Installing...");
+///     ctx.installer().set_out_dir(&ctx.install_dir());
+///     // ... install files ...
+///     ctx.set_progress(1.0);
+///     ctx.set_status("Done!");
+///     Ok(())
+/// });
+/// w.finish_page("Complete!", "Click Finish to exit.");
 /// w.run(i)?;
 /// ```
 pub struct InstallerGui {
@@ -160,29 +160,23 @@ impl InstallerGui {
     }
 
     /// Add a welcome page with a title and description message.
-    pub fn welcome(&mut self, title: &str, message: &str) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Welcome {
-                title: title.to_string(),
-                message: message.to_string(),
-            }));
-        self
+    pub fn welcome(&mut self, title: &str, message: &str) -> PageHandle<'_> {
+        self.push_page(WizardPage::Welcome {
+            title: title.to_string(),
+            message: message.to_string(),
+        })
     }
 
     /// Add a license agreement page.
     ///
     /// `heading` is the title displayed above the license text, and `accept_label`
     /// is the label on the acceptance checkbox (both translatable by the caller).
-    pub fn license(&mut self, heading: &str, text: &str, accept_label: &str) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::License {
-                heading: heading.to_string(),
-                text: text.to_string(),
-                accept_label: accept_label.to_string(),
-            }));
-        self
+    pub fn license(&mut self, heading: &str, text: &str, accept_label: &str) -> PageHandle<'_> {
+        self.push_page(WizardPage::License {
+            heading: heading.to_string(),
+            text: text.to_string(),
+            accept_label: accept_label.to_string(),
+        })
     }
 
     /// Add a components page (list of checkboxes for optional features).
@@ -194,14 +188,11 @@ impl InstallerGui {
     ///
     /// `heading` is the bold title at the top; `label` is the intro sentence
     /// above the checkbox list (e.g. "Select the features to install:").
-    pub fn components_page(&mut self, heading: &str, label: &str) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Components {
-                heading: heading.to_string(),
-                label: label.to_string(),
-            }));
-        self
+    pub fn components_page(&mut self, heading: &str, label: &str) -> PageHandle<'_> {
+        self.push_page(WizardPage::Components {
+            heading: heading.to_string(),
+            label: label.to_string(),
+        })
     }
 
     /// Add a directory picker page with a default path.
@@ -209,15 +200,17 @@ impl InstallerGui {
     /// `heading` is the bold title at the top of the page, `label` is the
     /// prompt next to the path input (e.g. "Install to:"), and `default` is
     /// the initial path.
-    pub fn directory_picker(&mut self, heading: &str, label: &str, default: &str) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::DirectoryPicker {
-                heading: heading.to_string(),
-                label: label.to_string(),
-                default: default.to_string(),
-            }));
-        self
+    pub fn directory_picker(
+        &mut self,
+        heading: &str,
+        label: &str,
+        default: &str,
+    ) -> PageHandle<'_> {
+        self.push_page(WizardPage::DirectoryPicker {
+            heading: heading.to_string(),
+            label: label.to_string(),
+            default: default.to_string(),
+        })
     }
 
     /// Add the install page with a callback that performs the actual installation.
@@ -227,14 +220,11 @@ impl InstallerGui {
     pub fn install_page(
         &mut self,
         callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
-    ) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Install {
-                callback: Box::new(callback),
-                is_uninstall: false,
-            }));
-        self
+    ) -> PageHandle<'_> {
+        self.push_page(WizardPage::Install {
+            callback: Box::new(callback),
+            is_uninstall: false,
+        })
     }
 
     /// Add an uninstall page — identical to [`install_page`](Self::install_page)
@@ -244,35 +234,30 @@ impl InstallerGui {
     pub fn uninstall_page(
         &mut self,
         callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
-    ) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Install {
-                callback: Box::new(callback),
-                is_uninstall: true,
-            }));
-        self
+    ) -> PageHandle<'_> {
+        self.push_page(WizardPage::Install {
+            callback: Box::new(callback),
+            is_uninstall: true,
+        })
     }
 
     /// Add a finish page shown after installation completes.
-    pub fn finish_page(&mut self, title: &str, message: &str) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Finish {
-                title: title.to_string(),
-                message: message.to_string(),
-            }));
-        self
+    pub fn finish_page(&mut self, title: &str, message: &str) -> PageHandle<'_> {
+        self.push_page(WizardPage::Finish {
+            title: title.to_string(),
+            message: message.to_string(),
+        })
     }
 
     /// Add a custom page — a labeled column of text inputs, checkboxes,
     /// and dropdowns. Each widget is tied to an installer option by key:
     /// values are pre-filled from `installer.option_value(key)` (useful
     /// for CLI overrides), and written back to the options store on
-    /// forward navigation. Validate via `.on_before_leave(...)`:
+    /// forward navigation. Validate via `.on_before_leave(...)` on the
+    /// returned page handle:
     ///
     /// ```rust,ignore
-    /// .custom_page("Settings", "Configure your install:", |p| {
+    /// w.custom_page("Settings", "Configure your install:", |p| {
     ///     p.text("username", "Username:", "admin");
     ///     p.password("password", "Password:");
     ///     p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
@@ -291,24 +276,21 @@ impl InstallerGui {
     ///         return Ok(false);
     ///     }
     ///     Ok(true)
-    /// })
+    /// });
     /// ```
     pub fn custom_page(
         &mut self,
         heading: &str,
         label: &str,
         build: impl FnOnce(&mut CustomPageBuilder),
-    ) -> &mut Self {
+    ) -> PageHandle<'_> {
         let mut b = CustomPageBuilder::new();
         build(&mut b);
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Custom {
-                heading: heading.to_string(),
-                label: label.to_string(),
-                widgets: b.widgets,
-            }));
-        self
+        self.push_page(WizardPage::Custom {
+            heading: heading.to_string(),
+            label: label.to_string(),
+            widgets: b.widgets,
+        })
     }
 
     /// Add an error page shown after the install page if the install
@@ -318,68 +300,18 @@ impl InstallerGui {
     ///
     /// If no error page is registered, install failures surface as a
     /// native error dialog instead.
-    pub fn error_page(&mut self, title: &str, message: &str) -> &mut Self {
-        self.config
-            .pages
-            .push(ConfiguredPage::new(WizardPage::Error {
-                title: title.to_string(),
-                message: message.to_string(),
-            }));
-        self
+    pub fn error_page(&mut self, title: &str, message: &str) -> PageHandle<'_> {
+        self.push_page(WizardPage::Error {
+            title: title.to_string(),
+            message: message.to_string(),
+        })
     }
 
-    /// Attach an `on_enter` callback to the most recently added page.
-    ///
-    /// The callback runs on the GUI thread after the page becomes visible.
-    pub fn on_enter<F>(&mut self, f: F) -> &mut Self
-    where
-        F: Fn(&mut PageContext) -> Result<()> + 'static,
-    {
-        if let Some(last) = self.config.pages.last_mut() {
-            last.on_enter = Some(Box::new(f));
+    fn push_page(&mut self, page: WizardPage) -> PageHandle<'_> {
+        self.config.pages.push(ConfiguredPage::new(page));
+        PageHandle {
+            page: self.config.pages.last_mut().unwrap(),
         }
-        self
-    }
-
-    /// Attach an `on_before_leave` callback to the most recently added page.
-    ///
-    /// Returning `Ok(false)` cancels the navigation and keeps the page visible.
-    /// Returning `Err(_)` also cancels navigation.
-    pub fn on_before_leave<F>(&mut self, f: F) -> &mut Self
-    where
-        F: Fn(&mut PageContext) -> Result<bool> + 'static,
-    {
-        if let Some(last) = self.config.pages.last_mut() {
-            last.on_before_leave = Some(Box::new(f));
-        }
-        self
-    }
-
-    /// Attach a `skip_if` predicate to the most recently added page.
-    ///
-    /// The predicate is evaluated every time the wizard navigates past the
-    /// page. Returning `true` hides it — the user never sees it, and
-    /// `on_enter` / `on_before_leave` don't fire for hidden pages. Must be
-    /// pure: side effects belong in `on_enter`.
-    ///
-    /// Works in both directions: if you hide a page on forward nav, the
-    /// Back button also skips over it.
-    ///
-    /// ```rust,ignore
-    /// .license("License", include_str!("../LICENSE"), "I accept")
-    /// .skip_if(|ctx| ctx.installer().get_option::<bool>("accept-license").unwrap_or(false))
-    ///
-    /// .directory_picker("Install Location", "Install to:", default_dir)
-    /// .skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some())
-    /// ```
-    pub fn skip_if<F>(&mut self, f: F) -> &mut Self
-    where
-        F: Fn(&PageContext) -> bool + 'static,
-    {
-        if let Some(last) = self.config.pages.last_mut() {
-            last.skip_if = Some(Box::new(f));
-        }
-        self
     }
 
     /// Run the wizard GUI. This blocks until the user closes the window.
@@ -519,5 +451,60 @@ impl InstallerGui {
         Err(anyhow::anyhow!(
             "No GUI backend available for this platform. Enable `gui-win32` on Windows or `gui-gtk` on Linux."
         ))
+    }
+}
+
+/// Handle to the most recently added wizard page, returned by every
+/// page-adding method on [`InstallerGui`]. Scope for attaching
+/// page-specific callbacks — `on_enter`, `on_before_leave`, `skip_if`.
+///
+/// The handle borrows the wizard mutably, so it must be consumed (or
+/// dropped) before the next page-adding call. In practice that means
+/// one page per statement — which reads better than a 30-line chain
+/// anyway.
+pub struct PageHandle<'a> {
+    page: &'a mut ConfiguredPage,
+}
+
+impl<'a> PageHandle<'a> {
+    /// Attach an `on_enter` callback. Runs on the GUI thread after the
+    /// page becomes visible, on forward navigation only.
+    pub fn on_enter<F>(self, f: F) -> Self
+    where
+        F: Fn(&mut PageContext) -> Result<()> + 'static,
+    {
+        self.page.on_enter = Some(Box::new(f));
+        self
+    }
+
+    /// Attach an `on_before_leave` callback. Returning `Ok(false)`
+    /// cancels navigation and keeps the page visible; `Err(_)` also
+    /// cancels. Runs on forward navigation only.
+    pub fn on_before_leave<F>(self, f: F) -> Self
+    where
+        F: Fn(&mut PageContext) -> Result<bool> + 'static,
+    {
+        self.page.on_before_leave = Some(Box::new(f));
+        self
+    }
+
+    /// Attach a `skip_if` predicate. Evaluated every time the wizard
+    /// navigates past the page; returning `true` hides it. Must be pure
+    /// — side effects belong in `on_enter`. Both Next and Back respect
+    /// the skip, so a hidden page is also skipped on backward nav.
+    ///
+    /// ```rust,ignore
+    /// w.license("License", include_str!("../LICENSE"), "I accept")
+    ///     .skip_if(|ctx| ctx.installer().get_option::<bool>("accept-license").unwrap_or(false));
+    ///
+    /// w.directory_picker("Install Location", "Install to:", default_dir)
+    ///     .skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some());
+    /// ```
+    pub fn skip_if<F>(self, f: F) -> Self
+    where
+        F: Fn(&PageContext) -> bool + 'static,
+    {
+        self.page.skip_if = Some(Box::new(f));
+        self
     }
 }

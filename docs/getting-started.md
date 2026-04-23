@@ -250,7 +250,7 @@ installrs --target .
   `uninstall`.
 - [GUI Wizard](gui-wizard.md) — beyond the quick snippet in §6, covers
   custom pages, error page, dialogs, and headless mode.
-- [Components and CLI options](components-and-cli.md) — selectable
+- [Installer API](installer-api.md) — selectable
   components plus registering your own `--flags`.
 - [Building for production](building.md) — cross-compilation, size and
   speed tuning, code signing, release CI.

@@ -1,6 +1,6 @@
 <!-- markdownlint-configure-file { "MD013": { "line_length": 100 } } -->
 
-# Components and CLI
+# Installer API
 
 InstallRS has a **component system** that lets users pick which optional
 features to install, plus a **CLI parser** that handles built-in flags

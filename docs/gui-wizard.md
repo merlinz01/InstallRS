@@ -263,7 +263,7 @@ install in headless mode) — **even if the install failed**.
 
 ## See also
 
-- [Components and CLI options](components-and-cli.md) — the
+- [Installer API](installer-api.md) — the
   `components_page` renders registered components; custom-page widgets
   bind to registered CLI options by key.
 - [Internationalization](internationalization.md) — translating page

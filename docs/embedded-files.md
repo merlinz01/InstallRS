@@ -204,7 +204,7 @@ All `.status()`, `.log()`, and progress updates flow through the sink.
 
 ## See also
 
-- [Components and CLI options](components-and-cli.md) — the
+- [Installer API](installer-api.md) — the
   `progress_weight` declared on each component, and how it interacts
   with per-op weights.
 - [GUI Wizard](gui-wizard.md) — the install page consumes the status

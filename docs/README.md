@@ -23,7 +23,7 @@ relevant guide below.
 - **[GUI Wizard](gui-wizard.md)** — wizard builder, custom pages,
   error page, native dialogs, pre-wizard language selector, and headless
   mode.
-- **[Components and CLI options](components-and-cli.md)** — selectable
+- **[Installer API](installer-api.md)** — selectable
   components with `--components` / `--with` / `--without`, plus custom
   CLI flags (`--config /path`, `--port 8080`, etc.) that auto-wire to
   custom-page widgets.

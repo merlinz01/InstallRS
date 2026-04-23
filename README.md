@@ -104,7 +104,7 @@ and headless mode — the best way to see the whole system in action.
 - [Embedded files, builder ops, and progress](docs/embedded-files.md) — the `source!` macro,
   the fluent `file` / `dir` / `remove` / `shortcut` / `registry` / `step` API, and the progress model.
 - [GUI Wizard](docs/gui-wizard.md) — wizard builder, custom pages, dialogs, headless mode.
-- [Components and CLI options](docs/components-and-cli.md) — selectable features plus custom `--flags`.
+- [Installer API](docs/installer-api.md) — selectable components plus custom `--flags`.
 - [Internationalization](docs/internationalization.md) — translating wizard strings,
   locale detection, and the pre-wizard language picker.
 - [Windows Resources](docs/windows-resources.md) — icons, version info, UAC manifests.

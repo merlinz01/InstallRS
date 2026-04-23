@@ -1,0 +1,7 @@
+This file is only embedded when the installer is built with the
+"pro" cargo feature enabled:
+
+    installrs --target ./example --feature pro
+
+Without that flag, neither this file nor the `Installer::file` call
+that places it are compiled into the installer binary.

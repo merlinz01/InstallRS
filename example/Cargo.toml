@@ -7,6 +7,12 @@ edition = "2021"
 name = "my_installer"
 path = "installer.rs"
 
+[features]
+# Demonstrates cargo-feature-gated embedded sources. Enable with
+# `installrs --target ./example --feature pro` to include pro-bonus.txt
+# and the matching Installer::file call in the build.
+pro = []
+
 [dependencies]
 installrs = { path = ".." }
 anyhow = "1"

@@ -260,6 +260,19 @@ pub fn install(i: &mut Installer) -> Result<()> {
                     .install()?;
             }
 
+            // Cargo-feature-gated content. Both the `source!` and the
+            // `i.file(...)` call are compiled out unless the installer was
+            // built with `installrs --feature pro`.
+            #[cfg(feature = "pro")]
+            {
+                i.file(
+                    installrs::source!("pro-bonus.txt", features = ["pro"]),
+                    "pro-bonus.txt",
+                )
+                .log(t!("installer.install.log_pro_bonus"))
+                .install()?;
+            }
+
             // Simulate a long-running step to demonstrate the progress bar and cancellation.
             // Opens a single weighted step (contributes 2 units to the core component's
             // budget) and interpolates progress across 5 × 200 ms sub-ticks.

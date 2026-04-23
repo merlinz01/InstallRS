@@ -150,6 +150,11 @@ installer.install.log_testfile:
   de: "Testdatei wird installiert..."
   es: "Instalando archivo de prueba..."
 
+installer.install.log_pro_bonus:
+  en: "Installing pro bonus file..."
+  de: "Pro-Bonusdatei wird installiert..."
+  es: "Instalando archivo adicional pro..."
+
 installer.install.status_longrunning:
   en: "Simulating a long-running step..."
   de: "Simuliere lang andauernden Schritt..."

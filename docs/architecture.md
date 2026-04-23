@@ -31,7 +31,18 @@ they write `installrs = "X.Y.Z"` in their installer crate's
 ```text
 Cargo.toml              # single [package] with lib + [[bin]] targets
 src/
-  lib.rs                # runtime API (public): Installer, Source, builder ops
+  lib.rs                # Installer struct + install/uninstall entry points;
+                        # re-exports every public type from the submodules below
+  source.rs             # Source newtype, source! macro, FNV-1a path hash
+  embedded.rs           # EmbeddedEntry / DirChild / DirChildKind + verify_payload
+  types.rs              # OverwriteMode, ErrorAction, DirFilter / DirErrorHandler
+  progress.rs           # ProgressSink trait + internal ProgressState
+  options.rs            # OptionKind / OptionValue / FromOptionValue + CmdOption
+  component.rs          # Component struct with default_off / required
+  ops.rs                # FileOp / DirOp / UninstallerOp / MkdirOp / RemoveOp
+                        # plus install_children / backup / write helpers
+  shortcut.rs           # (Windows-only) ShortcutOp + SHChangeNotify plumbing
+  registry.rs           # (Windows-only) RegistryHive / Registry / Reg*Op
   gui/                  # optional GUI module (behind `gui` feature)
     mod.rs              # InstallerGui wizard builder + platform dispatch
     types.rs            # WizardConfig, WizardPage, GuiContext, PageContext, GuiMessage
@@ -57,38 +68,43 @@ tests/
   integration.rs        # end-to-end CLI → build → install → uninstall tests
 ```
 
-## Runtime library (`src/lib.rs`)
+## Runtime library (`src/lib.rs` + submodules)
 
-Everything in the public API that users touch at runtime:
+The public API is split across the submodules listed above; `lib.rs`
+owns the `Installer` struct itself (fields, constructor, CLI parser,
+log file, cancellation flag, Ctrl+C handler, decompression,
+component/option registries, `install_main` / `uninstall_main` entry
+points, Windows self-deletion) and re-exports every type from the
+submodules so `installrs::FileOp`, `installrs::Component`, etc. stay
+at the crate root. Several `Installer` methods and fields are
+`pub(crate)` so the builder-op modules (`ops.rs`, `shortcut.rs`,
+`registry.rs`) can drive them without exposing internal plumbing to
+user code.
 
-- `Installer` struct — the central context passed into `install()` /
+Everything users touch at runtime:
+
+- `Installer` — the central context passed into `install()` /
   `uninstall()`.
-- `Source` newtype + `source!` macro — compile-time path hash.
+- `Source` + `source!` macro — compile-time path hash.
 - Builder op types: `FileOp`, `DirOp`, `UninstallerOp`, `MkdirOp`,
-  `RemoveOp` — each with `.status()` / `.log()` / `.weight()` / terminal
-  `.install()`. File / dir / uninstaller additionally support
-  `.overwrite(OverwriteMode)` and `.mode(u32)`; `DirOp` also
-  `.filter(Fn)` and `.on_error(Fn)`.
-- `ProgressSink` trait and step-weighted `ProgressState { steps_done,
-step_range_start, step_range_end }`.
-- `EmbeddedEntry` / `DirChild` / `DirChildKind` — the embedded-entries
-  table type the generated `ENTRIES` static is shaped to.
+  `RemoveOp` (plus Windows-only `ShortcutOp` and registry ops). Each
+  has `.status()` / `.log()` / `.weight()` / terminal `.install()`;
+  file / dir / uninstaller also support `.overwrite(OverwriteMode)`
+  and `.mode(u32)`; `DirOp` adds `.filter(Fn)` and `.on_error(Fn)`.
+- `ProgressSink` trait; step-weighted progress driven by an
+  Installer-owned `ProgressState`.
+- `EmbeddedEntry` / `DirChild` / `DirChildKind` — the entries table
+  the generated `ENTRIES` static is shaped to; `verify_payload`
+  checks its SHA-256 on process start.
 - `Component { id, label, description, progress_weight, default,
-required, selected }` with chainable `.default_off()` and
-  `.required()`.
+  required, selected }` with `.default_off()` / `.required()`.
 - User-defined CLI options (`OptionKind`, `OptionValue`,
-  `FromOptionValue` for `bool`/`String`/`i64`/`i32`/`u64`/`u32`).
-- `process_commandline()` — the built-in CLI parser. Errors on unknown
-  flags.
+  `FromOptionValue` for `bool`/`String`/`i64`/`i32`/`u64`/`u32`) and
+  `process_commandline()` — errors on unknown flags.
 - `log_error()` / `set_log_file()` — the log-file plumbing that
   `--log <path>` hooks into.
-- `install_main` / `uninstall_main` — the entry points the generated
-  `main()` calls.
-- `install_ctrlc_handler()` — the SIGINT / console-Ctrl handler that
-  flips the shared cancel flag on first press and exits on second.
-- Decompression (gated behind `lzma` / `gzip` / `bzip2` features).
-- FNV-1a path hashing (`source_path_hash_const`).
-- Windows self-deletion mechanism.
+- `install_ctrlc_handler()` — SIGINT / console-Ctrl handler that flips
+  the shared cancel flag on first press and exits on second.
 
 ## GUI module (`src/gui/`, feature-gated)
 

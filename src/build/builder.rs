@@ -253,14 +253,12 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         log::info!("Active features: {}", params.features.join(", "));
     }
 
-    log::info!("Install sources ({}):", scan.install_sources.len());
-    for s in &scan.install_sources {
-        log_source_ref(s);
-    }
-    log::info!("Uninstall sources ({}):", scan.uninstall_sources.len());
-    for s in &scan.uninstall_sources {
-        log_source_ref(s);
-    }
+    log_source_list("Install sources", &scan.install_sources, &params.features);
+    log_source_list(
+        "Uninstall sources",
+        &scan.uninstall_sources,
+        &params.features,
+    );
 
     // ── Gather and compress files for installer ──────────────────────────────
     let mut install_gathered: Vec<GatheredFile> = Vec::new();
@@ -781,11 +779,49 @@ fn merge_win_resource_config(
     }
 }
 
+fn log_source_list(label: &str, sources: &[scanner::SourceRef], active_features: &[String]) {
+    let active: Vec<&scanner::SourceRef> = sources
+        .iter()
+        .filter(|s| source_is_active(s, active_features))
+        .collect();
+    let skipped_count = sources.len() - active.len();
+    if skipped_count > 0 {
+        log::info!(
+            "{} ({}, {} feature-gated skipped):",
+            label,
+            active.len(),
+            skipped_count
+        );
+    } else {
+        log::info!("{} ({}):", label, active.len());
+    }
+    for s in &active {
+        log_source_ref(s);
+    }
+    // Skipped sources appear only in verbose (debug) mode.
+    for s in sources {
+        if !source_is_active(s, active_features) {
+            log::debug!(
+                "  [skipped] {} (features: {})",
+                s.path,
+                s.features.join(", ")
+            );
+        }
+    }
+}
+
 fn log_source_ref(s: &scanner::SourceRef) {
-    if s.ignore.is_empty() {
+    let mut annotations: Vec<String> = Vec::new();
+    if !s.ignore.is_empty() {
+        annotations.push(format!("ignore: {}", s.ignore.join(", ")));
+    }
+    if !s.features.is_empty() {
+        annotations.push(format!("features: {}", s.features.join(", ")));
+    }
+    if annotations.is_empty() {
         log::info!("  {}", s.path);
     } else {
-        log::info!("  {} (ignore: {})", s.path, s.ignore.join(", "));
+        log::info!("  {} ({})", s.path, annotations.join("; "));
     }
 }
 

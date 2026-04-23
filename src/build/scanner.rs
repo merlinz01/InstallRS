@@ -4,12 +4,17 @@ use anyhow::{Context, Result};
 use syn::visit::Visit;
 
 /// A `source!(...)` invocation: the embedded path plus any build-time-only
-/// options (e.g. `ignore = [...]`). Dedup is by path; options from repeat
-/// references are merged (union for `ignore`).
+/// options (e.g. `ignore = [...]`, `features = [...]`). Dedup is by path;
+/// `ignore` merges as union. `features` merges as: empty (unconditional)
+/// wins; otherwise union — meaning the source is active if *any* listed
+/// feature is enabled.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SourceRef {
     pub path: String,
     pub ignore: Vec<String>,
+    /// Feature gates. Empty = always active. Non-empty = active iff any
+    /// feature in this list is in the builder's active-feature set.
+    pub features: Vec<String>,
 }
 
 pub struct ScanResult {
@@ -89,6 +94,16 @@ fn merge_or_push(list: &mut Vec<SourceRef>, new: SourceRef) {
                 existing.ignore.push(pat);
             }
         }
+        // features: empty (unconditional) wins. Otherwise union.
+        if existing.features.is_empty() || new.features.is_empty() {
+            existing.features.clear();
+        } else {
+            for f in new.features {
+                if !existing.features.contains(&f) {
+                    existing.features.push(f);
+                }
+            }
+        }
     } else {
         list.push(new);
     }
@@ -146,6 +161,7 @@ fn parse_source_macro(mac: &syn::Macro) -> Option<SourceRef> {
     let mut out = SourceRef {
         path,
         ignore: Vec::new(),
+        features: Vec::new(),
     };
 
     for arg in iter {
@@ -168,6 +184,16 @@ fn parse_source_macro(mac: &syn::Macro) -> Option<SourceRef> {
                     } else {
                         log::warn!(
                             "source!({:?}, ignore = ...): value must be an array of string literals",
+                            out.path
+                        );
+                    }
+                }
+                "features" => {
+                    if let Some(items) = extract_str_array(right) {
+                        out.features = items;
+                    } else {
+                        log::warn!(
+                            "source!({:?}, features = ...): value must be an array of string literals",
                             out.path
                         );
                     }

@@ -38,6 +38,24 @@ behavior.
 i.dir(source!("assets", ignore = ["*.bak", "scratch"]), "assets").install()?;
 ```
 
+- `features = ["name", ...]` — cargo feature gates. The source is
+  embedded only when at least one listed feature is active for the
+  build (`installrs --feature <name>`). With no `features` key, the
+  source is always embedded. The matching name must exist in your
+  user crate's `[features]` table; the builder passes it through to
+  the user-crate dependency of the generated installer, so
+  `#[cfg(feature = "name")]` on the surrounding `Installer::file(...)`
+  call lines up. Repeat references to the same path union their
+  feature lists; an unconditional reference anywhere clears the
+  gate.
+
+```rust
+#[cfg(feature = "pro")]
+i.file(source!("pro-assets.dat", features = ["pro"]), "assets.dat").install()?;
+```
+
+Then build with `installrs --target . --feature pro`.
+
 ## Builder ops
 
 Every install operation returns a builder that terminates with

@@ -98,6 +98,17 @@ fn installrs_dep_spec(features_suffix: &str) -> String {
     }
 }
 
+/// Format a ", features = [\"a\", \"b\"]" suffix for the user-crate dep,
+/// or "" when empty.
+fn format_user_features(features: &[String]) -> String {
+    if features.is_empty() {
+        String::new()
+    } else {
+        let list: Vec<String> = features.iter().map(|f| format!("{f:?}")).collect();
+        format!(", features = [{}]", list.join(", "))
+    }
+}
+
 /// Write a file only if its content has changed, preserving mtime for build caching.
 fn write_if_changed(path: &Path, content: &str) -> Result<()> {
     if path.exists() {
@@ -160,6 +171,16 @@ pub struct BuildParams {
     pub installer_win_resource: Option<WinResourceConfig>,
     pub uninstaller_win_resource: Option<WinResourceConfig>,
     pub gui_enabled: bool,
+    /// User-library cargo features to enable. Gates `source!(..., features
+    /// = [...])` entries and is passed through as the user-crate
+    /// dependency's `features = [...]` list in the generated crates.
+    pub features: Vec<String>,
+}
+
+/// A source is active if it has no feature gates, or if any of its listed
+/// features is in the builder's active-feature set.
+fn source_is_active(src: &scanner::SourceRef, active: &[String]) -> bool {
+    src.features.is_empty() || src.features.iter().any(|f| active.contains(f))
 }
 
 struct GatheredFile {
@@ -228,6 +249,10 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         return Err(anyhow!("source must define a public `uninstall` function"));
     }
 
+    if !params.features.is_empty() {
+        log::info!("Active features: {}", params.features.join(", "));
+    }
+
     log::info!("Install sources ({}):", scan.install_sources.len());
     for s in &scan.install_sources {
         log_source_ref(s);
@@ -242,6 +267,14 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     let mut hash_cache: HashMap<String, String> = HashMap::new();
 
     for src in &scan.install_sources {
+        if !source_is_active(src, &params.features) {
+            log::debug!(
+                "Skipping feature-gated source {:?} (features {:?})",
+                src.path,
+                src.features
+            );
+            continue;
+        }
         let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
         gather_source(
             &src.path,
@@ -259,6 +292,14 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     let mut uninstall_gathered: Vec<GatheredFile> = Vec::new();
 
     for src in &scan.uninstall_sources {
+        if !source_is_active(src, &params.features) {
+            log::debug!(
+                "Skipping feature-gated source {:?} (features {:?})",
+                src.path,
+                src.features
+            );
+            continue;
+        }
         let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
         gather_source(
             &src.path,
@@ -341,6 +382,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         params.gui_enabled,
         target_is_windows,
         target_is_linux,
+        &params.features,
     )?;
     compile_cargo_project(
         &uninstaller_dir,
@@ -403,6 +445,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         params.gui_enabled,
         target_is_windows,
         target_is_linux,
+        &params.features,
     )?;
     compile_cargo_project(
         &installer_dir,
@@ -1274,6 +1317,7 @@ fn write_uninstaller_sources(
     gui_enabled: bool,
     target_is_windows: bool,
     target_is_linux: bool,
+    user_features: &[String],
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
@@ -1306,6 +1350,8 @@ fn write_uninstaller_sources(
         ""
     };
 
+    let user_features_str = format_user_features(user_features);
+
     let cargo_toml = format!(
         r#"[package]
 name = "uninstaller"
@@ -1316,7 +1362,7 @@ edition = "2021"
 
 [dependencies]
 {installrs_dep}
-{user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
+{user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}"{user_features_str} }}
 {build_deps}
 [profile.release]
 opt-level = "z"
@@ -1407,6 +1453,7 @@ fn write_installer_sources(
     gui_enabled: bool,
     target_is_windows: bool,
     target_is_linux: bool,
+    user_features: &[String],
 ) -> Result<()> {
     log::debug!("Writing installer sources");
 
@@ -1439,6 +1486,8 @@ fn write_installer_sources(
         ""
     };
 
+    let user_features_str = format_user_features(user_features);
+
     let cargo_toml = format!(
         r#"[package]
 name = "installer-generated"
@@ -1449,7 +1498,7 @@ edition = "2021"
 
 [dependencies]
 {installrs_dep}
-{user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}" }}
+{user_crate_name} = {{ path = {user_path:?}, package = "{user_package_name}"{user_features_str} }}
 {build_deps}
 [profile.release]
 opt-level = "z"

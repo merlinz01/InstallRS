@@ -32,6 +32,14 @@ struct Cli {
     #[arg(long)]
     target_triple: Option<String>,
 
+    /// Enable a user-library cargo feature in the generated installer.
+    /// Activates `source!(..., features = [...])` entries gated on the
+    /// same name, and enables the matching feature on the user-crate
+    /// dependency so `#[cfg(feature = "...")]` code in `install()` /
+    /// `uninstall()` is compiled in. Repeatable.
+    #[arg(long = "feature", value_name = "NAME", action = clap::ArgAction::Append)]
+    features: Vec<String>,
+
     /// Enable debug output (-v) or trace output (-vv)
     #[arg(long, short, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -117,6 +125,7 @@ fn run(cli: Cli) -> Result<()> {
         installer_win_resource,
         uninstaller_win_resource,
         gui_enabled,
+        features: cli.features,
     };
 
     build::builder::build(params)
@@ -350,6 +359,56 @@ mod tests {
             .find(|s| s.path == "assets")
             .expect("missing assets source");
         assert_eq!(s.ignore, vec!["*.bak".to_string(), "scratch".to_string()]);
+    }
+
+    #[test]
+    fn scanner_parses_features_option() {
+        let r = scan_str(
+            r#"fn install(i: &mut T) { i.file(source!("docs.tar", features = ["docs", "full"]), "dst"); }"#,
+        );
+        let s = r
+            .install_sources
+            .iter()
+            .find(|s| s.path == "docs.tar")
+            .expect("missing docs.tar source");
+        assert_eq!(s.features, vec!["docs".to_string(), "full".to_string()]);
+    }
+
+    #[test]
+    fn scanner_empty_features_wins_over_gated_repeat() {
+        let r = scan_str(
+            r#"fn install(i: &mut T) {
+                i.file(source!("x.dat", features = ["pro"]), "a");
+                i.file(source!("x.dat"), "b");
+            }"#,
+        );
+        let s = r
+            .install_sources
+            .iter()
+            .find(|s| s.path == "x.dat")
+            .unwrap();
+        assert!(
+            s.features.is_empty(),
+            "unconditional reference should clear feature gates, got {:?}",
+            s.features
+        );
+    }
+
+    #[test]
+    fn scanner_unions_features_across_invocations() {
+        let r = scan_str(
+            r#"fn install(i: &mut T) {
+                i.file(source!("x.dat", features = ["a"]), "1");
+                i.file(source!("x.dat", features = ["b"]), "2");
+            }"#,
+        );
+        let s = r
+            .install_sources
+            .iter()
+            .find(|s| s.path == "x.dat")
+            .unwrap();
+        assert!(s.features.contains(&"a".to_string()));
+        assert!(s.features.contains(&"b".to_string()));
     }
 
     #[test]

@@ -12,6 +12,11 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- Cargo-feature gating for embedded sources via
+  `source!(path, features = [...])` and `installrs --feature <name>`.
+
 ## [0.1.0-rc7] — 2026-04-22
 
 ### Added

@@ -149,8 +149,10 @@ The binary target includes `src/build/` via `#[path]`.
   for `install()` / `uninstall()` function definitions and for
   `source!("path" [, key = value]*)` macro invocations. `visit_macro`
   catches them in any syntactic position. Produces a
-  `Vec<SourceRef { path, ignore }>` per scope; repeat invocations with
-  different `ignore` lists merge (union).
+  `Vec<SourceRef { path, ignore, features }>` per scope; repeat
+  invocations with different `ignore` lists merge (union), and
+  `features` merges as union — but an unconditional reference (empty
+  `features`) anywhere wins and clears the gate.
 - **`build/compress.rs`** — LZMA / gzip / bzip2 / none. Validates
   methods, compresses files during build, decompresses on cache hit
   to verify integrity.
@@ -239,11 +241,19 @@ entries table. **`source_path_hash_const` in `lib.rs` and `fnv1a` in
 `builder.rs` must stay in sync** — a drift would silently break
 lookups.
 
-The macro also accepts build-time-only keyword options. Currently
+The macro also accepts build-time-only keyword options:
 `source!("path", ignore = ["*.bak", ...])` adds per-source glob
-ignores when gathering a directory; the scanner's `SourceRef { path,
-ignore }` dedups by path and merges ignore lists across repeat
-invocations.
+ignores when gathering a directory, and
+`source!("path", features = ["name", ...])` gates the entry on an
+active cargo feature. The scanner's `SourceRef { path, ignore,
+features }` dedups by path and merges options across repeat
+invocations. Feature filtering happens in `builder::build` — gated
+sources are dropped from `install_sources` / `uninstall_sources`
+before `gather_source`, so the generated `ENTRIES` table contains
+only the active set. Active features are also injected into the
+user-crate dependency's `features = [...]` list in the generated
+installer and uninstaller `Cargo.toml`, so `#[cfg(feature = "name")]`
+blocks in user code are compiled in consistently with the gating.
 
 ### Content deduplication
 

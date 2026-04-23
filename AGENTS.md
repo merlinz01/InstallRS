@@ -47,6 +47,6 @@ InstallRS, update README.md and/or the relevant doc files in `docs/`.
 Make sure to update documentation indexes and links.
 If you add a new doc file, add it to any relevant indexes
 and link to it from the README and any relevant "See also" doc sections.
-Also update `CHANGELOG.md` with a brief note about the change,
-following the style of previous entries, keeping it concise
-and focused on the change.
+Also update `CHANGELOG.md` with a brief high-level overview note about the change.
+Keep changelog entries concise and focused on the user-facing impact of the change;
+don't include internal implementation details or development notes.

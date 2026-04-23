@@ -20,6 +20,7 @@ installrs --target <dir> --output <file> [options]
 | `--compression <method>`   | Compression method for embedded files (default `lzma`)             |
 | `--ignore <patterns>`      | Comma-separated glob patterns to ignore when gathering directories |
 | `--target-triple <triple>` | Rust target triple for cross-compilation                           |
+| `--feature <name>`         | Enable a user-library cargo feature (repeatable)                   |
 | `-v` / `-vv`               | Debug output / trace output                                        |
 | `-q` / `--quiet`           | Suppress non-error output                                          |
 | `-s` / `--silent`          | Suppress all output                                                |
@@ -56,6 +57,20 @@ Verbose build to see what files got embedded:
 ```sh
 installrs --target my-installer --output installer -v
 ```
+
+Enable user-library cargo features — gates `source!(..., features =
+[...])` entries and activates matching `#[cfg(feature = "...")]` code
+in your installer library:
+
+```sh
+installrs --target my-installer --feature pro --feature docs
+```
+
+The named features must exist in your installer crate's `[features]`
+table. The builder passes them through to the user-crate dependency of
+the generated installer and uninstaller, so one `--feature` flag
+covers both the embedded-file gating and the compile-time code
+gating.
 
 ## Customizing the generated release profile
 

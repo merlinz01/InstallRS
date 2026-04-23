@@ -129,17 +129,17 @@ init_locale();
 show_language_dialog_if_needed();
 rust_i18n::set_locale(&chosen);
 
-InstallerGui::wizard()
-    .title(&t!("installer.title"))    // captured now, with the chosen locale
-    .welcome(&t!("installer.welcome.title"), &t!("installer.welcome.message"))
+let mut w = InstallerGui::wizard();
+w.title(&t!("installer.title"))    // captured now, with the chosen locale
+    .welcome(&t!("installer.welcome.title"), &t!("installer.welcome.message"));
     // ...
-    .run(i)?;
+w.run(i)?;
 
 // ❌ Wrong order — strings captured in the detected locale, not the chosen one
-InstallerGui::wizard()
-    .title(&t!("installer.title"))
+let mut w = InstallerGui::wizard();
+w.title(&t!("installer.title"));
     // ...
-    .run(i)?;
+w.run(i)?;
 
 rust_i18n::set_locale(&chosen); // too late
 ```

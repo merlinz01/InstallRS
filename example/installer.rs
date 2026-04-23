@@ -87,8 +87,8 @@ pub fn install(i: &mut Installer) -> Result<()> {
         .get_option::<String>("install-dir")
         .unwrap_or_else(|| default_install_dir().to_string());
 
-    InstallerGui::wizard()
-        .title(&t!("installer.title"))
+    let mut w = InstallerGui::wizard();
+    w.title(&t!("installer.title"))
         .buttons(installrs::gui::ButtonLabels {
             back: t!("wizard.back").into(),
             next: t!("wizard.next").into(),
@@ -367,8 +367,8 @@ pub fn install(i: &mut Installer) -> Result<()> {
             &t!("installer.finish.title"),
             &t!("installer.finish.message"),
         )
-        .error_page(&t!("installer.error.title"), &t!("installer.error.message"))
-        .run(i)?;
+        .error_page(&t!("installer.error.title"), &t!("installer.error.message"));
+    w.run(i)?;
 
     Ok(())
 }
@@ -392,8 +392,8 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     #[cfg(windows)]
     i.enable_self_delete();
 
-    InstallerGui::wizard()
-        .title(&t!("uninstaller.title"))
+    let mut w = InstallerGui::wizard();
+    w.title(&t!("uninstaller.title"))
         .buttons(installrs::gui::ButtonLabels {
             back: t!("wizard.back").into(),
             next: t!("wizard.next").into(),
@@ -480,8 +480,8 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         .error_page(
             &t!("uninstaller.error.title"),
             &t!("uninstaller.error.message"),
-        )
-        .run(i)?;
+        );
+    w.run(i)?;
 
     Ok(())
 }

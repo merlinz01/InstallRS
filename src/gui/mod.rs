@@ -10,8 +10,8 @@
 //! ```rust,ignore
 //! use installrs::gui::*;
 //!
-//! InstallerGui::wizard()
-//!     .title("My App Installer")
+//! let mut w = InstallerGui::wizard();
+//! w.title("My App Installer")
 //!     .welcome("Welcome!", "Click Next to continue.")
 //!     .license("License", include_str!("../LICENSE"), "I accept")
 //!     .components_page("Components", "Choose features:")
@@ -22,8 +22,8 @@
 //!         i.uninstaller("uninstall.exe").install()?;
 //!         Ok(())
 //!     })
-//!     .finish_page("Done!", "Click Finish to exit.")
-//!     .run(i)?;
+//!     .finish_page("Done!", "Click Finish to exit.");
+//! w.run(i)?;
 //! ```
 //!
 //! The same wizard definition runs headless (no window) when the user
@@ -81,8 +81,8 @@ use crate::{Installer, ProgressSink};
 /// ```rust,ignore
 /// use installrs::gui::*;
 ///
-/// InstallerGui::wizard()
-///     .title("My App Installer")
+/// let mut w = InstallerGui::wizard();
+/// w.title("My App Installer")
 ///     .welcome("Welcome!", "Click Next to continue.")
 ///     .license(include_str!("../LICENSE"))
 ///     .directory_picker("C:/Program Files/MyApp")
@@ -94,8 +94,8 @@ use crate::{Installer, ProgressSink};
 ///         ctx.set_status("Done!");
 ///         Ok(())
 ///     })
-///     .finish_page("Complete!", "Click Finish to exit.")
-///     .run(i)?;
+///     .finish_page("Complete!", "Click Finish to exit.");
+/// w.run(i)?;
 /// ```
 pub struct InstallerGui {
     config: WizardConfig,
@@ -121,7 +121,10 @@ impl InstallerGui {
     /// Inspect `installer.headless` inside the callback to branch on mode.
     /// Useful for work that must happen regardless of UI — environment
     /// setup, argument validation, prerequisite checks.
-    pub fn on_start(mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) -> Self {
+    pub fn on_start(
+        &mut self,
+        f: impl FnOnce(&mut Installer) -> Result<()> + 'static,
+    ) -> &mut Self {
         self.config.on_start = Some(Box::new(f));
         self
     }
@@ -129,13 +132,13 @@ impl InstallerGui {
     /// Set a callback that runs at wizard exit, after the window closes (or
     /// after the install callback completes in headless mode). Runs even
     /// when the install flow fails.
-    pub fn on_exit(mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) -> Self {
+    pub fn on_exit(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) -> &mut Self {
         self.config.on_exit = Some(Box::new(f));
         self
     }
 
     /// Set the window title.
-    pub fn title(mut self, title: &str) -> Self {
+    pub fn title(&mut self, title: &str) -> &mut Self {
         self.config.title = title.to_string();
         self
     }
@@ -151,13 +154,13 @@ impl InstallerGui {
     ///     ..Default::default()
     /// })
     /// ```
-    pub fn buttons(mut self, labels: ButtonLabels) -> Self {
+    pub fn buttons(&mut self, labels: ButtonLabels) -> &mut Self {
         self.config.buttons = labels;
         self
     }
 
     /// Add a welcome page with a title and description message.
-    pub fn welcome(mut self, title: &str, message: &str) -> Self {
+    pub fn welcome(&mut self, title: &str, message: &str) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::Welcome {
@@ -171,7 +174,7 @@ impl InstallerGui {
     ///
     /// `heading` is the title displayed above the license text, and `accept_label`
     /// is the label on the acceptance checkbox (both translatable by the caller).
-    pub fn license(mut self, heading: &str, text: &str, accept_label: &str) -> Self {
+    pub fn license(&mut self, heading: &str, text: &str, accept_label: &str) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::License {
@@ -191,7 +194,7 @@ impl InstallerGui {
     ///
     /// `heading` is the bold title at the top; `label` is the intro sentence
     /// above the checkbox list (e.g. "Select the features to install:").
-    pub fn components_page(mut self, heading: &str, label: &str) -> Self {
+    pub fn components_page(&mut self, heading: &str, label: &str) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::Components {
@@ -206,7 +209,7 @@ impl InstallerGui {
     /// `heading` is the bold title at the top of the page, `label` is the
     /// prompt next to the path input (e.g. "Install to:"), and `default` is
     /// the initial path.
-    pub fn directory_picker(mut self, heading: &str, label: &str, default: &str) -> Self {
+    pub fn directory_picker(&mut self, heading: &str, label: &str, default: &str) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::DirectoryPicker {
@@ -222,9 +225,9 @@ impl InstallerGui {
     /// The callback receives a [`GuiContext`] for updating progress and accessing
     /// the [`Installer`].
     pub fn install_page(
-        mut self,
+        &mut self,
         callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
-    ) -> Self {
+    ) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::Install {
@@ -239,9 +242,9 @@ impl InstallerGui {
     /// showing) uses `ButtonLabels::uninstall` ("Uninstall" by default) in
     /// place of `ButtonLabels::install`.
     pub fn uninstall_page(
-        mut self,
+        &mut self,
         callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
-    ) -> Self {
+    ) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::Install {
@@ -252,7 +255,7 @@ impl InstallerGui {
     }
 
     /// Add a finish page shown after installation completes.
-    pub fn finish_page(mut self, title: &str, message: &str) -> Self {
+    pub fn finish_page(&mut self, title: &str, message: &str) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::Finish {
@@ -291,11 +294,11 @@ impl InstallerGui {
     /// })
     /// ```
     pub fn custom_page(
-        mut self,
+        &mut self,
         heading: &str,
         label: &str,
         build: impl FnOnce(&mut CustomPageBuilder),
-    ) -> Self {
+    ) -> &mut Self {
         let mut b = CustomPageBuilder::new();
         build(&mut b);
         self.config
@@ -315,7 +318,7 @@ impl InstallerGui {
     ///
     /// If no error page is registered, install failures surface as a
     /// native error dialog instead.
-    pub fn error_page(mut self, title: &str, message: &str) -> Self {
+    pub fn error_page(&mut self, title: &str, message: &str) -> &mut Self {
         self.config
             .pages
             .push(ConfiguredPage::new(WizardPage::Error {
@@ -328,7 +331,7 @@ impl InstallerGui {
     /// Attach an `on_enter` callback to the most recently added page.
     ///
     /// The callback runs on the GUI thread after the page becomes visible.
-    pub fn on_enter<F>(mut self, f: F) -> Self
+    pub fn on_enter<F>(&mut self, f: F) -> &mut Self
     where
         F: Fn(&mut PageContext) -> Result<()> + 'static,
     {
@@ -342,7 +345,7 @@ impl InstallerGui {
     ///
     /// Returning `Ok(false)` cancels the navigation and keeps the page visible.
     /// Returning `Err(_)` also cancels navigation.
-    pub fn on_before_leave<F>(mut self, f: F) -> Self
+    pub fn on_before_leave<F>(&mut self, f: F) -> &mut Self
     where
         F: Fn(&mut PageContext) -> Result<bool> + 'static,
     {
@@ -369,7 +372,7 @@ impl InstallerGui {
     /// .directory_picker("Install Location", "Install to:", default_dir)
     /// .skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some())
     /// ```
-    pub fn skip_if<F>(mut self, f: F) -> Self
+    pub fn skip_if<F>(&mut self, f: F) -> &mut Self
     where
         F: Fn(&PageContext) -> bool + 'static,
     {

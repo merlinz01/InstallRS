@@ -32,13 +32,14 @@ Windows has no extra system dependency at build or runtime.
 
 ## Wizard builder
 
-Build the wizard with `InstallerGui::wizard()` and chain page methods:
+Build the wizard with `InstallerGui::wizard()`, configure it via its
+builder methods, then call `run`:
 
 ```rust
 use installrs::gui::*;
 
-InstallerGui::wizard()
-    .title("My App Installer")
+let mut w = InstallerGui::wizard();
+w.title("My App Installer")
     .welcome("Welcome!", "Click Next to continue.")
     .license("License Agreement", include_str!("../LICENSE"), "I accept")
     .components_page("Select Components", "Choose features to install:")
@@ -59,13 +60,30 @@ InstallerGui::wizard()
     .error_page(
         "Installation Failed",
         "The installation did not complete. Details are shown below.",
-    )
-    .run(i)?;
+    );
+w.run(i)?;
 ```
 
-Pages appear in the order you add them. Each page method returns the
-builder, so you can chain `.on_enter(...)` and `.on_before_leave(...)`
-callbacks on the just-added page.
+Builder methods take `&mut self` and return `&mut Self`, so you can
+chain them off the binding or call them as separate statements —
+whichever reads best for conditional / looped configuration:
+
+```rust
+let mut w = InstallerGui::wizard();
+w.title("My App");
+w.welcome("Welcome!", "...");
+if include_license {
+    w.license("License", LICENSE, "I accept");
+}
+for page in custom_pages {
+    w.custom_page(&page.heading, &page.label, |b| page.build(b));
+}
+w.run(i)?;
+```
+
+Pages appear in the order you add them. `.on_enter(...)`,
+`.on_before_leave(...)`, and `.skip_if(...)` attach to the
+most-recently-added page.
 
 ### Error page
 
@@ -217,9 +235,11 @@ if let Some(code) = installrs::gui::choose_language(
 )? {
     rust_i18n::set_locale(&code);
 }
-InstallerGui::wizard()
-    .title(&t!("installer.title")) // now uses chosen locale
+let mut w = InstallerGui::wizard();
+w.title(&t!("installer.title")) // now uses chosen locale
     // ...
+    ;
+w.run(i)?;
 ```
 
 Returns the selected code, or `None` if the user cancelled the dialog.
@@ -236,25 +256,25 @@ The same wizard definition serves both modes. Use `.on_start(...)` and
 `.on_exit(...)` for setup and cleanup that must happen either way:
 
 ```rust
-InstallerGui::wizard()
-    .on_start(|i| {
-        if i.headless {
-            eprintln!("Running headless install...");
-        }
-        Ok(())
-    })
-    .on_exit(|i| {
-        if i.headless {
-            eprintln!("Done.");
-        }
-        Ok(())
-    })
-    // ... pages ...
-    .install_page(|ctx| {
-        // runs in both modes
-        Ok(())
-    })
-    .run(i)?;
+let mut w = InstallerGui::wizard();
+w.on_start(|i| {
+    if i.headless {
+        eprintln!("Running headless install...");
+    }
+    Ok(())
+})
+.on_exit(|i| {
+    if i.headless {
+        eprintln!("Done.");
+    }
+    Ok(())
+})
+// ... pages ...
+.install_page(|ctx| {
+    // runs in both modes
+    Ok(())
+});
+w.run(i)?;
 ```
 
 `on_start` runs before the window opens (or before the install callback

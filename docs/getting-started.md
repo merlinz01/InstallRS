@@ -156,8 +156,8 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     i.process_commandline()?;
 
-    InstallerGui::wizard()
-        .title("My App Installer")
+    let mut w = InstallerGui::wizard();
+    w.title("My App Installer")
         .welcome("Welcome", "This wizard will install My App.")
         .license("License", include_str!("../LICENSE.txt"), "I accept")
         .components_page("Components", "Select features:")
@@ -172,8 +172,8 @@ pub fn install(i: &mut Installer) -> Result<()> {
             i.uninstaller("uninstall").install()?;
             Ok(())
         })
-        .finish_page("Done!", "Click Finish to exit.")
-        .run(i)?;
+        .finish_page("Done!", "Click Finish to exit.");
+    w.run(i)?;
 
     Ok(())
 }

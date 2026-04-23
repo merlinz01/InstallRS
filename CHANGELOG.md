@@ -12,6 +12,14 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `InstallerGui` builder methods now take `&mut self` and
+  return `&mut Self` instead of consuming by value. Bind the wizard to
+  a `let mut` first, then call `run(i)` on the binding — chaining
+  straight off `InstallerGui::wizard()` to `.run(i)` no longer
+  compiles.
+
 ## [0.1.0-rc8] — 2026-04-23
 
 ### Added

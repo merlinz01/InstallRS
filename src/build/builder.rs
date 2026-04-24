@@ -260,59 +260,22 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &params.features,
     );
 
-    // ── Gather and compress files for installer ──────────────────────────────
-    let mut install_gathered: Vec<GatheredFile> = Vec::new();
+    // ── Gather and compress files for installer + uninstaller ────────────────
     let mut hash_cache: HashMap<String, String> = HashMap::new();
-
-    for src in &scan.install_sources {
-        if !source_is_active(src, &params.features) {
-            log::debug!(
-                "Skipping feature-gated source {:?} (features {:?})",
-                src.path,
-                src.features
-            );
-            continue;
-        }
-        let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
-        gather_source(
-            &src.path,
-            &params.target_dir,
-            &install_files_dir,
-            &params.compression,
-            &merged,
-            &mut install_gathered,
-            &mut hash_cache,
-        )?;
-    }
-    log::info!("Total install entries gathered: {}", install_gathered.len());
-
-    // ── Gather and compress files for uninstaller ────────────────────────────
-    let mut uninstall_gathered: Vec<GatheredFile> = Vec::new();
-
-    for src in &scan.uninstall_sources {
-        if !source_is_active(src, &params.features) {
-            log::debug!(
-                "Skipping feature-gated source {:?} (features {:?})",
-                src.path,
-                src.features
-            );
-            continue;
-        }
-        let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
-        gather_source(
-            &src.path,
-            &params.target_dir,
-            &uninstall_files_dir,
-            &params.compression,
-            &merged,
-            &mut uninstall_gathered,
-            &mut hash_cache,
-        )?;
-    }
-    log::info!(
-        "Total uninstall entries gathered: {}",
-        uninstall_gathered.len()
-    );
+    let install_gathered = gather_for_phase(
+        "install",
+        &scan.install_sources,
+        &install_files_dir,
+        &params,
+        &mut hash_cache,
+    )?;
+    let uninstall_gathered = gather_for_phase(
+        "uninstall",
+        &scan.uninstall_sources,
+        &uninstall_files_dir,
+        &params,
+        &mut hash_cache,
+    )?;
 
     // ── Compile uninstaller ──────────────────────────────────────────────────
     let target_is_windows = params
@@ -833,6 +796,43 @@ fn merge_ignore(global: &[String], per_source: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+/// Walk one phase's source list (install or uninstall), filter out
+/// feature-gated entries, merge per-source ignore globs with the
+/// global ones, and gather + compress each source into `files_dir`.
+/// `hash_cache` is shared across phases so identical content is
+/// content-addressed (and written) once.
+fn gather_for_phase(
+    phase: &str,
+    sources: &[scanner::SourceRef],
+    files_dir: &Path,
+    params: &BuildParams,
+    hash_cache: &mut HashMap<String, String>,
+) -> Result<Vec<GatheredFile>> {
+    let mut gathered: Vec<GatheredFile> = Vec::new();
+    for src in sources {
+        if !source_is_active(src, &params.features) {
+            log::debug!(
+                "Skipping feature-gated source {:?} (features {:?})",
+                src.path,
+                src.features
+            );
+            continue;
+        }
+        let merged = merge_ignore(&params.ignore_patterns, &src.ignore);
+        gather_source(
+            &src.path,
+            &params.target_dir,
+            files_dir,
+            &params.compression,
+            &merged,
+            &mut gathered,
+            hash_cache,
+        )?;
+    }
+    log::info!("Total {phase} entries gathered: {}", gathered.len());
+    Ok(gathered)
 }
 
 /// Gather a single `source!()` path — dispatches to `gather_file` or

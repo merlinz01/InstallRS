@@ -3,6 +3,7 @@
 
 use anyhow::{Context, Result};
 
+use crate::ops::impl_common_op_setters;
 use crate::Installer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,19 +139,9 @@ pub struct RegSetOp<'i> {
     log: Option<String>,
 }
 
+impl_common_op_setters!(RegSetOp);
+
 impl<'i> RegSetOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
-        self
-    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -181,19 +172,9 @@ pub struct RegRemoveKeyOp<'i> {
     log: Option<String>,
 }
 
+impl_common_op_setters!(RegRemoveKeyOp);
+
 impl<'i> RegRemoveKeyOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
-        self
-    }
     /// Recursively delete all child subkeys. Without this, removing a
     /// key that has children fails with an error.
     pub fn recursive(mut self) -> Self {
@@ -235,19 +216,9 @@ pub struct RegDeleteValueOp<'i> {
     log: Option<String>,
 }
 
+impl_common_op_setters!(RegDeleteValueOp);
+
 impl<'i> RegDeleteValueOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
-        self
-    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);

@@ -11,6 +11,31 @@ use crate::types::{
 };
 use crate::{Installer, Source};
 
+/// Implement the shared `status()`, `log()`, and `weight()` setters on a
+/// builder op. The op struct must have `status: Option<String>`,
+/// `log: Option<String>`, and `weight: u32` fields.
+macro_rules! impl_common_op_setters {
+    ($ty:ident) => {
+        impl<'i> $ty<'i> {
+            pub fn status(mut self, s: impl Into<String>) -> Self {
+                self.status = Some(s.into());
+                self
+            }
+            pub fn log(mut self, s: impl Into<String>) -> Self {
+                self.log = Some(s.into());
+                self
+            }
+            /// Step weight this op consumes from the component budget. Default 1.
+            pub fn weight(mut self, w: u32) -> Self {
+                self.weight = w;
+                self
+            }
+        }
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use impl_common_op_setters;
+
 // ── Builder ops ─────────────────────────────────────────────────────────────
 
 pub struct FileOp<'i> {
@@ -24,15 +49,9 @@ pub struct FileOp<'i> {
     pub(crate) weight: u32,
 }
 
+impl_common_op_setters!(FileOp);
+
 impl<'i> FileOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
     pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
         self.overwrite = mode;
         self
@@ -40,11 +59,6 @@ impl<'i> FileOp<'i> {
     /// Unix file permissions (octal, e.g. `0o755`). No-op on Windows.
     pub fn mode(mut self, mode: u32) -> Self {
         self.mode = Some(mode);
-        self
-    }
-    /// Step weight this op consumes from the component budget. Default 1.
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
         self
     }
     pub fn install(self) -> Result<()> {
@@ -59,23 +73,8 @@ impl<'i> FileOp<'i> {
         let weight = self.weight;
 
         self.installer.run_weighted_step(weight, || {
-            match overwrite {
-                OverwriteMode::Overwrite => {}
-                OverwriteMode::Skip => {
-                    if dest.exists() {
-                        return Ok(());
-                    }
-                }
-                OverwriteMode::Error => {
-                    if dest.exists() {
-                        return Err(anyhow!("destination already exists: {}", dest.display()));
-                    }
-                }
-                OverwriteMode::Backup => {
-                    if dest.exists() {
-                        backup_path(&dest)?;
-                    }
-                }
+            if apply_overwrite_policy(&dest, overwrite)? {
+                return Ok(());
             }
             let bytes = Installer::decompress(raw_bytes, compression)?;
             write_file(&dest, &bytes)?;
@@ -96,18 +95,12 @@ pub struct DirOp<'i> {
     pub(crate) filter: Option<DirFilter>,
     pub(crate) on_error: Option<DirErrorHandler>,
     /// Weight applied per-file inside the directory tree. Default 1.
-    pub(crate) per_file_weight: u32,
+    pub(crate) weight: u32,
 }
 
+impl_common_op_setters!(DirOp);
+
 impl<'i> DirOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
     pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
         self.overwrite = mode;
         self
@@ -129,11 +122,6 @@ impl<'i> DirOp<'i> {
         self.on_error = Some(Box::new(f));
         self
     }
-    /// Step weight applied per-file inside the directory tree. Default 1.
-    pub fn weight(mut self, w: u32) -> Self {
-        self.per_file_weight = w;
-        self
-    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -153,7 +141,7 @@ impl<'i> DirOp<'i> {
             self.mode,
             self.filter.as_deref(),
             self.on_error.as_deref(),
-            self.per_file_weight,
+            self.weight,
         )
     }
 }
@@ -167,22 +155,11 @@ pub struct UninstallerOp<'i> {
     pub(crate) weight: u32,
 }
 
+impl_common_op_setters!(UninstallerOp);
+
 impl<'i> UninstallerOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
     pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
         self.overwrite = mode;
-        self
-    }
-    /// Step weight this op consumes from the component budget. Default 1.
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
         self
     }
     pub fn install(self) -> Result<()> {
@@ -197,25 +174,9 @@ impl<'i> UninstallerOp<'i> {
         let compression = self.installer.uninstaller_compression;
 
         self.installer.run_weighted_step(weight, || {
-            match overwrite {
-                OverwriteMode::Overwrite => {}
-                OverwriteMode::Skip => {
-                    if dest.exists() {
-                        return Ok(());
-                    }
-                }
-                OverwriteMode::Error => {
-                    if dest.exists() {
-                        return Err(anyhow!("destination already exists: {}", dest.display()));
-                    }
-                }
-                OverwriteMode::Backup => {
-                    if dest.exists() {
-                        backup_path(&dest)?;
-                    }
-                }
+            if apply_overwrite_policy(&dest, overwrite)? {
+                return Ok(());
             }
-
             let data = Installer::decompress(data_ptr, compression)?;
             write_file(&dest, &data)?;
             #[cfg(unix)]
@@ -237,20 +198,9 @@ pub struct MkdirOp<'i> {
     pub(crate) weight: u32,
 }
 
+impl_common_op_setters!(MkdirOp);
+
 impl<'i> MkdirOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
-    /// Step weight this op consumes from the component budget. Default 1.
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
-        self
-    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -271,20 +221,9 @@ pub struct RemoveOp<'i> {
     pub(crate) weight: u32,
 }
 
+impl_common_op_setters!(RemoveOp);
+
 impl<'i> RemoveOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
-    /// Step weight this op consumes from the component budget. Default 1.
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
-        self
-    }
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -358,7 +297,7 @@ pub(crate) fn install_children(
     mode: Option<u32>,
     filter: Option<&DirFilterRef>,
     on_error: Option<&DirErrorHandlerRef>,
-    per_file_weight: u32,
+    weight: u32,
 ) -> Result<()> {
     for child in children {
         installer.check_cancelled()?;
@@ -376,7 +315,7 @@ pub(crate) fn install_children(
                         continue;
                     }
                 }
-                let res = installer.run_weighted_step(per_file_weight, || {
+                let res = installer.run_weighted_step(weight, || {
                     install_one_file(data, compression, &target, overwrite, mode)
                 });
                 if let Err(e) = res {
@@ -393,15 +332,7 @@ pub(crate) fn install_children(
                 std::fs::create_dir_all(&target)
                     .with_context(|| format!("failed to create dir: {}", target.display()))?;
                 install_children(
-                    children,
-                    &target,
-                    &rel,
-                    installer,
-                    overwrite,
-                    mode,
-                    filter,
-                    on_error,
-                    per_file_weight,
+                    children, &target, &rel, installer, overwrite, mode, filter, on_error, weight,
                 )?;
             }
         }
@@ -416,29 +347,37 @@ fn install_one_file(
     overwrite: OverwriteMode,
     mode: Option<u32>,
 ) -> Result<()> {
+    if apply_overwrite_policy(dest, overwrite)? {
+        return Ok(());
+    }
+    let bytes = Installer::decompress(data, compression)?;
+    write_file(dest, &bytes)?;
+    apply_mode(dest, mode)?;
+    Ok(())
+}
+
+/// Apply the chosen [`OverwriteMode`] to `dest`. Returns `Ok(true)` when
+/// the caller should skip writing (e.g. Skip mode and the file already
+/// exists); `Ok(false)` when the caller should proceed; `Err` for Error
+/// mode on an existing file or when a backup operation fails.
+pub(crate) fn apply_overwrite_policy(dest: &Path, overwrite: OverwriteMode) -> Result<bool> {
     match overwrite {
-        OverwriteMode::Overwrite => {}
-        OverwriteMode::Skip => {
-            if dest.exists() {
-                return Ok(());
-            }
-        }
+        OverwriteMode::Overwrite => Ok(false),
+        OverwriteMode::Skip => Ok(dest.exists()),
         OverwriteMode::Error => {
             if dest.exists() {
-                return Err(anyhow!("destination already exists: {}", dest.display()));
+                Err(anyhow!("destination already exists: {}", dest.display()))
+            } else {
+                Ok(false)
             }
         }
         OverwriteMode::Backup => {
             if dest.exists() {
                 backup_path(dest)?;
             }
+            Ok(false)
         }
     }
-
-    let bytes = Installer::decompress(data, compression)?;
-    write_file(dest, &bytes)?;
-    apply_mode(dest, mode)?;
-    Ok(())
 }
 
 pub(crate) fn backup_path(path: &Path) -> Result<()> {

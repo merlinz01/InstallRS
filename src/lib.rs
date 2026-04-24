@@ -730,7 +730,7 @@ impl Installer {
             mode: None,
             filter: None,
             on_error: None,
-            per_file_weight: 1,
+            weight: 1,
         }
     }
 

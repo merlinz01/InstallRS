@@ -4,6 +4,7 @@
 
 use anyhow::{anyhow, Context, Result};
 
+use crate::ops::impl_common_op_setters;
 use crate::Installer;
 
 pub struct ShortcutOp<'i> {
@@ -19,15 +20,9 @@ pub struct ShortcutOp<'i> {
     pub(crate) weight: u32,
 }
 
+impl_common_op_setters!(ShortcutOp);
+
 impl<'i> ShortcutOp<'i> {
-    pub fn status(mut self, s: impl Into<String>) -> Self {
-        self.status = Some(s.into());
-        self
-    }
-    pub fn log(mut self, s: impl Into<String>) -> Self {
-        self.log = Some(s.into());
-        self
-    }
     /// Command-line arguments passed to the target when the shortcut runs.
     pub fn arguments(mut self, s: impl Into<String>) -> Self {
         self.arguments = Some(s.into());
@@ -48,11 +43,6 @@ impl<'i> ShortcutOp<'i> {
     /// index within it. Use index `0` for single-icon files.
     pub fn icon(mut self, path: impl Into<String>, index: i32) -> Self {
         self.icon = Some((path.into(), index));
-        self
-    }
-    /// Step weight this op consumes from the component budget. Default 1.
-    pub fn weight(mut self, w: u32) -> Self {
-        self.weight = w;
         self
     }
     pub fn install(self) -> Result<()> {

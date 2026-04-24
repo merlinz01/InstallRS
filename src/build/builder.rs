@@ -38,25 +38,8 @@ const INSTALLRS_CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// - Dep is `{ path = ... }` or `{ git = ... }` without a version req — the
 ///   user is pointing at a specific source on disk or a ref, and the usual
 ///   crates.io version check doesn't apply.
-fn check_installrs_version_compat(target_dir: &Path) -> Result<()> {
-    let cargo_toml_path = target_dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(&cargo_toml_path)
-        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
-    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
-
-    let user_req_str = value
-        .get("dependencies")
-        .and_then(|d| d.get("installrs"))
-        .and_then(|dep| match dep {
-            toml::Value::String(s) => Some(s.clone()),
-            toml::Value::Table(t) => t
-                .get("version")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
-            _ => None,
-        });
-
-    let user_req_str = match user_req_str {
+fn check_installrs_version_compat(manifest: &CargoManifest) -> Result<()> {
+    let user_req_str = match manifest.installrs_dep_version_req() {
         Some(s) => s,
         None => return Ok(()),
     };
@@ -77,6 +60,117 @@ fn check_installrs_version_compat(target_dir: &Path) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Parsed-once view of the user's installer crate `Cargo.toml`. All the
+/// builder-side code that needs to read fields from it (package info,
+/// `[package.metadata.installrs]` config, `installrs` version req) goes
+/// through methods on this type so the file is only parsed once per
+/// build invocation.
+pub struct CargoManifest {
+    raw: toml::Value,
+    target_dir: PathBuf,
+}
+
+impl CargoManifest {
+    pub fn load(target_dir: &Path) -> Result<Self> {
+        let cargo_toml_path = target_dir.join("Cargo.toml");
+        let content = std::fs::read_to_string(&cargo_toml_path)
+            .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
+        let raw: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
+        Ok(Self {
+            raw,
+            target_dir: target_dir.to_path_buf(),
+        })
+    }
+
+    /// The `installrs` dep's version requirement string, if declared and
+    /// a version key is present. Returns `None` for path/git-only deps
+    /// or when the dep is absent — callers treat those as silent passes.
+    fn installrs_dep_version_req(&self) -> Option<String> {
+        self.raw
+            .get("dependencies")
+            .and_then(|d| d.get("installrs"))
+            .and_then(|dep| match dep {
+                toml::Value::String(s) => Some(s.clone()),
+                toml::Value::Table(t) => t
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                _ => None,
+            })
+    }
+
+    /// Returns (package_name, lib_crate_name, lib_path).
+    fn package_info(&self) -> Result<(String, String, PathBuf)> {
+        let package_name = self
+            .raw
+            .get("package")
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+            .ok_or_else(|| anyhow!("could not find [package].name in Cargo.toml"))?
+            .to_string();
+        let lib = self.raw.get("lib");
+        let lib_crate_name = lib
+            .and_then(|l| l.get("name"))
+            .and_then(|n| n.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| package_name.replace('-', "_"));
+        let lib_path = lib
+            .and_then(|l| l.get("path"))
+            .and_then(|p| p.as_str())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("src/lib.rs"));
+        Ok((package_name, lib_crate_name, lib_path))
+    }
+
+    /// `[package.metadata.installrs]` subtree, if present.
+    fn installrs_meta(&self) -> Option<&toml::Value> {
+        self.raw
+            .get("package")
+            .and_then(|p| p.get("metadata"))
+            .and_then(|m| m.get("installrs"))
+    }
+
+    /// Read `gui = true` from `[package.metadata.installrs]`.
+    pub fn gui_enabled(&self) -> bool {
+        self.installrs_meta()
+            .and_then(|i| i.get("gui"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Parse installer and uninstaller Windows resource configs.
+    ///
+    /// Base keys in `[package.metadata.installrs]` apply to both. Keys in
+    /// `[package.metadata.installrs.installer]` or `…uninstaller` override
+    /// the base.
+    pub fn win_resource_config(
+        &self,
+    ) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
+        let meta = match self.installrs_meta() {
+            Some(v) => v,
+            None => return Ok((None, None)),
+        };
+
+        let base = parse_win_resource_table(meta, &self.target_dir)?;
+
+        let installer = if let Some(sub) = meta.get("installer") {
+            let overrides = parse_win_resource_table(sub, &self.target_dir)?;
+            merge_win_resource_config(&base, &overrides)
+        } else {
+            base.clone()
+        };
+
+        let uninstaller = if let Some(sub) = meta.get("uninstaller") {
+            let overrides = parse_win_resource_table(sub, &self.target_dir)?;
+            merge_win_resource_config(&base, &overrides)
+        } else {
+            base
+        };
+
+        Ok((Some(installer), Some(uninstaller)))
+    }
 }
 
 fn installrs_dep_spec(features_suffix: &str) -> String {
@@ -204,10 +298,16 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 
     compress::validate_method(&params.compression)?;
 
+    // Parse the user's Cargo.toml once and reuse it for every subsequent
+    // read (version check, package info, and — in the CLI path — gui /
+    // win-resource configs that were already read to populate
+    // BuildParams).
+    let manifest = CargoManifest::load(&params.target_dir)?;
+
     // Preflight: user's installer crate must declare an `installrs` version
     // compatible with this CLI. Fails fast with a clear message instead of
     // letting cargo discover the mismatch later.
-    check_installrs_version_compat(&params.target_dir)?;
+    check_installrs_version_compat(&manifest)?;
 
     // ── Prepare directories ──────────────────────────────────────────────────
     log::trace!("Creating build directory: {}", params.build_dir.display());
@@ -232,7 +332,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         .context("failed to create installer src directory")?;
 
     // ── Read user's package name and lib path ────────────────────────────────
-    let (user_package_name, user_crate_name, lib_path) = read_package_info(&params.target_dir)?;
+    let (user_package_name, user_crate_name, lib_path) = manifest.package_info()?;
     log::debug!("User package: {user_package_name} (crate name: {user_crate_name})");
 
     // ── Scan user source ─────────────────────────────────────────────────────
@@ -445,89 +545,24 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     Ok(())
 }
 
-/// Returns (package_name, lib_crate_name, lib_path) where lib_path is relative to target_dir.
-/// lib_crate_name is [lib].name if set, otherwise package_name with hyphens → underscores.
-fn read_package_info(target_dir: &Path) -> Result<(String, String, PathBuf)> {
-    let cargo_toml_path = target_dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(&cargo_toml_path)
-        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
-    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
-    let package_name = value
-        .get("package")
-        .and_then(|p| p.get("name"))
-        .and_then(|n| n.as_str())
-        .ok_or_else(|| anyhow!("could not find [package].name in Cargo.toml"))?
-        .to_string();
-    let lib = value.get("lib");
-    let lib_crate_name = lib
-        .and_then(|l| l.get("name"))
-        .and_then(|n| n.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| package_name.replace('-', "_"));
-    let lib_path = lib
-        .and_then(|l| l.get("path"))
-        .and_then(|p| p.as_str())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("src/lib.rs"));
-    Ok((package_name, lib_crate_name, lib_path))
-}
+// The parse-and-extract helpers live as methods on [`CargoManifest`]
+// above. `read_win_resource_config` / `read_gui_config` remain as thin
+// wrappers for callers that don't already hold a manifest handle.
 
-/// Returns (installer_config, uninstaller_config).
-///
-/// Base keys in `[package.metadata.installrs]` apply to both. Keys in
-/// `[package.metadata.installrs.installer]` or `…uninstaller` override the base.
+/// Returns (installer_config, uninstaller_config). Parses `Cargo.toml`
+/// on every call — prefer [`CargoManifest::win_resource_config`] when
+/// you already have a manifest.
 pub fn read_win_resource_config(
     target_dir: &Path,
 ) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
-    let cargo_toml_path = target_dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(&cargo_toml_path)
-        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
-    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
-
-    let meta = match value
-        .get("package")
-        .and_then(|p| p.get("metadata"))
-        .and_then(|m| m.get("installrs"))
-    {
-        Some(v) => v,
-        None => return Ok((None, None)),
-    };
-
-    let base = parse_win_resource_table(meta, target_dir)?;
-
-    let installer = if let Some(sub) = meta.get("installer") {
-        let overrides = parse_win_resource_table(sub, target_dir)?;
-        merge_win_resource_config(&base, &overrides)
-    } else {
-        base.clone()
-    };
-
-    let uninstaller = if let Some(sub) = meta.get("uninstaller") {
-        let overrides = parse_win_resource_table(sub, target_dir)?;
-        merge_win_resource_config(&base, &overrides)
-    } else {
-        base
-    };
-
-    Ok((Some(installer), Some(uninstaller)))
+    CargoManifest::load(target_dir)?.win_resource_config()
 }
 
-/// Read `gui = true` from `[package.metadata.installrs]`.
+/// Read `gui = true` from `[package.metadata.installrs]`. Parses on
+/// every call — prefer [`CargoManifest::gui_enabled`] when you already
+/// have a manifest.
 pub fn read_gui_config(target_dir: &Path) -> Result<bool> {
-    let cargo_toml_path = target_dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(&cargo_toml_path)
-        .with_context(|| format!("failed to read {}", cargo_toml_path.display()))?;
-    let value: toml::Value = content.parse().context("failed to parse Cargo.toml")?;
-
-    let gui = value
-        .get("package")
-        .and_then(|p| p.get("metadata"))
-        .and_then(|m| m.get("installrs"))
-        .and_then(|i| i.get("gui"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    Ok(gui)
+    Ok(CargoManifest::load(target_dir)?.gui_enabled())
 }
 
 const VERSION_INFO_KEYS: &[(&str, &str)] = &[

@@ -389,16 +389,19 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         .is_some_and(|t| t.contains("linux"))
         || (params.target_triple.is_none() && cfg!(target_os = "linux"));
 
-    // Convert PNG icons to ICO only when targeting Windows — Linux uses the
-    // original PNG (embedded via include_bytes! in main.rs).
-    if target_is_windows {
-        for cfg in [
-            &mut params.installer_win_resource,
-            &mut params.uninstaller_win_resource,
-        ]
-        .into_iter()
-        .flatten()
-        {
+    let auto_resolved = if params.gui_enabled {
+        "windows"
+    } else {
+        "console"
+    };
+    for slot in [
+        &mut params.installer_win_resource,
+        &mut params.uninstaller_win_resource,
+    ] {
+        let Some(cfg) = slot.as_mut() else { continue };
+        // Convert PNG icons to ICO only when targeting Windows — Linux
+        // uses the original PNG (embedded via include_bytes! in main.rs).
+        if target_is_windows {
             if let Some(ref icon_path) = cfg.icon {
                 if icon_path.extension().and_then(|e| e.to_str()) == Some("png") {
                     let ico_path =
@@ -407,22 +410,9 @@ pub fn build(mut params: BuildParams) -> Result<()> {
                 }
             }
         }
-    }
-
-    let auto_resolved = if params.gui_enabled {
-        "windows"
-    } else {
-        "console"
-    };
-    for cfg in [
-        &mut params.installer_win_resource,
-        &mut params.uninstaller_win_resource,
-    ] {
-        if let Some(cfg) = cfg.as_mut() {
-            if cfg.windows_subsystem == "auto" {
-                log::debug!("Resolved subsystem \"auto\" → {auto_resolved:?}");
-                cfg.windows_subsystem = auto_resolved.to_string();
-            }
+        if cfg.windows_subsystem == "auto" {
+            log::debug!("Resolved subsystem \"auto\" → {auto_resolved:?}");
+            cfg.windows_subsystem = auto_resolved.to_string();
         }
     }
 

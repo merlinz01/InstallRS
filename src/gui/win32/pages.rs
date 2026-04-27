@@ -1,4 +1,5 @@
 use winsafe::co;
+use winsafe::guard::DeleteObjectGuard;
 use winsafe::gui;
 use winsafe::msg::{lvm, wm};
 use winsafe::prelude::*;
@@ -16,6 +17,92 @@ fn setup_transparent_labels(parent: &gui::WindowControl) {
             p.hdc.SetBkMode(co::BKMODE::TRANSPARENT)?;
             Ok(HBRUSH::GetSysColorBrush(co::COLOR::WINDOW)?)
         });
+}
+
+/// Build the bold "Segoe UI 18" font used for page headings/titles.
+fn make_bold_heading_font() -> winsafe::SysResult<DeleteObjectGuard<HFONT>> {
+    HFONT::CreateFont(
+        SIZE { cx: 0, cy: -18 },
+        0,
+        0,
+        co::FW::BOLD,
+        false,
+        false,
+        false,
+        co::CHARSET::DEFAULT,
+        co::OUT_PRECIS::DEFAULT,
+        co::CLIP::DEFAULT_PRECIS,
+        co::QUALITY::DEFAULT,
+        co::PITCH::DEFAULT,
+        "Segoe UI",
+    )
+}
+
+/// Apply [`make_bold_heading_font`] to `label` once the parent's WM_CREATE
+/// fires. Use this for pages whose only WM_CREATE work is the heading font;
+/// pages that also need to do other init (Components, Custom) inline a call
+/// to `make_bold_heading_font` in their own combined handler instead.
+fn register_bold_heading(parent: &gui::WindowControl, label: &gui::Label) {
+    let label_c = label.clone();
+    parent.on().wm_create(move |_| {
+        let mut font = make_bold_heading_font()?;
+        unsafe {
+            label_c.hwnd().SendMessage(wm::SetFont {
+                hfont: font.leak(),
+                redraw: true,
+            });
+        }
+        Ok(0)
+    });
+}
+
+/// Build a `(label, entry, browse_button)` row for a path-picker control:
+/// a heading label above, with the entry + Browse button on the row below.
+/// Caller wires up the Browse click handler.
+fn build_path_picker_row(
+    parent: &gui::WindowControl,
+    label_text: &str,
+    initial_text: &str,
+    y: i32,
+    row_w: i32,
+) -> (gui::Label, gui::Edit, gui::Button) {
+    let lbl_ctl = gui::Label::new(
+        parent,
+        gui::LabelOpts {
+            text: label_text,
+            position: gui::dpi(PAD, y),
+            size: gui::dpi(row_w, 18),
+            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+            ..Default::default()
+        },
+    );
+    let browse_w = 80;
+    let edit_w = row_w - browse_w - 10;
+    let (ew, eh) = gui::dpi(edit_w, 24);
+    let edit = gui::Edit::new(
+        parent,
+        gui::EditOpts {
+            text: initial_text,
+            position: gui::dpi(PAD, y + 20),
+            width: ew,
+            height: eh,
+            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
+            ..Default::default()
+        },
+    );
+    let (bw, bh) = gui::dpi(browse_w, 26);
+    let browse = gui::Button::new(
+        parent,
+        gui::ButtonOpts {
+            text: "Browse...",
+            position: gui::dpi(PAD + edit_w + 10, y + 19),
+            width: bw,
+            height: bh,
+            resize_behavior: (gui::Horz::Repos, gui::Vert::None),
+            ..Default::default()
+        },
+    );
+    (lbl_ctl, edit, browse)
 }
 
 /// Discriminant for the page type — stored alongside the panel.
@@ -68,36 +155,7 @@ impl WelcomePage {
             },
         );
 
-        // Set bold + larger font on title after the panel is created.
-        {
-            let title_c = title_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
-                unsafe {
-                    title_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                Ok(0)
-            });
-        }
-
-        // Transparent label backgrounds.
+        register_bold_heading(parent, &title_label);
         setup_transparent_labels(parent);
 
         Self {
@@ -138,34 +196,7 @@ impl LicensePage {
             },
         );
 
-        // Bold + larger font for the heading.
-        {
-            let heading_c = heading_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
-                unsafe {
-                    heading_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                Ok(0)
-            });
-        }
+        register_bold_heading(parent, &heading_label);
 
         let edit_y = PAD + 24 + 10;
         let edit_height = height - edit_y - 10 - 20 - PAD;
@@ -256,75 +287,11 @@ impl DirectoryPickerPage {
             },
         );
 
-        // Bold + larger font for the heading.
-        {
-            let heading_c = heading_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
-                unsafe {
-                    heading_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                Ok(0)
-            });
-        }
+        register_bold_heading(parent, &heading_label);
 
         let label_y = PAD + 24 + 20;
-        let label = gui::Label::new(
-            parent,
-            gui::LabelOpts {
-                text: label_text,
-                position: gui::dpi(PAD, label_y),
-                size: gui::dpi(width - 2 * PAD, 20),
-                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                ..Default::default()
-            },
-        );
-
-        let edit_y = label_y + 25;
-        let browse_width = 80;
-        let edit_width = width - 2 * PAD - browse_width - 10;
-        let (ew, eh) = gui::dpi(edit_width, 24);
-        let dir_edit = gui::Edit::new(
-            parent,
-            gui::EditOpts {
-                text: default,
-                position: gui::dpi(PAD, edit_y),
-                width: ew,
-                height: eh,
-                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                ..Default::default()
-            },
-        );
-
-        let (bw, bh) = gui::dpi(browse_width, 26);
-        let browse_btn = gui::Button::new(
-            parent,
-            gui::ButtonOpts {
-                text: "Browse...",
-                position: gui::dpi(PAD + edit_width + 10, edit_y - 1),
-                width: bw,
-                height: bh,
-                resize_behavior: (gui::Horz::Repos, gui::Vert::None),
-                ..Default::default()
-            },
-        );
+        let (label, dir_edit, browse_btn) =
+            build_path_picker_row(parent, label_text, default, label_y, width - 2 * PAD);
 
         // Wire up browse button to open a folder dialog.
         {
@@ -398,34 +365,6 @@ impl ComponentsPage {
             },
         );
 
-        {
-            let heading_c = heading_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
-                unsafe {
-                    heading_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                Ok(0)
-            });
-        }
-
         let label_y = PAD + 24 + 20;
         let label = gui::Label::new(
             parent,
@@ -465,8 +404,11 @@ impl ComponentsPage {
         let ids: Vec<String> = components.iter().map(|c| c.id.clone()).collect();
         let required: Vec<bool> = components.iter().map(|c| c.required).collect();
 
-        // Populate rows + initial check state after the control is created.
+        // Combined wm_create handler: apply heading bold font + populate the
+        // list rows. winsafe only keeps one wm_create per parent, so these
+        // must share a single registration.
         {
+            let heading_c = heading_label.clone();
             let list_c = list.clone();
             let initial: Vec<(String, bool)> = components
                 .iter()
@@ -480,6 +422,13 @@ impl ComponentsPage {
                 })
                 .collect();
             parent.on().wm_create(move |_| {
+                let mut bold_font = make_bold_heading_font()?;
+                unsafe {
+                    heading_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
                 for (idx, (text, selected)) in initial.iter().enumerate() {
                     list_c.items().add(&[text.as_str()], None, ())?;
                     set_lv_check(&list_c, idx as u32, *selected);
@@ -1032,46 +981,12 @@ impl CustomPage {
                     default,
                     filters,
                 } => {
-                    let lbl_ctl = gui::Label::new(
-                        parent,
-                        gui::LabelOpts {
-                            text: lbl,
-                            position: gui::dpi(PAD, y),
-                            size: gui::dpi(row_w, 18),
-                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                            ..Default::default()
-                        },
-                    );
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
                         _ => default.clone(),
                     };
-                    let browse_w = 80;
-                    let edit_w = row_w - browse_w - 10;
-                    let (ew, eh) = gui::dpi(edit_w, 24);
-                    let edit = gui::Edit::new(
-                        parent,
-                        gui::EditOpts {
-                            text: &initial_text,
-                            position: gui::dpi(PAD, y + 20),
-                            width: ew,
-                            height: eh,
-                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                            ..Default::default()
-                        },
-                    );
-                    let (bw, bh) = gui::dpi(browse_w, 26);
-                    let browse = gui::Button::new(
-                        parent,
-                        gui::ButtonOpts {
-                            text: "Browse...",
-                            position: gui::dpi(PAD + edit_w + 10, y + 19),
-                            width: bw,
-                            height: bh,
-                            resize_behavior: (gui::Horz::Repos, gui::Vert::None),
-                            ..Default::default()
-                        },
-                    );
+                    let (lbl_ctl, edit, browse) =
+                        build_path_picker_row(parent, lbl, &initial_text, y, row_w);
                     let edit_c = edit.clone();
                     let parent_c = parent.clone();
                     let filters_owned: Vec<(String, String)> = filters.clone();
@@ -1106,46 +1021,12 @@ impl CustomPage {
                     label: lbl,
                     default,
                 } => {
-                    let lbl_ctl = gui::Label::new(
-                        parent,
-                        gui::LabelOpts {
-                            text: lbl,
-                            position: gui::dpi(PAD, y),
-                            size: gui::dpi(row_w, 18),
-                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                            ..Default::default()
-                        },
-                    );
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
                         _ => default.clone(),
                     };
-                    let browse_w = 80;
-                    let edit_w = row_w - browse_w - 10;
-                    let (ew, eh) = gui::dpi(edit_w, 24);
-                    let edit = gui::Edit::new(
-                        parent,
-                        gui::EditOpts {
-                            text: &initial_text,
-                            position: gui::dpi(PAD, y + 20),
-                            width: ew,
-                            height: eh,
-                            resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                            ..Default::default()
-                        },
-                    );
-                    let (bw, bh) = gui::dpi(browse_w, 26);
-                    let browse = gui::Button::new(
-                        parent,
-                        gui::ButtonOpts {
-                            text: "Browse...",
-                            position: gui::dpi(PAD + edit_w + 10, y + 19),
-                            width: bw,
-                            height: bh,
-                            resize_behavior: (gui::Horz::Repos, gui::Vert::None),
-                            ..Default::default()
-                        },
-                    );
+                    let (lbl_ctl, edit, browse) =
+                        build_path_picker_row(parent, lbl, &initial_text, y, row_w);
                     let edit_c = edit.clone();
                     let parent_c = parent.clone();
                     browse.on().bn_clicked(move || {
@@ -1177,21 +1058,7 @@ impl CustomPage {
         {
             let heading_c = heading_label.clone();
             parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
+                let mut bold_font = make_bold_heading_font()?;
                 unsafe {
                     heading_c.hwnd().SendMessage(wm::SetFont {
                         hfont: bold_font.leak(),
@@ -1318,34 +1185,7 @@ impl ErrorPage {
             },
         );
 
-        {
-            let title_c = title_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
-                unsafe {
-                    title_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                Ok(0)
-            });
-        }
-
+        register_bold_heading(parent, &title_label);
         setup_transparent_labels(parent);
 
         Self {
@@ -1398,36 +1238,7 @@ impl FinishPage {
             },
         );
 
-        // Set bold + larger font on title after the panel is created.
-        {
-            let title_c = title_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = HFONT::CreateFont(
-                    SIZE { cx: 0, cy: -18 },
-                    0,
-                    0,
-                    co::FW::BOLD,
-                    false,
-                    false,
-                    false,
-                    co::CHARSET::DEFAULT,
-                    co::OUT_PRECIS::DEFAULT,
-                    co::CLIP::DEFAULT_PRECIS,
-                    co::QUALITY::DEFAULT,
-                    co::PITCH::DEFAULT,
-                    "Segoe UI",
-                )?;
-                unsafe {
-                    title_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                Ok(0)
-            });
-        }
-
-        // Transparent label backgrounds.
+        register_bold_heading(parent, &title_label);
         setup_transparent_labels(parent);
 
         Self {

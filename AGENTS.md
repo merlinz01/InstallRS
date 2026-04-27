@@ -48,7 +48,7 @@ Make sure to update documentation indexes and links.
 If you add a new doc file, add it to any relevant indexes
 and link to it from the README and any relevant "See also" doc sections.
 Also update `CHANGELOG.md` with a brief high-level overview note about the change.
-Keep changelog entries concise and focused on the user-facing impact of the change;
+Keep changelog entries concise (1-2 lines) and focused on the user-facing impact;
 don't include internal implementation details or development notes.
 Don't add changelog entries for changes that are purely internal
 and don't affect users of the library or CLI.

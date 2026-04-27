@@ -237,132 +237,133 @@ pub fn install(i: &mut Installer) -> Result<()> {
         },
     );
     w.install_page(|ctx| {
-            let mut i = ctx.installer();
+        let mut i = ctx.installer();
+        #[cfg_attr(not(windows), allow(unused_variables))]
+        let out_dir = i.install_dir();
 
-            let out_dir = ctx.install_dir();
-            i.set_out_dir(&out_dir);
+        let out_dir = ctx.install_dir();
+        i.set_out_dir(&out_dir);
 
-            // core: always installed (required component)
-            i.dir(installrs::source!("testdir", ignore = ["*.bak"]), "testdir")
-                .status(t!("installer.install.status_installing"))
-                .log(t!("installer.install.log_testdir"))
+        // core: always installed (required component)
+        i.dir(installrs::source!("testdir", ignore = ["*.bak"]), "testdir")
+            .status(t!("installer.install.status_installing"))
+            .log(t!("installer.install.log_testdir"))
+            .install()?;
+
+        if i.is_component_selected("docs") {
+            i.file(installrs::source!("test.txt"), "docs/readme.txt")
+                .log(t!("installer.install.log_docs"))
+                .install()?;
+        }
+
+        if i.is_component_selected("extras") {
+            i.file(installrs::source!("test.txt"), "testfile.txt")
+                .log(t!("installer.install.log_testfile"))
+                .install()?;
+        }
+
+        // Cargo-feature-gated content. Both the `source!` and the
+        // `i.file(...)` call are compiled out unless the installer was
+        // built with `installrs --feature pro`.
+        #[cfg(feature = "pro")]
+        {
+            i.file(
+                installrs::source!("pro-bonus.txt", features = ["pro"]),
+                "pro-bonus.txt",
+            )
+            .log(t!("installer.install.log_pro_bonus"))
+            .install()?;
+        }
+
+        // Simulate a long-running step to demonstrate the progress bar and cancellation.
+        // Opens a single weighted step (contributes 2 units to the core component's
+        // budget) and interpolates progress across 5 × 200 ms sub-ticks.
+        const TICKS: u32 = 5;
+        i.begin_step(&t!("installer.install.status_longrunning"), 2);
+        for step in 1..=TICKS {
+            ctx.set_status(&t!("installer.install.status_step", step = step));
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            i.set_step_progress(step as f64 / TICKS as f64);
+            i.check_cancelled()?;
+        }
+        i.end_step();
+
+        #[cfg(windows)]
+        i.uninstaller("uninstall.exe")
+            .log(t!("installer.install.log_uninstaller"))
+            .install()?;
+        #[cfg(not(windows))]
+        i.uninstaller("uninstall")
+            .log(t!("installer.install.log_uninstaller"))
+            .install()?;
+
+        // Windows polish: Start Menu shortcut + Add/Remove Programs
+        // registration. The shortcut points at the uninstaller so the
+        // example is clickable; a real installer would point it at the
+        // installed app's main executable.
+        #[cfg(windows)]
+        {
+            use installrs::RegistryHive::LocalMachine;
+
+            let program_data =
+                std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
+            let start_menu =
+                format!(r"{program_data}\Microsoft\Windows\Start Menu\Programs\InstallRS Example");
+            let shortcut_path = format!(r"{start_menu}\InstallRS Example.lnk");
+            let uninstaller_path = format!(r"{out_dir}\uninstall.exe");
+
+            i.shortcut(&shortcut_path, &uninstaller_path)
+                .description("Uninstall InstallRS Example")
+                .working_dir(&out_dir)
+                .log(t!("installer.install.log_shortcut"))
                 .install()?;
 
-            if i.is_component_selected("docs") {
-                i.file(installrs::source!("test.txt"), "docs/readme.txt")
-                    .log(t!("installer.install.log_docs"))
-                    .install()?;
-            }
+            const UNINSTALL_KEY: &str =
+                r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
+            let quoted_uninstaller = format!("\"{uninstaller_path}\"");
 
-            if i.is_component_selected("extras") {
-                i.file(installrs::source!("test.txt"), "testfile.txt")
-                    .log(t!("installer.install.log_testfile"))
-                    .install()?;
-            }
-
-            // Cargo-feature-gated content. Both the `source!` and the
-            // `i.file(...)` call are compiled out unless the installer was
-            // built with `installrs --feature pro`.
-            #[cfg(feature = "pro")]
-            {
-                i.file(
-                    installrs::source!("pro-bonus.txt", features = ["pro"]),
-                    "pro-bonus.txt",
+            i.registry()
+                .set(
+                    LocalMachine,
+                    UNINSTALL_KEY,
+                    "DisplayName",
+                    "InstallRS Example",
                 )
-                .log(t!("installer.install.log_pro_bonus"))
+                .log(t!("installer.install.log_registry"))
                 .install()?;
-            }
-
-            // Simulate a long-running step to demonstrate the progress bar and cancellation.
-            // Opens a single weighted step (contributes 2 units to the core component's
-            // budget) and interpolates progress across 5 × 200 ms sub-ticks.
-            const TICKS: u32 = 5;
-            i.begin_step(&t!("installer.install.status_longrunning"), 2);
-            for step in 1..=TICKS {
-                ctx.set_status(&t!("installer.install.status_step", step = step));
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                i.set_step_progress(step as f64 / TICKS as f64);
-                i.check_cancelled()?;
-            }
-            i.end_step();
-
-            #[cfg(windows)]
-            i.uninstaller("uninstall.exe")
-                .log(t!("installer.install.log_uninstaller"))
+            i.registry()
+                .set(LocalMachine, UNINSTALL_KEY, "DisplayVersion", "0.1.0")
                 .install()?;
-            #[cfg(not(windows))]
-            i.uninstaller("uninstall")
-                .log(t!("installer.install.log_uninstaller"))
+            i.registry()
+                .set(LocalMachine, UNINSTALL_KEY, "Publisher", "InstallRS")
                 .install()?;
+            i.registry()
+                .set(
+                    LocalMachine,
+                    UNINSTALL_KEY,
+                    "InstallLocation",
+                    out_dir.as_str(),
+                )
+                .install()?;
+            i.registry()
+                .set(
+                    LocalMachine,
+                    UNINSTALL_KEY,
+                    "UninstallString",
+                    quoted_uninstaller.as_str(),
+                )
+                .install()?;
+            i.registry()
+                .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoModify", 1)
+                .install()?;
+            i.registry()
+                .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoRepair", 1)
+                .install()?;
+        }
 
-            // Windows polish: Start Menu shortcut + Add/Remove Programs
-            // registration. The shortcut points at the uninstaller so the
-            // example is clickable; a real installer would point it at the
-            // installed app's main executable.
-            #[cfg(windows)]
-            {
-                use installrs::RegistryHive::LocalMachine;
-
-                let program_data =
-                    std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
-                let start_menu = format!(
-                    r"{program_data}\Microsoft\Windows\Start Menu\Programs\InstallRS Example"
-                );
-                let shortcut_path = format!(r"{start_menu}\InstallRS Example.lnk");
-                let uninstaller_path = format!(r"{out_dir}\uninstall.exe");
-
-                i.shortcut(&shortcut_path, &uninstaller_path)
-                    .description("Uninstall InstallRS Example")
-                    .working_dir(&out_dir)
-                    .log(t!("installer.install.log_shortcut"))
-                    .install()?;
-
-                const UNINSTALL_KEY: &str =
-                    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
-                let quoted_uninstaller = format!("\"{uninstaller_path}\"");
-
-                i.registry()
-                    .set(
-                        LocalMachine,
-                        UNINSTALL_KEY,
-                        "DisplayName",
-                        "InstallRS Example",
-                    )
-                    .log(t!("installer.install.log_registry"))
-                    .install()?;
-                i.registry()
-                    .set(LocalMachine, UNINSTALL_KEY, "DisplayVersion", "0.1.0")
-                    .install()?;
-                i.registry()
-                    .set(LocalMachine, UNINSTALL_KEY, "Publisher", "InstallRS")
-                    .install()?;
-                i.registry()
-                    .set(
-                        LocalMachine,
-                        UNINSTALL_KEY,
-                        "InstallLocation",
-                        out_dir.as_str(),
-                    )
-                    .install()?;
-                i.registry()
-                    .set(
-                        LocalMachine,
-                        UNINSTALL_KEY,
-                        "UninstallString",
-                        quoted_uninstaller.as_str(),
-                    )
-                    .install()?;
-                i.registry()
-                    .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoModify", 1)
-                    .install()?;
-                i.registry()
-                    .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoRepair", 1)
-                    .install()?;
-            }
-
-            ctx.set_status(&t!("installer.install.status_complete"));
-            Ok(())
-        });
+        ctx.set_status(&t!("installer.install.status_complete"));
+        Ok(())
+    });
     w.finish_page(
         &t!("installer.finish.title"),
         &t!("installer.finish.message"),
@@ -422,57 +423,56 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         &t!("uninstaller.welcome.message"),
     );
     w.uninstall_page(|ctx| {
-            let mut i = ctx.installer();
+        let mut i = ctx.installer();
 
-            // On Windows, `enable_self_delete` relaunches from a temp dir, so
-            // `current_exe()` no longer points to the real install location.
-            // Read it back from the registry instead (InstallLocation is what
-            // Add/Remove Programs uses). On other platforms, fall back to the
-            // value captured before the wizard ran.
-            #[cfg(windows)]
-            let install_dir: String = {
-                use installrs::RegistryHive::LocalMachine;
-                const UNINSTALL_KEY: &str =
-                    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
-                i.registry()
-                    .get::<String>(LocalMachine, UNINSTALL_KEY, "InstallLocation")
-                    .unwrap_or_else(|_| {
-                        std::env::current_exe()
-                            .ok()
-                            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                            .and_then(|p| p.to_str().map(String::from))
-                            .unwrap_or_default()
-                    })
-            };
+        // On Windows, `enable_self_delete` relaunches from a temp dir, so
+        // `current_exe()` no longer points to the real install location.
+        // Read it back from the registry instead (InstallLocation is what
+        // Add/Remove Programs uses). On other platforms, fall back to the
+        // value captured before the wizard ran.
+        #[cfg(windows)]
+        let install_dir: String = {
+            use installrs::RegistryHive::LocalMachine;
+            const UNINSTALL_KEY: &str =
+                r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
+            i.registry()
+                .get::<String>(LocalMachine, UNINSTALL_KEY, "InstallLocation")
+                .unwrap_or_else(|_| {
+                    std::env::current_exe()
+                        .ok()
+                        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                        .and_then(|p| p.to_str().map(String::from))
+                        .unwrap_or_default()
+                })
+        };
 
-            #[cfg(windows)]
-            {
-                use installrs::RegistryHive::LocalMachine;
+        #[cfg(windows)]
+        {
+            use installrs::RegistryHive::LocalMachine;
 
-                let program_data =
-                    std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
-                let shortcut_dir = format!(
-                    r"{program_data}\Microsoft\Windows\Start Menu\Programs\InstallRS Example"
-                );
-                i.remove(shortcut_dir).install()?;
+            let program_data =
+                std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
+            let shortcut_dir =
+                format!(r"{program_data}\Microsoft\Windows\Start Menu\Programs\InstallRS Example");
+            i.remove(shortcut_dir).install()?;
 
-                i.registry()
-                    .remove(
-                        LocalMachine,
-                        r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample",
-                    )
-                    .recursive()
-                    .install()?;
-            }
-
-            i.remove(install_dir)
-                .status(t!("uninstaller.status_removing"))
-                .log(t!("uninstaller.log_removing"))
+            i.registry()
+                .remove(
+                    LocalMachine,
+                    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample",
+                )
+                .recursive()
                 .install()?;
+        }
 
-            ctx.set_status(&t!("uninstaller.status_complete"));
-            Ok(())
-        });
+        i.remove(install_dir)
+            .status(t!("uninstaller.status_removing"))
+            .log(t!("uninstaller.log_removing"))
+            .install()?;
+
+        ctx.set_status(&t!("uninstaller.status_complete"));
+        Ok(())
+    });
     w.finish_page(
         &t!("uninstaller.finish.title"),
         &t!("uninstaller.finish.message"),

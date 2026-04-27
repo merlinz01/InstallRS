@@ -12,6 +12,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Changed
+
+- String-taking setters now accept `impl AsRef<str>`, so `String`,
+  `&str`, `Cow<str>`, `&Cow<str>` (e.g. results of `rust_i18n::t!`),
+  and `format!(...)` all work without explicit conversion.
+
 ## [0.1.0-rc9] — 2026-04-23
 
 ### Changed

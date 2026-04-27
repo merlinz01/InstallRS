@@ -138,8 +138,8 @@ impl InstallerGui {
     }
 
     /// Set the window title.
-    pub fn title(&mut self, title: &str) -> &mut Self {
-        self.config.title = title.to_string();
+    pub fn title(&mut self, title: impl AsRef<str>) -> &mut Self {
+        self.config.title = title.as_ref().to_string();
         self
     }
 
@@ -160,10 +160,10 @@ impl InstallerGui {
     }
 
     /// Add a welcome page with a title and description message.
-    pub fn welcome(&mut self, title: &str, message: &str) -> PageHandle<'_> {
+    pub fn welcome(&mut self, title: impl AsRef<str>, message: impl AsRef<str>) -> PageHandle<'_> {
         self.push_page(WizardPage::Welcome {
-            title: title.to_string(),
-            message: message.to_string(),
+            title: title.as_ref().to_string(),
+            message: message.as_ref().to_string(),
         })
     }
 
@@ -171,11 +171,16 @@ impl InstallerGui {
     ///
     /// `heading` is the title displayed above the license text, and `accept_label`
     /// is the label on the acceptance checkbox (both translatable by the caller).
-    pub fn license(&mut self, heading: &str, text: &str, accept_label: &str) -> PageHandle<'_> {
+    pub fn license(
+        &mut self,
+        heading: impl AsRef<str>,
+        text: impl AsRef<str>,
+        accept_label: impl AsRef<str>,
+    ) -> PageHandle<'_> {
         self.push_page(WizardPage::License {
-            heading: heading.to_string(),
-            text: text.to_string(),
-            accept_label: accept_label.to_string(),
+            heading: heading.as_ref().to_string(),
+            text: text.as_ref().to_string(),
+            accept_label: accept_label.as_ref().to_string(),
         })
     }
 
@@ -188,10 +193,14 @@ impl InstallerGui {
     ///
     /// `heading` is the bold title at the top; `label` is the intro sentence
     /// above the checkbox list (e.g. "Select the features to install:").
-    pub fn components_page(&mut self, heading: &str, label: &str) -> PageHandle<'_> {
+    pub fn components_page(
+        &mut self,
+        heading: impl AsRef<str>,
+        label: impl AsRef<str>,
+    ) -> PageHandle<'_> {
         self.push_page(WizardPage::Components {
-            heading: heading.to_string(),
-            label: label.to_string(),
+            heading: heading.as_ref().to_string(),
+            label: label.as_ref().to_string(),
         })
     }
 
@@ -202,14 +211,14 @@ impl InstallerGui {
     /// the initial path.
     pub fn directory_picker(
         &mut self,
-        heading: &str,
-        label: &str,
-        default: &str,
+        heading: impl AsRef<str>,
+        label: impl AsRef<str>,
+        default: impl AsRef<str>,
     ) -> PageHandle<'_> {
         self.push_page(WizardPage::DirectoryPicker {
-            heading: heading.to_string(),
-            label: label.to_string(),
-            default: default.to_string(),
+            heading: heading.as_ref().to_string(),
+            label: label.as_ref().to_string(),
+            default: default.as_ref().to_string(),
         })
     }
 
@@ -242,10 +251,14 @@ impl InstallerGui {
     }
 
     /// Add a finish page shown after installation completes.
-    pub fn finish_page(&mut self, title: &str, message: &str) -> PageHandle<'_> {
+    pub fn finish_page(
+        &mut self,
+        title: impl AsRef<str>,
+        message: impl AsRef<str>,
+    ) -> PageHandle<'_> {
         self.push_page(WizardPage::Finish {
-            title: title.to_string(),
-            message: message.to_string(),
+            title: title.as_ref().to_string(),
+            message: message.as_ref().to_string(),
         })
     }
 
@@ -280,15 +293,15 @@ impl InstallerGui {
     /// ```
     pub fn custom_page(
         &mut self,
-        heading: &str,
-        label: &str,
+        heading: impl AsRef<str>,
+        label: impl AsRef<str>,
         build: impl FnOnce(&mut CustomPageBuilder),
     ) -> PageHandle<'_> {
         let mut b = CustomPageBuilder::new();
         build(&mut b);
         self.push_page(WizardPage::Custom {
-            heading: heading.to_string(),
-            label: label.to_string(),
+            heading: heading.as_ref().to_string(),
+            label: label.as_ref().to_string(),
             widgets: b.widgets,
         })
     }
@@ -300,10 +313,14 @@ impl InstallerGui {
     ///
     /// If no error page is registered, install failures surface as a
     /// native error dialog instead.
-    pub fn error_page(&mut self, title: &str, message: &str) -> PageHandle<'_> {
+    pub fn error_page(
+        &mut self,
+        title: impl AsRef<str>,
+        message: impl AsRef<str>,
+    ) -> PageHandle<'_> {
         self.push_page(WizardPage::Error {
-            title: title.to_string(),
-            message: message.to_string(),
+            title: title.as_ref().to_string(),
+            message: message.as_ref().to_string(),
         })
     }
 

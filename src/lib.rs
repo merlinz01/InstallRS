@@ -322,8 +322,8 @@ impl Installer {
     }
 
     /// Set the base output directory for relative destination paths.
-    pub fn set_out_dir(&mut self, dir: &str) {
-        self.out_dir = Some(PathBuf::from(dir));
+    pub fn set_out_dir(&mut self, dir: impl AsRef<str>) {
+        self.out_dir = Some(PathBuf::from(dir.as_ref()));
     }
 
     /// Attach a [`ProgressSink`] that receives status, progress, and log events.
@@ -647,7 +647,7 @@ mod tests {
 
     fn make_installer(entries: Vec<EmbeddedEntry>, out_dir: &std::path::Path) -> Installer {
         let mut i = Installer::new(leak_entries(entries), leak_bytes(vec![]), "");
-        i.set_out_dir(&out_dir.to_string_lossy());
+        i.set_out_dir(out_dir.to_string_lossy());
         i
     }
 

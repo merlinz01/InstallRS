@@ -1,0 +1,197 @@
+//! Command-line argument parsing for the `Installer`. Handles built-in
+//! flags (`--headless`, `--list-components`, `--components`, `--with`,
+//! `--without`, `--log`) and dispatches user-defined options registered
+//! via [`Installer::option`].
+
+use anyhow::{anyhow, Result};
+
+use crate::options::OptionValue;
+use crate::{Installer, OptionKind};
+
+impl Installer {
+    /// Parse command-line arguments and apply them to the installer state.
+    ///
+    /// **All installers must call this.** Typical placement is the first
+    /// line inside the `install` / `uninstall` function, right after
+    /// registering components:
+    ///
+    /// ```rust,ignore
+    /// pub fn install(i: &mut Installer) -> Result<()> {
+    ///     i.component("docs", "Documentation", "", 3);
+    ///     i.process_commandline()?;
+    ///     // ... wizard or headless install flow ...
+    /// }
+    /// ```
+    ///
+    /// Recognized flags:
+    /// - `--headless` — sets `self.headless = true`, disables GUI
+    /// - `--list-components` — print the component table and exit status 0
+    /// - `--components a,b,c` — install exactly this set (plus required)
+    /// - `--with a,b` — enable these in addition to defaults
+    /// - `--without a,b` — disable these (required cannot be disabled)
+    /// - `--log <path>` — tee all status / log / error messages to a file
+    ///   (append mode; see [`Installer::set_log_file`])
+    ///
+    /// Returns an error on unknown component ids or unknown flags. Register
+    /// custom flags via [`Installer::option`] before calling this.
+    pub fn process_commandline(&mut self) -> Result<()> {
+        let args: Vec<String> = std::env::args().collect();
+        self.process_commandline_from(&args)
+    }
+
+    #[doc(hidden)]
+    pub fn process_commandline_from(&mut self, args: &[String]) -> Result<()> {
+        let mut exact: Option<Vec<String>> = None;
+        let mut with: Vec<String> = Vec::new();
+        let mut without: Vec<String> = Vec::new();
+        let mut list = false;
+
+        let mut i = 1;
+        #[cfg(windows)]
+        // `--self-delete` is recognized only as the very first argument
+        // so we don't have to worry about it appearing as a value later on.
+        if args.get(i).map(|s| s.as_str()) == Some("--self-delete") {
+            i += 1;
+        }
+        while i < args.len() {
+            let a = &args[i];
+            let (flag, inline_val): (&str, Option<&str>) = if let Some(eq) = a.find('=') {
+                (&a[..eq], Some(&a[eq + 1..]))
+            } else {
+                (a.as_str(), None)
+            };
+            let take_val = |i: &mut usize| -> Result<String> {
+                if let Some(v) = inline_val {
+                    Ok(v.to_string())
+                } else {
+                    *i += 1;
+                    args.get(*i)
+                        .cloned()
+                        .ok_or_else(|| anyhow!("{flag} requires a value"))
+                }
+            };
+            match flag {
+                "--headless" => self.headless = true,
+                "--list-components" => list = true,
+                "--components" => {
+                    let v = take_val(&mut i)?;
+                    exact = Some(v.split(',').map(|s| s.trim().to_string()).collect());
+                }
+                "--with" => {
+                    let v = take_val(&mut i)?;
+                    with.extend(v.split(',').map(|s| s.trim().to_string()));
+                }
+                "--without" => {
+                    let v = take_val(&mut i)?;
+                    without.extend(v.split(',').map(|s| s.trim().to_string()));
+                }
+                "--log" => {
+                    let v = take_val(&mut i)?;
+                    self.set_log_file(&v)?;
+                }
+                _ => {
+                    // User-defined option? Strip the leading `--`.
+                    let bare = flag.strip_prefix("--").unwrap_or(flag);
+                    let opt = self
+                        .options
+                        .iter()
+                        .find(|o| o.name == bare)
+                        .cloned()
+                        .ok_or_else(|| anyhow!("unknown flag: {flag}"))?;
+                    let parsed = match opt.kind {
+                        OptionKind::Flag => {
+                            if inline_val.is_some() {
+                                return Err(anyhow!(
+                                    "--{} is a flag and does not take a value",
+                                    opt.name
+                                ));
+                            }
+                            OptionValue::Flag(true)
+                        }
+                        OptionKind::String => OptionValue::String(take_val(&mut i)?),
+                        OptionKind::Int => {
+                            let v = take_val(&mut i)?;
+                            let n: i64 = v.parse().map_err(|_| {
+                                anyhow!("--{} expected an integer, got {v:?}", opt.name)
+                            })?;
+                            OptionValue::Int(n)
+                        }
+                        OptionKind::Bool => {
+                            let v = take_val(&mut i)?;
+                            let b = match v.to_ascii_lowercase().as_str() {
+                                "true" | "1" | "yes" | "on" => true,
+                                "false" | "0" | "no" | "off" => false,
+                                _ => {
+                                    return Err(anyhow!(
+                                        "--{} expected true/false, got {v:?}",
+                                        opt.name
+                                    ))
+                                }
+                            };
+                            OptionValue::Bool(b)
+                        }
+                    };
+                    self.option_values.insert(opt.name.clone(), parsed);
+                }
+            }
+            i += 1;
+        }
+
+        // Flags default to `false` so `get_option::<bool>("flag")` always
+        // returns `Some(...)` for registered flags, regardless of presence.
+        for opt in &self.options {
+            if matches!(opt.kind, OptionKind::Flag) && !self.option_values.contains_key(&opt.name) {
+                self.option_values
+                    .insert(opt.name.clone(), OptionValue::Flag(false));
+            }
+        }
+
+        if list {
+            println!("Available components:");
+            for c in &self.components {
+                let marker = if c.required {
+                    "*"
+                } else if c.default {
+                    "+"
+                } else {
+                    "-"
+                };
+                println!("  {} {:<20} {}", marker, c.id, c.label);
+                if !c.description.is_empty() {
+                    println!("    {}", c.description);
+                }
+            }
+            println!("\n  * required   + default on   - default off");
+            std::process::exit(0);
+        }
+
+        let known: std::collections::HashSet<String> =
+            self.components.iter().map(|c| c.id.clone()).collect();
+        for id in exact
+            .iter()
+            .flatten()
+            .chain(with.iter())
+            .chain(without.iter())
+        {
+            if !id.is_empty() && !known.contains(id) {
+                return Err(anyhow!("unknown component: {id}"));
+            }
+        }
+
+        if let Some(wanted) = exact {
+            let wanted: std::collections::HashSet<String> = wanted.into_iter().collect();
+            for c in self.components.iter_mut() {
+                let on = c.required || wanted.contains(&c.id);
+                c.selected = on;
+            }
+        }
+        for id in with {
+            self.set_component_selected(&id, true);
+        }
+        for id in without {
+            self.set_component_selected(&id, false);
+        }
+
+        Ok(())
+    }
+}

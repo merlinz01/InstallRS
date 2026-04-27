@@ -1,5 +1,8 @@
-//! Progress-reporting types. The `Installer` owns a `ProgressState` and an
-//! optional `ProgressSink`; see `crate::Installer` for the full API.
+//! Progress-reporting types and the `Installer` methods that drive them.
+
+use anyhow::Result;
+
+use crate::Installer;
 
 /// Sink for progress, status, and log events emitted by installer operations.
 ///
@@ -21,4 +24,117 @@ pub(crate) struct ProgressState {
     pub(crate) step_range_start: f64,
     /// End of the current step's weight range — cursor + weight.
     pub(crate) step_range_end: f64,
+}
+
+impl Installer {
+    /// Total step weight across all currently-selected components. Every
+    /// builder op (and `step`/`begin_step`) advances a cursor that runs from
+    /// 0 up to this total; the progress sink receives `cursor / total` on
+    /// each update.
+    pub fn total_steps(&self) -> u64 {
+        self.components
+            .iter()
+            .filter(|c| c.selected)
+            .map(|c| c.progress_weight as u64)
+            .sum()
+    }
+
+    /// Reset the step cursor to zero. Usually not needed — `install_main`
+    /// leaves it alone and the wizard's install page runs exactly once.
+    pub fn reset_progress(&mut self) {
+        let mut state = self.progress.lock().unwrap();
+        state.steps_done = 0.0;
+        state.step_range_start = 0.0;
+        state.step_range_end = 0.0;
+    }
+
+    /// Open a weighted step without running a builder op. Use this around
+    /// your own long-running work (downloads, service registration, etc.) so
+    /// the progress bar advances; pair with [`Installer::set_step_progress`]
+    /// for sub-step updates, then [`Installer::end_step`] to close it out.
+    ///
+    /// ```rust,ignore
+    /// i.begin_step("Downloading", 5);
+    /// for (done, total) in download_chunks(&url)? {
+    ///     i.set_step_progress(done as f64 / total as f64);
+    /// }
+    /// i.end_step();
+    /// ```
+    pub fn begin_step(&self, status: &str, weight: u32) {
+        self.emit_status(&Some(status.to_string()));
+        let mut state = self.progress.lock().unwrap();
+        state.step_range_start = state.steps_done;
+        state.step_range_end = state.steps_done + weight as f64;
+        drop(state);
+        self.emit_progress();
+    }
+
+    /// Update progress within the currently-open step: `fraction` is
+    /// interpreted as a position from 0.0 (step start) to 1.0 (step end).
+    /// Outside an open step this is a no-op. Clamped to `[0, 1]`.
+    pub fn set_step_progress(&self, fraction: f64) {
+        let f = fraction.clamp(0.0, 1.0);
+        let mut state = self.progress.lock().unwrap();
+        let span = state.step_range_end - state.step_range_start;
+        state.steps_done = state.step_range_start + f * span;
+        drop(state);
+        self.emit_progress();
+    }
+
+    /// Close the currently-open step, jumping the cursor to the end of its
+    /// range. If no step is open this just snaps the cursor to the previous
+    /// `step_range_end`.
+    pub fn end_step(&self) {
+        let mut state = self.progress.lock().unwrap();
+        state.steps_done = state.step_range_end;
+        state.step_range_start = state.step_range_end;
+        drop(state);
+        self.emit_progress();
+    }
+
+    /// One-shot equivalent of `begin_step` + `end_step` for user code whose
+    /// progress can't be subdivided: advances the cursor by `weight` units
+    /// and emits the status message.
+    pub fn step(&self, status: &str, weight: u32) {
+        self.begin_step(status, weight);
+        self.end_step();
+    }
+
+    pub(crate) fn emit_progress(&self) {
+        let Some(sink) = self.sink.as_ref() else {
+            return;
+        };
+        let state = self.progress.lock().unwrap();
+        let total = self.total_steps();
+        let fraction = if total == 0 {
+            0.0
+        } else {
+            (state.steps_done / total as f64).clamp(0.0, 1.0)
+        };
+        drop(state);
+        sink.set_progress(fraction);
+    }
+
+    /// Open a step with the given weight, run `f`, then close the step.
+    /// Used by builder ops' `.install()` to wrap the actual work in a
+    /// progress step. If `f` errors, the step is still closed.
+    pub(crate) fn run_weighted_step<F>(&self, weight: u32, f: F) -> Result<()>
+    where
+        F: FnOnce() -> Result<()>,
+    {
+        {
+            let mut state = self.progress.lock().unwrap();
+            state.step_range_start = state.steps_done;
+            state.step_range_end = state.steps_done + weight as f64;
+        }
+        self.emit_progress();
+        let result = f();
+        {
+            let mut state = self.progress.lock().unwrap();
+            state.steps_done = state.step_range_end;
+            state.step_range_start = state.step_range_end;
+        }
+        self.emit_progress();
+        result
+    }
 }

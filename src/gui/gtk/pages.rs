@@ -122,10 +122,12 @@ impl LicensePage {
 pub struct DirectoryPickerPage {
     widget: gtk::Box,
     entry: gtk::Entry,
+    key: String,
 }
 
 impl DirectoryPickerPage {
-    pub fn new(heading: &str, label_text: &str, default: &str) -> Self {
+    pub fn new(heading: &str, label_text: &str, key: &str, initial: &str) -> Self {
+        let default = initial;
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
         set_page_margins(&vbox);
 
@@ -180,6 +182,7 @@ impl DirectoryPickerPage {
         Self {
             widget: vbox,
             entry,
+            key: key.to_string(),
         }
     }
 
@@ -189,6 +192,10 @@ impl DirectoryPickerPage {
 
     pub fn get_directory(&self) -> String {
         self.entry.text().to_string()
+    }
+
+    pub fn key(&self) -> &str {
+        &self.key
     }
 }
 

@@ -101,7 +101,11 @@ pub enum WizardPage {
     DirectoryPicker {
         heading: String,
         label: String,
-        default: String,
+        /// Name of the [`crate::OptionValue::String`] option to read/write.
+        /// Initial display value is the option's current value (or empty).
+        /// Auto-registered as [`crate::OptionKind::String`] at wizard
+        /// `run()` if not already registered.
+        key: String,
     },
     Install {
         callback: InstallCallback,

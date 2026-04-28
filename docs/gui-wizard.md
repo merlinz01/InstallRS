@@ -43,11 +43,14 @@ w.title("My App Installer");
 w.welcome("Welcome!", "Click Next to continue.");
 w.license("License Agreement", include_str!("../LICENSE"), "I accept");
 w.components_page("Select Components", "Choose features to install:");
-w.directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
+i.set_option_default("install-dir", "C:/MyApp");
+w.directory_picker("Choose Install Location", "Install to:", "install-dir")
     .on_before_leave(|i| {
-        confirm("Confirm", &format!("Install to {}?", i.install_dir()))
+        let dir: String = i.get_option("install-dir").unwrap_or_default();
+        confirm("Confirm", &format!("Install to {dir}?"))
     });
 w.install_page(|i| {
+    i.set_out_dir(i.get_option::<String>("install-dir").unwrap_or_default());
     i.file(source!("app.exe"), "app.exe").install()?;
     if i.is_component_selected("docs") {
         i.dir(source!("docs"), "docs").install()?;
@@ -124,8 +127,8 @@ CLI flags:
 .license("License", include_str!("../LICENSE"), "I accept")
 .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false))
 
-.directory_picker("Install Location", "Install to:", default_dir)
-.skip_if(|i| i.get_option::<String>("install-dir").is_some())
+.directory_picker("Install Location", "Install to:", "install-dir")
+.skip_if(|i| i.get_option::<String>("install-dir").map(|s| !s.is_empty()).unwrap_or(false))
 ```
 
 The predicate must be **pure** — no side effects, no I/O. Side effects

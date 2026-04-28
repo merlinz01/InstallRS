@@ -26,6 +26,37 @@ pub enum OptionValue {
     Bool(bool),
 }
 
+impl From<bool> for OptionValue {
+    fn from(b: bool) -> Self {
+        OptionValue::Bool(b)
+    }
+}
+impl From<String> for OptionValue {
+    fn from(s: String) -> Self {
+        OptionValue::String(s)
+    }
+}
+impl From<&str> for OptionValue {
+    fn from(s: &str) -> Self {
+        OptionValue::String(s.to_string())
+    }
+}
+impl From<&String> for OptionValue {
+    fn from(s: &String) -> Self {
+        OptionValue::String(s.clone())
+    }
+}
+impl From<i64> for OptionValue {
+    fn from(n: i64) -> Self {
+        OptionValue::Int(n)
+    }
+}
+impl From<i32> for OptionValue {
+    fn from(n: i32) -> Self {
+        OptionValue::Int(n as i64)
+    }
+}
+
 /// Types that can be pulled out of an [`OptionValue`] via
 /// [`crate::Installer::get_option`]. Implemented for `bool`, `String`, `i64`,
 /// `i32`, `u64`, `u32`.

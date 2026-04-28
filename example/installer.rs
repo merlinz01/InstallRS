@@ -81,11 +81,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // Parse CLI (--headless, --list-components, --components, --log, etc.).
     i.process_commandline()?;
 
-    // Seed the directory picker's default from --install-dir when provided,
-    // otherwise fall back to the platform default.
-    let default_dir = i
-        .get_option::<String>("install-dir")
-        .unwrap_or_else(|| default_install_dir().to_string());
+    // Seed the install-dir option to the platform default if neither
+    // `--install-dir` nor user code has already set it. The directory
+    // picker reads the current option value as its initial display.
+    i.set_option_default("install-dir", default_install_dir());
 
     let mut w = InstallerGui::wizard();
     w.title(&t!("installer.title"))
@@ -140,16 +139,17 @@ pub fn install(i: &mut Installer) -> Result<()> {
     w.directory_picker(
         &t!("installer.directory.heading"),
         &t!("installer.directory.label"),
-        &default_dir,
+        "install-dir",
     )
     .on_before_leave(|i| {
         // --yes skips the confirmation dialog.
         if i.get_option::<bool>("yes").unwrap_or(false) {
             return Ok(true);
         }
+        let dir: String = i.get_option("install-dir").unwrap_or_default();
         installrs::gui::confirm(
             &t!("installer.confirm.title"),
-            &t!("installer.confirm.message", dir = i.install_dir()),
+            &t!("installer.confirm.message", dir = dir),
         )
     });
     w.custom_page(
@@ -231,8 +231,9 @@ pub fn install(i: &mut Installer) -> Result<()> {
         },
     );
     w.install_page(|i| {
-        #[cfg_attr(not(windows), allow(unused_variables))]
-        let out_dir = i.install_dir();
+        // Lift the picker's option into the relative-path resolution slot.
+        let out_dir: String = i.get_option("install-dir").unwrap_or_default();
+        i.set_out_dir(&out_dir);
 
         // core: always installed (required component)
         i.dir(installrs::source!("testdir", ignore = ["*.bak"]), "testdir")

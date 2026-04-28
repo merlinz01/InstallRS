@@ -232,7 +232,8 @@ confirm.install_to:
 ```
 
 ```rust
-t!("confirm.install_to", dir = ctx.install_dir())
+let dir: String = i.get_option("install-dir").unwrap_or_default();
+t!("confirm.install_to", dir = dir)
 ```
 
 ## 7. Testing

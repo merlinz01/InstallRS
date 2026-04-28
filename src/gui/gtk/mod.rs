@@ -55,15 +55,6 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     // the install callback all see the same flag.
     let cancelled = installer.cancellation_flag();
 
-    // Apply the directory_picker default to the installer's out_dir if
-    // nothing else gave it one.
-    if installer.out_dir().is_none() {
-        let default_dir = find_default_dir(&config.pages);
-        if !default_dir.is_empty() {
-            installer.set_out_dir(default_dir);
-        }
-    }
-
     let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
     let installer_arc = Arc::new(Mutex::new(installer_taken));
 
@@ -123,13 +114,4 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     *installer = restored;
 
     result
-}
-
-fn find_default_dir(pages: &[ConfiguredPage]) -> String {
-    for configured in pages {
-        if let WizardPage::DirectoryPicker { default, .. } = &configured.page {
-            return default.clone();
-        }
-    }
-    String::new()
 }

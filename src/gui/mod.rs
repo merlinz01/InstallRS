@@ -15,7 +15,7 @@
 //! w.welcome("Welcome!", "Click Next to continue.");
 //! w.license("License", include_str!("../LICENSE"), "I accept");
 //! w.components_page("Components", "Choose features:");
-//! w.directory_picker("Install Location", "Install to:", "C:/MyApp");
+//! w.directory_picker("Install Location", "Install to:", "install-dir");
 //! w.install_page(|i| {
 //!     i.file(installrs::source!("app.exe"), "app.exe").install()?;
 //!     i.uninstaller("uninstall.exe").install()?;
@@ -84,7 +84,7 @@ use crate::Installer;
 /// w.title("My App Installer");
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license(include_str!("../LICENSE"));
-/// w.directory_picker("C:/Program Files/MyApp");
+/// w.directory_picker("Install Location", "Install to:", "install-dir");
 /// w.install_page(|i| {
 ///     i.set_status("Installing...");
 ///     // ... install files ...
@@ -202,30 +202,49 @@ impl InstallerGui {
         })
     }
 
-    /// Add a directory picker page with a default path.
+    /// Add a directory picker page bound to a named installer option.
     ///
     /// `heading` is the bold title at the top of the page, `label` is the
-    /// prompt next to the path input (e.g. "Install to:"), and `default` is
-    /// the initial path.
+    /// prompt next to the path input (e.g. "Install to:"), and `key` is the
+    /// name of the [`crate::OptionValue::String`] option the picker reads
+    /// and writes. Initial display value is the option's current value (or
+    /// empty if unset) — seed it via `installer.set_option(key, ...)` (or
+    /// the helper `set_option_default`) before [`run`](Self::run) for a
+    /// sensible first-run default. The option is auto-registered as
+    /// [`crate::OptionKind::String`] at `run()` if the user hasn't already
+    /// registered it; register it explicitly before
+    /// [`Installer::process_commandline`] if you want a `--<key>` CLI flag.
+    ///
+    /// User code is responsible for lifting the picked value into
+    /// `installer.set_out_dir(...)` if relative-path resolution should
+    /// honour it — typically inside the install callback:
+    ///
+    /// ```rust,ignore
+    /// w.install_page(|i| {
+    ///     i.set_out_dir(i.get_option::<String>("install-dir").unwrap_or_default());
+    ///     // ...
+    /// });
+    /// ```
     pub fn directory_picker(
         &mut self,
         heading: impl AsRef<str>,
         label: impl AsRef<str>,
-        default: impl AsRef<str>,
+        key: impl AsRef<str>,
     ) -> PageHandle<'_> {
         self.push_page(WizardPage::DirectoryPicker {
             heading: heading.as_ref().to_string(),
             label: label.as_ref().to_string(),
-            default: default.as_ref().to_string(),
+            key: key.as_ref().to_string(),
         })
     }
 
     /// Add the install page with a callback that performs the actual installation.
     ///
-    /// The callback receives `&mut Installer` directly. The wizard already
-    /// applied the directory_picker selection via `installer.set_out_dir`
-    /// before calling, and a progress sink that forwards to the install
-    /// page is attached for the duration of the callback.
+    /// The callback receives `&mut Installer` directly. A progress sink
+    /// that forwards to the install page is attached for the duration of
+    /// the callback. The wizard does not implicitly call
+    /// [`Installer::set_out_dir`] from a directory_picker page — lift the
+    /// option value yourself if you want relative-path resolution.
     pub fn install_page(
         &mut self,
         callback: impl FnOnce(&mut Installer) -> Result<()> + Send + 'static,
@@ -338,6 +357,19 @@ impl InstallerGui {
         let on_start = self.config.on_start.take();
         let on_exit = self.config.on_exit.take();
 
+        // Auto-register any directory_picker option keys not already
+        // registered, so the picker's read/write via set_option works
+        // without forcing the user to call `i.option(key, ...)`. Users
+        // who want a `--<key>` CLI flag should still register the option
+        // explicitly before `process_commandline()`.
+        for configured in &self.config.pages {
+            if let WizardPage::DirectoryPicker { key, .. } = &configured.page {
+                if !installer.is_option_registered(key) {
+                    installer.option(key.clone(), crate::OptionKind::String);
+                }
+            }
+        }
+
         if let Some(cb) = on_start {
             cb(installer)?;
         }
@@ -362,24 +394,14 @@ impl InstallerGui {
     /// is attached if the caller didn't already set one, so status / log /
     /// progress events surface readably on stderr.
     fn run_headless(self, installer: &mut Installer) -> Result<()> {
-        // Extract install callback and the directory_picker's default path
-        // (which becomes the installer's out_dir if nothing else set one).
+        // Extract install callback. Directory_picker pages are no-ops in
+        // headless mode — user code reads / seeds the relevant option
+        // directly and lifts it into out_dir as needed.
         let mut install_callback: Option<InstallCallback> = None;
-        let mut default_dir = String::new();
         for configured in self.config.pages {
-            match configured.page {
-                WizardPage::Install { callback, .. } => install_callback = Some(callback),
-                WizardPage::DirectoryPicker { default, .. } if default_dir.is_empty() => {
-                    default_dir = default;
-                }
-                _ => {}
+            if let WizardPage::Install { callback, .. } = configured.page {
+                install_callback = Some(callback);
             }
-        }
-
-        // Apply the directory_picker default if the installer doesn't already
-        // have an out_dir configured (e.g. via --install-dir or user code).
-        if installer.out_dir().is_none() && !default_dir.is_empty() {
-            installer.set_out_dir(default_dir);
         }
 
         // Attach a default stderr sink if none is already set, so headless

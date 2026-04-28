@@ -21,6 +21,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
   `&Installer` directly; `GuiContext` and `PageContext` are gone.
   Status, progress, log, and install-dir helpers moved onto `Installer`.
   Non-GUI installs auto-attach a stderr progress sink.
+- **Breaking:** `directory_picker(heading, label, key)` binds to a
+  named option instead of a literal default. New helpers
+  `set_option`, `set_option_default`, `is_option_registered`.
 
 ## [0.1.0-rc9] — 2026-04-23
 

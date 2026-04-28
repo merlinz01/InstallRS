@@ -265,6 +265,7 @@ pub struct DirectoryPickerPage {
     _label: gui::Label,
     dir_edit: gui::Edit,
     _browse_btn: gui::Button,
+    key: String,
 }
 
 impl DirectoryPickerPage {
@@ -272,10 +273,12 @@ impl DirectoryPickerPage {
         parent: &gui::WindowControl,
         heading: &str,
         label_text: &str,
-        default: &str,
+        key: &str,
+        initial: &str,
         width: i32,
         _height: i32,
     ) -> Self {
+        let default = initial;
         let heading_label = gui::Label::new(
             parent,
             gui::LabelOpts {
@@ -327,11 +330,16 @@ impl DirectoryPickerPage {
             _label: label,
             dir_edit,
             _browse_btn: browse_btn,
+            key: key.to_string(),
         }
     }
 
     pub fn get_directory(&self) -> String {
         self.dir_edit.text().unwrap_or_default()
+    }
+
+    pub fn key(&self) -> &str {
+        &self.key
     }
 }
 

@@ -146,14 +146,38 @@ impl Installer {
     /// let port: i64 = i.get_option("port").unwrap_or(8080);
     /// let verbose: bool = i.get_option("verbose").unwrap_or(false);
     /// ```
-    pub fn option(&mut self, name: &str, kind: OptionKind) -> &mut Self {
-        let name = name.trim_start_matches('-').to_string();
+    pub fn option(&mut self, name: impl AsRef<str>, kind: OptionKind) -> &mut Self {
+        let name = name.as_ref().trim_start_matches('-').to_string();
         if let Some(existing) = self.options.iter_mut().find(|o| o.name == name) {
             existing.kind = kind;
         } else {
             self.options.push(CmdOption { name, kind });
         }
         self
+    }
+
+    /// Whether an option with this name has been registered.
+    pub fn is_option_registered(&self, name: impl AsRef<str>) -> bool {
+        let name = name.as_ref().trim_start_matches('-');
+        self.options.iter().any(|o| o.name == name)
+    }
+
+    /// Set an option value only if it isn't already set. Useful for
+    /// seeding a sensible first-run default that CLI flags or prior
+    /// wizard state can override.
+    pub fn set_option_default(&mut self, name: impl AsRef<str>, value: impl Into<OptionValue>) {
+        let name = name.as_ref().trim_start_matches('-');
+        if !self.option_values.contains_key(name) {
+            self.option_values.insert(name.to_string(), value.into());
+        }
+    }
+
+    /// Set an option value (always overwrites). Same as
+    /// [`set_option_value`](Self::set_option_value) but accepts anything
+    /// convertible to [`OptionValue`].
+    pub fn set_option(&mut self, name: impl AsRef<str>, value: impl Into<OptionValue>) {
+        let name = name.as_ref().trim_start_matches('-').to_string();
+        self.option_values.insert(name, value.into());
     }
 
     /// Typed accessor for a parsed option value.
@@ -329,15 +353,6 @@ impl Installer {
     /// Get the configured output directory as a `PathBuf` if set.
     pub fn out_dir(&self) -> Option<&Path> {
         self.out_dir.as_deref()
-    }
-
-    /// Get the configured output directory as a `String` (empty if unset).
-    /// Convenience for templating into status messages and dialogs.
-    pub fn install_dir(&self) -> String {
-        self.out_dir
-            .as_ref()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default()
     }
 
     /// Push a status update to the attached [`ProgressSink`] and log file.

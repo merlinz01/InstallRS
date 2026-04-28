@@ -173,15 +173,23 @@ pub fn run(
             WizardPage::DirectoryPicker {
                 heading,
                 label,
-                default,
-            } => PageKind::DirectoryPicker(DirectoryPickerPage::new(
-                &panel,
-                &heading,
-                &label,
-                &default,
-                content_width,
-                content_height,
-            )),
+                key,
+            } => {
+                let initial = installer
+                    .lock()
+                    .unwrap()
+                    .get_option::<String>(&key)
+                    .unwrap_or_default();
+                PageKind::DirectoryPicker(DirectoryPickerPage::new(
+                    &panel,
+                    &heading,
+                    &label,
+                    &key,
+                    &initial,
+                    content_width,
+                    content_height,
+                ))
+            }
             WizardPage::Install { .. } => {
                 PageKind::Install(InstallPage::new(&panel, content_width, content_height))
             }
@@ -440,7 +448,7 @@ pub fn run(
                     let pages_guard = pages_c.lock().unwrap();
                     if let PageKind::DirectoryPicker(ref dp) = pages_guard[idx].kind {
                         let dir = dp.get_directory();
-                        installer_c.lock().unwrap().set_out_dir(dir);
+                        installer_c.lock().unwrap().set_option(dp.key(), dir);
                     }
                     if let PageKind::Components(ref cp) = pages_guard[idx].kind {
                         let sels = cp.selections();

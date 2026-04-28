@@ -134,9 +134,14 @@ pub fn run(
             WizardPage::DirectoryPicker {
                 heading,
                 label,
-                default,
+                key,
             } => {
-                let p = DirectoryPickerPage::new(&heading, &label, &default);
+                let initial = installer
+                    .lock()
+                    .unwrap()
+                    .get_option::<String>(&key)
+                    .unwrap_or_default();
+                let p = DirectoryPickerPage::new(&heading, &label, &key, &initial);
                 let w = p.widget().clone();
                 (w, PageKind::DirectoryPicker(p))
             }
@@ -366,7 +371,8 @@ pub fn run(
             {
                 let pages_b = pages_c.borrow();
                 if let PageKind::DirectoryPicker(ref dp) = pages_b[idx].kind {
-                    installer_c.lock().unwrap().set_out_dir(dp.get_directory());
+                    let dir = dp.get_directory();
+                    installer_c.lock().unwrap().set_option(dp.key(), dir);
                 }
                 if let PageKind::Components(ref cp) = pages_b[idx].kind {
                     let sels = cp.selections();

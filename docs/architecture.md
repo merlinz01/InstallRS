@@ -45,7 +45,7 @@ src/
   registry.rs           # (Windows-only) RegistryHive / Registry / Reg*Op
   gui/                  # optional GUI module (behind `gui` feature)
     mod.rs              # InstallerGui wizard builder + platform dispatch
-    types.rs            # WizardConfig, WizardPage, GuiContext, PageContext, GuiMessage
+    types.rs            # WizardConfig, WizardPage, GuiMessage, ChannelSink
     dialog.rs           # info / warn / error / confirm wrappers
     win32/              # Win32 backend (behind `gui-win32`)
       mod.rs

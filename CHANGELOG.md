@@ -17,6 +17,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - String-taking setters now accept `impl AsRef<str>`, so `String`,
   `&str`, `Cow<str>`, `&Cow<str>` (e.g. results of `rust_i18n::t!`),
   and `format!(...)` all work without explicit conversion.
+- **Breaking:** wizard callbacks now receive `&mut Installer` /
+  `&Installer` directly; `GuiContext` and `PageContext` are gone.
+  Status, progress, log, and install-dir helpers moved onto `Installer`.
+  Non-GUI installs auto-attach a stderr progress sink.
 
 ## [0.1.0-rc9] — 2026-04-23
 

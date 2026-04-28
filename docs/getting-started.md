@@ -162,9 +162,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     w.license("License", include_str!("../LICENSE.txt"), "I accept");
     w.components_page("Components", "Select features:");
     w.directory_picker("Install Location", "Install to:", "/opt/my-app");
-    w.install_page(|ctx| {
-        let mut i = ctx.installer();
-        i.set_out_dir(ctx.install_dir());
+    w.install_page(|i| {
         i.file(source!("app"), "app").mode(0o755).install()?;
         if i.is_component_selected("docs") {
             i.dir(source!("docs"), "docs").install()?;

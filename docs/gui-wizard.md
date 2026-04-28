@@ -44,11 +44,10 @@ w.welcome("Welcome!", "Click Next to continue.");
 w.license("License Agreement", include_str!("../LICENSE"), "I accept");
 w.components_page("Select Components", "Choose features to install:");
 w.directory_picker("Choose Install Location", "Install to:", "C:/MyApp")
-    .on_before_leave(|ctx| {
-        confirm("Confirm", &format!("Install to {}?", ctx.install_dir()))
+    .on_before_leave(|i| {
+        confirm("Confirm", &format!("Install to {}?", i.install_dir()))
     });
-w.install_page(|ctx| {
-    let mut i = ctx.installer();
+w.install_page(|i| {
     i.file(source!("app.exe"), "app.exe").install()?;
     if i.is_component_selected("docs") {
         i.dir(source!("docs"), "docs").install()?;
@@ -123,10 +122,10 @@ CLI flags:
 
 ```rust
 .license("License", include_str!("../LICENSE"), "I accept")
-.skip_if(|ctx| ctx.installer().get_option::<bool>("accept-license").unwrap_or(false))
+.skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false))
 
 .directory_picker("Install Location", "Install to:", default_dir)
-.skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some())
+.skip_if(|i| i.get_option::<String>("install-dir").is_some())
 ```
 
 The predicate must be **pure** — no side effects, no I/O. Side effects
@@ -187,8 +186,8 @@ installer option by key:
     p.dir_picker("data_dir", "Data directory:", "");
     p.multiline("notes", "Notes:", "", 3);
 })
-.on_before_leave(|ctx| {
-    let user: String = ctx.installer().get_option("username").unwrap_or_default();
+.on_before_leave(|i| {
+    let user: String = i.get_option("username").unwrap_or_default();
     if user.trim().is_empty() {
         let _ = installrs::gui::error("Required", "Please enter a username.");
         return Ok(false);

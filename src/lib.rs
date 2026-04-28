@@ -21,7 +21,7 @@ pub use component::Component;
 pub use embedded::{verify_payload, DirChild, DirChildKind, EmbeddedEntry};
 pub use ops::{DirOp, FileOp, MkdirOp, RemoveOp, UninstallerOp};
 pub use options::{FromOptionValue, OptionKind, OptionValue};
-pub use progress::ProgressSink;
+pub use progress::{ProgressSink, StderrProgressSink};
 #[cfg(target_os = "windows")]
 pub use registry::{RegDeleteValueOp, RegRemoveKeyOp, RegSetOp, Registry, RegistryHive};
 #[cfg(target_os = "windows")]
@@ -326,9 +326,47 @@ impl Installer {
         self.out_dir = Some(PathBuf::from(dir.as_ref()));
     }
 
+    /// Get the configured output directory as a `PathBuf` if set.
+    pub fn out_dir(&self) -> Option<&Path> {
+        self.out_dir.as_deref()
+    }
+
+    /// Get the configured output directory as a `String` (empty if unset).
+    /// Convenience for templating into status messages and dialogs.
+    pub fn install_dir(&self) -> String {
+        self.out_dir
+            .as_ref()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
+    /// Push a status update to the attached [`ProgressSink`] and log file.
+    /// Same channel the builder ops use via `.status(...)`.
+    pub fn set_status(&self, status: impl AsRef<str>) {
+        self.emit_status(&Some(status.as_ref().to_string()));
+    }
+
+    /// Push a progress fraction (0.0–1.0) to the attached [`ProgressSink`].
+    /// Bypasses the step-weighted progress model — use sparingly.
+    pub fn set_progress(&self, fraction: f64) {
+        if let Some(sink) = self.sink.as_ref() {
+            sink.set_progress(fraction.clamp(0.0, 1.0));
+        }
+    }
+
+    /// Append a log line to the attached [`ProgressSink`] and log file.
+    pub fn log(&self, message: impl AsRef<str>) {
+        self.emit_log(&Some(message.as_ref().to_string()));
+    }
+
     /// Attach a [`ProgressSink`] that receives status, progress, and log events.
     pub fn set_progress_sink(&mut self, sink: Box<dyn ProgressSink>) {
         self.sink = Some(sink);
+    }
+
+    /// True if a [`ProgressSink`] is currently attached.
+    pub fn has_progress_sink(&self) -> bool {
+        self.sink.is_some()
     }
 
     /// Remove the progress sink (if any).
@@ -576,6 +614,9 @@ impl Installer {
     /// [`Installer::process_commandline`] itself (typically right after
     /// registering components).
     pub fn install_main(&mut self, install_fn: impl Fn(&mut Installer) -> Result<()>) {
+        if self.sink.is_none() {
+            self.sink = Some(Box::new(progress::StderrProgressSink::new()));
+        }
         if let Err(e) = install_fn(self) {
             eprintln!("Error: {e:#}");
             std::process::exit(1);
@@ -584,6 +625,9 @@ impl Installer {
 
     /// Entry point for uninstaller binaries. Call this from `main()`.
     pub fn uninstall_main(&mut self, uninstall_fn: impl Fn(&mut Installer) -> Result<()>) {
+        if self.sink.is_none() {
+            self.sink = Some(Box::new(progress::StderrProgressSink::new()));
+        }
         if let Err(e) = uninstall_fn(self) {
             eprintln!("Error: {e:#}");
             std::process::exit(1);

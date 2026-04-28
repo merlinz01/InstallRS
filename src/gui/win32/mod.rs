@@ -18,12 +18,18 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     // the install callback all see the same flag.
     let cancelled = installer.cancellation_flag();
 
+    // Apply the directory_picker default to the installer's out_dir if
+    // nothing else gave it one — so the install callback sees a sensible
+    // path even before the user touches the picker.
+    if installer.out_dir().is_none() {
+        let default_dir = find_default_dir(&config.pages);
+        if !default_dir.is_empty() {
+            installer.set_out_dir(default_dir);
+        }
+    }
+
     let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
     let installer_arc = Arc::new(Mutex::new(installer_taken));
-
-    // Shared install directory — updated by the directory picker page.
-    let default_dir = find_default_dir(&config.pages);
-    let install_dir = Arc::new(Mutex::new(default_dir));
 
     // Channel for background → GUI messages.
     let (tx, rx) = mpsc::channel::<GuiMessage>();
@@ -72,7 +78,6 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
     let result = window::run(
         wizard_config,
         installer_arc.clone(),
-        install_dir,
         cancelled,
         tx,
         rx,

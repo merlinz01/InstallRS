@@ -15,6 +15,108 @@ pub trait ProgressSink: Send + Sync {
     fn log(&self, message: &str);
 }
 
+/// Default text-based progress sink used by non-GUI installs. Writes
+/// status and log lines to stderr; renders an in-place progress bar when
+/// stderr is a TTY, otherwise emits no progress lines.
+///
+/// Attached automatically by [`Installer::install_main`] /
+/// [`Installer::uninstall_main`] when no other sink is set, so headless
+/// installers get readable output for free.
+pub struct StderrProgressSink {
+    is_tty: bool,
+    state: std::sync::Mutex<StderrSinkState>,
+}
+
+#[derive(Default)]
+struct StderrSinkState {
+    last_status: String,
+    last_fraction: f64,
+    progress_line_active: bool,
+}
+
+impl StderrProgressSink {
+    pub fn new() -> Self {
+        use std::io::IsTerminal;
+        Self {
+            is_tty: std::io::stderr().is_terminal(),
+            state: std::sync::Mutex::new(StderrSinkState::default()),
+        }
+    }
+
+    fn redraw(&self, state: &mut StderrSinkState) {
+        use std::io::Write;
+        if !self.is_tty {
+            return;
+        }
+        let pct = (state.last_fraction * 100.0).round() as u32;
+        let bar_width = 24usize;
+        let filled = ((state.last_fraction * bar_width as f64).round() as usize).min(bar_width);
+        let bar: String = "#".repeat(filled) + &"-".repeat(bar_width - filled);
+        let mut out = std::io::stderr().lock();
+        let _ = write!(out, "\r[{bar}] {pct:>3}% {}\x1b[K", state.last_status);
+        let _ = out.flush();
+        state.progress_line_active = true;
+    }
+
+    fn clear_progress_line(&self, state: &mut StderrSinkState) {
+        use std::io::Write;
+        if !self.is_tty || !state.progress_line_active {
+            return;
+        }
+        let mut out = std::io::stderr().lock();
+        let _ = write!(out, "\r\x1b[2K");
+        let _ = out.flush();
+        state.progress_line_active = false;
+    }
+}
+
+impl Default for StderrProgressSink {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for StderrProgressSink {
+    fn drop(&mut self) {
+        use std::io::Write;
+        let mut state = self.state.lock().unwrap();
+        if self.is_tty && state.progress_line_active {
+            let mut out = std::io::stderr().lock();
+            let _ = writeln!(out);
+            let _ = out.flush();
+            state.progress_line_active = false;
+        }
+    }
+}
+
+impl ProgressSink for StderrProgressSink {
+    fn set_status(&self, status: &str) {
+        let mut state = self.state.lock().unwrap();
+        state.last_status = status.to_string();
+        if self.is_tty {
+            self.redraw(&mut state);
+        } else {
+            self.clear_progress_line(&mut state);
+            eprintln!("[*] {status}");
+        }
+    }
+    fn set_progress(&self, fraction: f64) {
+        let mut state = self.state.lock().unwrap();
+        state.last_fraction = fraction.clamp(0.0, 1.0);
+        if self.is_tty {
+            self.redraw(&mut state);
+        }
+    }
+    fn log(&self, message: &str) {
+        let mut state = self.state.lock().unwrap();
+        self.clear_progress_line(&mut state);
+        eprintln!("    {message}");
+        if self.is_tty {
+            self.redraw(&mut state);
+        }
+    }
+}
+
 pub(crate) struct ProgressState {
     /// Weighted step cursor. Each operation advances this by its weight (default 1).
     /// `f64` so in-flight updates (`set_step_progress`) can land anywhere in

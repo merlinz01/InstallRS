@@ -142,14 +142,14 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.directory.label"),
         &default_dir,
     )
-    .on_before_leave(|ctx| {
+    .on_before_leave(|i| {
         // --yes skips the confirmation dialog.
-        if ctx.installer().get_option::<bool>("yes").unwrap_or(false) {
+        if i.get_option::<bool>("yes").unwrap_or(false) {
             return Ok(true);
         }
         installrs::gui::confirm(
             &t!("installer.confirm.title"),
-            &t!("installer.confirm.message", dir = ctx.install_dir()),
+            &t!("installer.confirm.message", dir = i.install_dir()),
         )
     });
     w.custom_page(
@@ -161,8 +161,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
             p.number("port", &t!("installer.account.port"), 8080);
         },
     )
-    .on_before_leave(|ctx| {
-        let i = ctx.installer();
+    .on_before_leave(|i| {
         let user: String = i.get_option("username").unwrap_or_default();
         if user.trim().is_empty() {
             let _ = installrs::gui::error(
@@ -211,12 +210,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.custom_info.title"),
         &t!("installer.custom_info.message"),
     )
-    .skip_if(|ctx| {
-        ctx.installer()
-            .get_option::<String>("install_type")
-            .as_deref()
-            != Some("custom")
-    });
+    .skip_if(|i| i.get_option::<String>("install_type").as_deref() != Some("custom"));
     w.custom_page(
         &t!("installer.paths.heading"),
         &t!("installer.paths.label"),
@@ -236,13 +230,9 @@ pub fn install(i: &mut Installer) -> Result<()> {
             p.multiline("notes", &t!("installer.paths.notes"), "", 3);
         },
     );
-    w.install_page(|ctx| {
-        let mut i = ctx.installer();
+    w.install_page(|i| {
         #[cfg_attr(not(windows), allow(unused_variables))]
         let out_dir = i.install_dir();
-
-        let out_dir = ctx.install_dir();
-        i.set_out_dir(&out_dir);
 
         // core: always installed (required component)
         i.dir(installrs::source!("testdir", ignore = ["*.bak"]), "testdir")
@@ -281,7 +271,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         const TICKS: u32 = 5;
         i.begin_step(&t!("installer.install.status_longrunning"), 2);
         for step in 1..=TICKS {
-            ctx.set_status(&t!("installer.install.status_step", step = step));
+            i.set_status(&t!("installer.install.status_step", step = step));
             std::thread::sleep(std::time::Duration::from_millis(500));
             i.set_step_progress(step as f64 / TICKS as f64);
             i.check_cancelled()?;
@@ -361,7 +351,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 .install()?;
         }
 
-        ctx.set_status(&t!("installer.install.status_complete"));
+        i.set_status(&t!("installer.install.status_complete"));
         Ok(())
     });
     w.finish_page(
@@ -422,9 +412,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         &t!("uninstaller.welcome.title"),
         &t!("uninstaller.welcome.message"),
     );
-    w.uninstall_page(|ctx| {
-        let mut i = ctx.installer();
-
+    w.uninstall_page(|i| {
         // On Windows, `enable_self_delete` relaunches from a temp dir, so
         // `current_exe()` no longer points to the real install location.
         // Read it back from the registry instead (InstallLocation is what
@@ -470,7 +458,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
             .log(t!("uninstaller.log_removing"))
             .install()?;
 
-        ctx.set_status(&t!("uninstaller.status_complete"));
+        i.set_status(&t!("uninstaller.status_complete"));
         Ok(())
     });
     w.finish_page(

@@ -16,8 +16,7 @@
 //! w.license("License", include_str!("../LICENSE"), "I accept");
 //! w.components_page("Components", "Choose features:");
 //! w.directory_picker("Install Location", "Install to:", "C:/MyApp");
-//! w.install_page(|ctx| {
-//!     let mut i = ctx.installer();
+//! w.install_page(|i| {
 //!     i.file(installrs::source!("app.exe"), "app.exe").install()?;
 //!     i.uninstaller("uninstall.exe").install()?;
 //!     Ok(())
@@ -65,14 +64,14 @@ pub fn __set_window_icon_png(bytes: &'static [u8]) {
     }
 }
 pub use types::{
-    ButtonLabels, ConfiguredPage, CustomPageBuilder, CustomWidget, ExitCallback, GuiContext,
-    GuiMessage, InstallCallback, OnBeforeLeaveCallback, OnEnterCallback, PageContext,
-    StartCallback, WizardConfig, WizardPage,
+    ButtonLabels, ConfiguredPage, CustomPageBuilder, CustomWidget, ExitCallback, GuiMessage,
+    InstallCallback, OnBeforeLeaveCallback, OnEnterCallback, StartCallback, WizardConfig,
+    WizardPage,
 };
 
 use anyhow::Result;
 
-use crate::{Installer, ProgressSink};
+use crate::Installer;
 
 /// Builder for a wizard-style installer GUI.
 ///
@@ -86,12 +85,11 @@ use crate::{Installer, ProgressSink};
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license(include_str!("../LICENSE"));
 /// w.directory_picker("C:/Program Files/MyApp");
-/// w.install_page(|ctx| {
-///     ctx.set_status("Installing...");
-///     ctx.installer().set_out_dir(&ctx.install_dir());
+/// w.install_page(|i| {
+///     i.set_status("Installing...");
 ///     // ... install files ...
-///     ctx.set_progress(1.0);
-///     ctx.set_status("Done!");
+///     i.set_progress(1.0);
+///     i.set_status("Done!");
 ///     Ok(())
 /// });
 /// w.finish_page("Complete!", "Click Finish to exit.");
@@ -224,11 +222,13 @@ impl InstallerGui {
 
     /// Add the install page with a callback that performs the actual installation.
     ///
-    /// The callback receives a [`GuiContext`] for updating progress and accessing
-    /// the [`Installer`].
+    /// The callback receives `&mut Installer` directly. The wizard already
+    /// applied the directory_picker selection via `installer.set_out_dir`
+    /// before calling, and a progress sink that forwards to the install
+    /// page is attached for the duration of the callback.
     pub fn install_page(
         &mut self,
-        callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
+        callback: impl FnOnce(&mut Installer) -> Result<()> + Send + 'static,
     ) -> PageHandle<'_> {
         self.push_page(WizardPage::Install {
             callback: Box::new(callback),
@@ -242,7 +242,7 @@ impl InstallerGui {
     /// place of `ButtonLabels::install`.
     pub fn uninstall_page(
         &mut self,
-        callback: impl FnOnce(&mut GuiContext) -> Result<()> + Send + 'static,
+        callback: impl FnOnce(&mut Installer) -> Result<()> + Send + 'static,
     ) -> PageHandle<'_> {
         self.push_page(WizardPage::Install {
             callback: Box::new(callback),
@@ -281,8 +281,7 @@ impl InstallerGui {
     ///         "sqlite",
     ///     );
     /// })
-    /// .on_before_leave(|ctx| {
-    ///     let i = ctx.installer();
+    /// .on_before_leave(|i| {
     ///     let u: String = i.get_option("username").unwrap_or_default();
     ///     if u.is_empty() {
     ///         installrs::gui::error("Required", "Enter a username.");
@@ -358,13 +357,13 @@ impl InstallerGui {
         result
     }
 
-    /// Headless runner: pulls the install callback out of the pages, invokes
-    /// it on the current thread with a `GuiContext` wired to an stderr sink
-    /// so status/log messages still surface.
+    /// Headless runner: pulls the install callback out of the pages and
+    /// invokes it on the current thread. A default [`crate::StderrProgressSink`]
+    /// is attached if the caller didn't already set one, so status / log /
+    /// progress events surface readably on stderr.
     fn run_headless(self, installer: &mut Installer) -> Result<()> {
-        use std::sync::{mpsc, Arc, Mutex};
-
-        // Extract install callback and default install dir.
+        // Extract install callback and the directory_picker's default path
+        // (which becomes the installer's out_dir if nothing else set one).
         let mut install_callback: Option<InstallCallback> = None;
         let mut default_dir = String::new();
         for configured in self.config.pages {
@@ -377,78 +376,33 @@ impl InstallerGui {
             }
         }
 
-        // Grab the real installer's cancellation flag BEFORE we swap it out,
-        // so the Ctrl+C handler and `check_cancelled()` inside the install
-        // callback both see the same flag.
-        let cancelled = installer.cancellation_flag();
-
-        let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
-        let installer_arc = Arc::new(Mutex::new(installer_taken));
-        let install_dir = Arc::new(Mutex::new(default_dir));
-
-        let (tx, rx) = mpsc::channel::<GuiMessage>();
-
-        // Drainer thread writes status and log messages to stderr so users
-        // get feedback during the headless install.
-        let drainer = std::thread::spawn(move || {
-            for msg in rx {
-                match msg {
-                    GuiMessage::SetStatus(s) => eprintln!("[*] {s}"),
-                    GuiMessage::Log(m) => eprintln!("    {m}"),
-                    GuiMessage::SetProgress(_) | GuiMessage::Finished(_) => {}
-                }
-            }
-        });
-
-        // Attach a stderr-forwarding sink so `Installer::file`/`dir`/etc.
-        // progress events also surface.
-        struct HeadlessSink {
-            tx: mpsc::Sender<GuiMessage>,
-        }
-        impl ProgressSink for HeadlessSink {
-            fn set_status(&self, s: &str) {
-                let _ = self.tx.send(GuiMessage::SetStatus(s.to_string()));
-            }
-            fn set_progress(&self, _: f64) {}
-            fn log(&self, m: &str) {
-                let _ = self.tx.send(GuiMessage::Log(m.to_string()));
-            }
-        }
-        {
-            let mut inst = installer_arc.lock().unwrap();
-            inst.set_progress_sink(Box::new(HeadlessSink { tx: tx.clone() }));
-            inst.reset_progress();
+        // Apply the directory_picker default if the installer doesn't already
+        // have an out_dir configured (e.g. via --install-dir or user code).
+        if installer.out_dir().is_none() && !default_dir.is_empty() {
+            installer.set_out_dir(default_dir);
         }
 
-        let result = (|| -> Result<()> {
-            if let Some(cb) = install_callback {
-                let mut ctx = GuiContext::new(
-                    tx.clone(),
-                    installer_arc.clone(),
-                    install_dir.clone(),
-                    cancelled.clone(),
-                );
-                cb(&mut ctx)?;
-            }
+        // Attach a default stderr sink if none is already set, so headless
+        // installs get readable feedback without extra setup.
+        if !installer.has_progress_sink() {
+            installer.set_progress_sink(Box::new(crate::StderrProgressSink::new()));
+        }
+        installer.reset_progress();
+
+        let result = if let Some(cb) = install_callback {
+            cb(installer)
+        } else {
             Ok(())
-        })();
+        };
 
-        // If the install failed, mirror the error to the log file (if any).
         if let Err(ref e) = result {
-            installer_arc.lock().unwrap().log_error(e);
+            installer.log_error(e);
         }
 
-        // Detach sink and close the channel so the drainer exits.
-        installer_arc.lock().unwrap().clear_progress_sink();
-        drop(tx);
-        let _ = drainer.join();
-
-        // Restore the installer back to the caller.
-        let restored = Arc::try_unwrap(installer_arc)
-            .map_err(|_| anyhow::anyhow!("installer still referenced after headless run"))?
-            .into_inner()
-            .map_err(|e| anyhow::anyhow!("installer mutex poisoned: {e}"))?;
-        *installer = restored;
+        // Detach the progress sink so its Drop runs now (the StderrProgressSink
+        // finalizes its in-place progress line with a trailing newline) before
+        // any subsequent `on_exit` stderr output prints.
+        installer.clear_progress_sink();
 
         result
     }
@@ -488,7 +442,7 @@ impl<'a> PageHandle<'a> {
     /// page becomes visible, on forward navigation only.
     pub fn on_enter<F>(self, f: F) -> Self
     where
-        F: Fn(&mut PageContext) -> Result<()> + 'static,
+        F: Fn(&mut Installer) -> Result<()> + 'static,
     {
         self.page.on_enter = Some(Box::new(f));
         self
@@ -499,7 +453,7 @@ impl<'a> PageHandle<'a> {
     /// cancels. Runs on forward navigation only.
     pub fn on_before_leave<F>(self, f: F) -> Self
     where
-        F: Fn(&mut PageContext) -> Result<bool> + 'static,
+        F: Fn(&mut Installer) -> Result<bool> + 'static,
     {
         self.page.on_before_leave = Some(Box::new(f));
         self
@@ -512,14 +466,14 @@ impl<'a> PageHandle<'a> {
     ///
     /// ```rust,ignore
     /// w.license("License", include_str!("../LICENSE"), "I accept")
-    ///     .skip_if(|ctx| ctx.installer().get_option::<bool>("accept-license").unwrap_or(false));
+    ///     .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false));
     ///
     /// w.directory_picker("Install Location", "Install to:", default_dir)
-    ///     .skip_if(|ctx| ctx.installer().get_option::<String>("install-dir").is_some());
+    ///     .skip_if(|i| i.get_option::<String>("install-dir").is_some());
     /// ```
     pub fn skip_if<F>(self, f: F) -> Self
     where
-        F: Fn(&PageContext) -> bool + 'static,
+        F: Fn(&Installer) -> bool + 'static,
     {
         self.page.skip_if = Some(Box::new(f));
         self

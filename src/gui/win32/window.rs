@@ -12,8 +12,8 @@ use super::pages::{
     LicensePage, PageKind, WelcomePage,
 };
 use crate::gui::types::{
-    ConfiguredPage, GuiContext, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
-    OnEnterCallback, PageContext, WizardConfig, WizardPage,
+    ChannelSink, ConfiguredPage, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
+    OnEnterCallback, WizardConfig, WizardPage,
 };
 use crate::Installer;
 
@@ -26,10 +26,10 @@ const MARGIN: i32 = 10;
 /// Find the next visible page strictly after `from`. Evaluates each
 /// candidate's `skip_if` predicate; returns None if every remaining page
 /// is hidden or `from` is already at the end.
-fn next_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<usize> {
+fn next_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Option<usize> {
     let mut i = from.checked_add(1)?;
     while i < pages.len() {
-        if pages[i].skip_if.as_ref().is_some_and(|p| p(ctx)) {
+        if pages[i].skip_if.as_ref().is_some_and(|p| p(installer)) {
             i = i.checked_add(1)?;
         } else {
             return Some(i);
@@ -40,10 +40,10 @@ fn next_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<u
 
 /// Find the previous visible page strictly before `from`. Returns None
 /// when every earlier page is hidden or `from` is already at the start.
-fn prev_visible_page(pages: &[Page], from: usize, ctx: &PageContext) -> Option<usize> {
+fn prev_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Option<usize> {
     let mut i = from.checked_sub(1)?;
     loop {
-        if pages[i].skip_if.as_ref().is_some_and(|p| p(ctx)) {
+        if pages[i].skip_if.as_ref().is_some_and(|p| p(installer)) {
             i = i.checked_sub(1)?;
         } else {
             return Some(i);
@@ -66,7 +66,6 @@ struct Page {
 pub fn run(
     config: WizardConfig,
     installer: Arc<Mutex<Installer>>,
-    install_dir: Arc<Mutex<String>>,
     cancelled: Arc<AtomicBool>,
     tx: mpsc::Sender<GuiMessage>,
     rx: mpsc::Receiver<GuiMessage>,
@@ -277,21 +276,6 @@ pub fn run(
     let install_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>> =
         Arc::new(Mutex::new(None));
 
-    // Helper: build a fresh PageContext for callbacks. Defined early so
-    // `update_buttons` can use it when evaluating `skip_if` predicates.
-    let make_page_ctx = {
-        let installer_c = installer.clone();
-        let install_dir_c = install_dir.clone();
-        let cancelled_c = cancelled.clone();
-        Arc::new(move || {
-            PageContext::new(
-                installer_c.clone(),
-                install_dir_c.clone(),
-                cancelled_c.clone(),
-            )
-        })
-    };
-
     // Helper: update button states for the current page.
     {
         let pages_c = pages.clone();
@@ -304,7 +288,7 @@ pub fn run(
         let label_install = config.buttons.install.clone();
         let label_uninstall = config.buttons.uninstall.clone();
         let label_finish = config.buttons.finish.clone();
-        let make_ctx_btn = make_page_ctx.clone();
+        let installer_btn = installer.clone();
 
         let update_buttons = move || {
             let idx = *current_c.lock().unwrap();
@@ -314,8 +298,10 @@ pub fn run(
             let is_finish = matches!(&pages_guard[idx].kind, PageKind::Finish(_));
             let is_error = matches!(&pages_guard[idx].kind, PageKind::Error(_));
             let is_terminal = is_finish || is_error;
-            let ctx = make_ctx_btn();
-            let next_idx = next_visible_page(&pages_guard, idx, &ctx);
+            let next_idx = {
+                let inst = installer_btn.lock().unwrap();
+                next_visible_page(&pages_guard, idx, &inst)
+            };
             let next_is_install = next_idx
                 .map(|i| matches!(&pages_guard[i].kind, PageKind::Install(_)))
                 .unwrap_or(false);
@@ -359,8 +345,6 @@ pub fn run(
         // callback is consumed on first call, so subsequent calls are a no-op.
         let start_install: Rc<dyn Fn() + 'static> = {
             let installer_c = installer.clone();
-            let install_dir_c = install_dir.clone();
-            let cancelled_c = cancelled.clone();
             let tx_c = tx.clone();
             let install_cb = install_callback.clone();
             let install_running_c = install_running.clone();
@@ -373,28 +357,21 @@ pub fn run(
                     install_running_c.store(true, std::sync::atomic::Ordering::Relaxed);
 
                     let installer_bg = installer_c.clone();
-                    let install_dir_bg = install_dir_c.clone();
-                    let cancelled_bg = cancelled_c.clone();
                     let tx_bg = tx_c.clone();
 
                     let handle = std::thread::spawn(move || {
-                        let mut ctx = GuiContext::new(
-                            tx_bg.clone(),
-                            installer_bg,
-                            install_dir_bg,
-                            cancelled_bg,
-                        );
-                        // Auto-attach a progress sink so Installer ops emit
-                        // status/progress/log events to the GUI.
-                        {
-                            let mut inst = ctx.installer();
-                            inst.set_progress_sink(ctx.progress_sink());
+                        let result = {
+                            let mut inst = installer_bg.lock().unwrap();
+                            // Attach a channel-forwarding sink so Installer ops emit
+                            // status/progress/log events to the GUI.
+                            inst.set_progress_sink(Box::new(ChannelSink::new(tx_bg.clone())));
                             inst.reset_progress();
-                        }
-                        let result = callback(&mut ctx);
-                        // Detach the sink: once the install is done, further
-                        // ops (if any) shouldn't push to a dead GUI channel.
-                        ctx.installer().clear_progress_sink();
+                            let r = callback(&mut inst);
+                            // Detach the sink: once the install is done, further
+                            // ops (if any) shouldn't push to a dead GUI channel.
+                            inst.clear_progress_sink();
+                            r
+                        };
                         let _ = tx_bg.send(GuiMessage::Finished(result));
                     });
                     *install_handle_c.lock().unwrap() = Some(handle);
@@ -420,7 +397,7 @@ pub fn run(
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let update = update_buttons.clone();
-            let make_ctx = make_page_ctx.clone();
+            let installer_back = installer.clone();
             btn_back.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
                 if idx == 0 {
@@ -430,8 +407,11 @@ pub fn run(
                 // on_before_leave / on_enter are intentionally skipped on
                 // backward navigation — they fire only on forward moves.
                 let pages_guard = pages_c.lock().unwrap();
-                let ctx = make_ctx();
-                let Some(new_idx) = prev_visible_page(&pages_guard, idx, &ctx) else {
+                let new_idx_opt = {
+                    let inst = installer_back.lock().unwrap();
+                    prev_visible_page(&pages_guard, idx, &inst)
+                };
+                let Some(new_idx) = new_idx_opt else {
                     return Ok(());
                 };
                 pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
@@ -447,22 +427,20 @@ pub fn run(
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let update = update_buttons.clone();
-            let install_dir_c = install_dir.clone();
             let start_install_c = start_install.clone();
             let wnd_c = wnd.clone();
-            let make_ctx = make_page_ctx.clone();
             let installer_c = installer.clone();
 
             btn_next.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
 
-                // Sync directory picker value before on_before_leave so the
-                // callback sees the updated install_dir.
+                // Sync directory picker / components / custom widgets into
+                // the installer state before on_before_leave runs.
                 {
                     let pages_guard = pages_c.lock().unwrap();
                     if let PageKind::DirectoryPicker(ref dp) = pages_guard[idx].kind {
                         let dir = dp.get_directory();
-                        *install_dir_c.lock().unwrap() = dir;
+                        installer_c.lock().unwrap().set_out_dir(dir);
                     }
                     if let PageKind::Components(ref cp) = pages_guard[idx].kind {
                         let sels = cp.selections();
@@ -484,8 +462,8 @@ pub fn run(
                 {
                     let pages_guard = pages_c.lock().unwrap();
                     if let Some(ref cb) = pages_guard[idx].on_before_leave {
-                        let mut ctx = make_ctx();
-                        match cb(&mut ctx) {
+                        let mut inst = installer_c.lock().unwrap();
+                        match cb(&mut inst) {
                             Ok(true) => {}
                             Ok(false) => return Ok(()),
                             Err(e) => {
@@ -509,8 +487,11 @@ pub fn run(
                 }
 
                 // Advance to next visible page.
-                let ctx_tmp = make_ctx();
-                if let Some(new_idx) = next_visible_page(&pages_guard, idx, &ctx_tmp) {
+                let next_idx_opt = {
+                    let inst = installer_c.lock().unwrap();
+                    next_visible_page(&pages_guard, idx, &inst)
+                };
+                if let Some(new_idx) = next_idx_opt {
                     let next_is_install =
                         matches!(&pages_guard[new_idx].kind, PageKind::Install(_));
                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
@@ -523,8 +504,8 @@ pub fn run(
                     {
                         let pages_guard = pages_c.lock().unwrap();
                         if let Some(ref cb) = pages_guard[new_idx].on_enter {
-                            let mut ctx = make_ctx();
-                            if let Err(e) = cb(&mut ctx) {
+                            let mut inst = installer_c.lock().unwrap();
+                            if let Err(e) = cb(&mut inst) {
                                 eprintln!("on_enter error: {e}");
                             }
                         }
@@ -608,8 +589,7 @@ pub fn run(
             let install_running_timer = install_running.clone();
             let install_result_timer = install_result.clone();
             let update_timer = update_buttons.clone();
-            let make_ctx = make_page_ctx.clone();
-            let installer_log_err = installer.clone();
+            let installer_timer = installer.clone();
 
             wnd.on().wm_timer(TIMER_ID, move || {
                 // Drain all pending messages.
@@ -646,10 +626,11 @@ pub fn run(
                                 // Advance to the next visible page (finish page).
                                 let pages_guard = pages_timer.lock().unwrap();
                                 let idx = *current_timer.lock().unwrap();
-                                let ctx_tmp = make_ctx();
-                                if let Some(new_idx) =
-                                    next_visible_page(&pages_guard, idx, &ctx_tmp)
-                                {
+                                let next_idx_opt = {
+                                    let inst = installer_timer.lock().unwrap();
+                                    next_visible_page(&pages_guard, idx, &inst)
+                                };
+                                if let Some(new_idx) = next_idx_opt {
                                     pages_guard[idx].panel.hwnd().ShowWindow(co::SW::HIDE);
                                     pages_guard[new_idx].panel.hwnd().ShowWindow(co::SW::SHOW);
                                     drop(pages_guard);
@@ -658,8 +639,8 @@ pub fn run(
                                     // on_enter of the new page.
                                     let pages_guard = pages_timer.lock().unwrap();
                                     if let Some(ref cb) = pages_guard[new_idx].on_enter {
-                                        let mut ctx = make_ctx();
-                                        if let Err(e) = cb(&mut ctx) {
+                                        let mut inst = installer_timer.lock().unwrap();
+                                        if let Err(e) = cb(&mut inst) {
                                             eprintln!("on_enter error: {e}");
                                         }
                                     }
@@ -681,7 +662,7 @@ pub fn run(
                                     }
                                 }
                                 if let Err(ref e) = result {
-                                    installer_log_err.lock().unwrap().log_error(e);
+                                    installer_timer.lock().unwrap().log_error(e);
                                 }
                                 *install_result_timer.lock().unwrap() = Some(result);
 
@@ -705,8 +686,8 @@ pub fn run(
 
                                     let pages_guard = pages_timer.lock().unwrap();
                                     if let Some(ref cb) = pages_guard[new_idx].on_enter {
-                                        let mut ctx = make_ctx();
-                                        if let Err(e) = cb(&mut ctx) {
+                                        let mut inst = installer_timer.lock().unwrap();
+                                        if let Err(e) = cb(&mut inst) {
                                             eprintln!("on_enter error: {e}");
                                         }
                                     }
@@ -732,7 +713,7 @@ pub fn run(
             let pages_c = pages.clone();
             let current_c = current_page.clone();
             let start_install_c = start_install.clone();
-            let make_ctx = make_page_ctx.clone();
+            let installer_show = installer.clone();
             let focus_set = Arc::new(AtomicBool::new(false));
             wnd.on().wm_show_window(move |_| {
                 update();
@@ -745,8 +726,8 @@ pub fn run(
 
                     // on_enter of the initial page.
                     if let Some(ref cb) = pages_guard[idx].on_enter {
-                        let mut ctx = make_ctx();
-                        if let Err(e) = cb(&mut ctx) {
+                        let mut inst = installer_show.lock().unwrap();
+                        if let Err(e) = cb(&mut inst) {
                             eprintln!("on_enter error: {e}");
                         }
                     }

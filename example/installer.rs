@@ -124,6 +124,13 @@ pub fn install(i: &mut Installer) -> Result<()> {
         if i.headless {
             eprintln!("Headless install complete.");
         }
+        if i.get_option::<bool>("launch_app").unwrap_or(false) {
+            #[cfg(windows)]
+            let cmd = "notepad.exe";
+            #[cfg(not(windows))]
+            let cmd = "xed";
+            let _ = std::process::Command::new(cmd).spawn();
+        }
         Ok(())
     });
     w.welcome(
@@ -361,7 +368,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
     w.finish_page(
         &t!("installer.finish.title"),
         &t!("installer.finish.message"),
-    );
+    )
+    .with_widgets(|p| {
+        p.checkbox("launch_app", &t!("installer.finish.launch_app"), true);
+    });
     w.error_page(&t!("installer.error.title"), &t!("installer.error.message"));
     w.run(i)?;
 

@@ -111,8 +111,13 @@ pub fn run(
         );
 
         let (widget, kind) = match page_cfg {
-            WizardPage::Welcome { title, message } => {
-                let p = WelcomePage::new(&title, &message);
+            WizardPage::Welcome {
+                title,
+                message,
+                widgets,
+            } => {
+                let initial = installer.lock().unwrap().option_values_snapshot();
+                let p = WelcomePage::new(&title, &message, &widgets, &initial);
                 let w = p.widget().clone();
                 (w, PageKind::Welcome(p))
             }
@@ -150,8 +155,13 @@ pub fn run(
                 let w = p.widget().clone();
                 (w, PageKind::Install(p))
             }
-            WizardPage::Finish { title, message } => {
-                let p = FinishPage::new(&title, &message);
+            WizardPage::Finish {
+                title,
+                message,
+                widgets,
+            } => {
+                let initial = installer.lock().unwrap().option_values_snapshot();
+                let p = FinishPage::new(&title, &message, &widgets, &initial);
                 let w = p.widget().clone();
                 (w, PageKind::Finish(p))
             }
@@ -381,8 +391,13 @@ pub fn run(
                         inst.set_component_selected(&id, on);
                     }
                 }
-                if let PageKind::Custom(ref cp) = pages_b[idx].kind {
-                    let values = cp.collect_values();
+                let values_opt = match &pages_b[idx].kind {
+                    PageKind::Custom(cp) => Some(cp.collect_values()),
+                    PageKind::Welcome(wp) => Some(wp.collect_values()),
+                    PageKind::Finish(fp) => Some(fp.collect_values()),
+                    _ => None,
+                };
+                if let Some(values) = values_opt {
                     let mut inst = installer_c.lock().unwrap();
                     for (key, v) in values {
                         inst.set_option_value(&key, v);

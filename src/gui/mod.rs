@@ -161,6 +161,7 @@ impl InstallerGui {
         self.push_page(WizardPage::Welcome {
             title: title.as_ref().to_string(),
             message: message.as_ref().to_string(),
+            widgets: Vec::new(),
         })
     }
 
@@ -277,6 +278,7 @@ impl InstallerGui {
         self.push_page(WizardPage::Finish {
             title: title.as_ref().to_string(),
             message: message.as_ref().to_string(),
+            widgets: Vec::new(),
         })
     }
 
@@ -497,6 +499,34 @@ impl<'a> PageHandle<'a> {
         F: Fn(&Installer) -> bool + 'static,
     {
         self.page.skip_if = Some(Box::new(f));
+        self
+    }
+
+    /// Append a column of input widgets below the page's main content.
+    /// Supported on welcome and finish pages; calling on any other page
+    /// kind panics. Widget keys bind to installer options exactly like
+    /// [`custom_page`](InstallerGui::custom_page) — values pre-fill from
+    /// the options store on entry and write back on forward navigation.
+    ///
+    /// ```rust,ignore
+    /// w.finish_page("All done!", "Click Finish to exit.")
+    ///     .with_widgets(|p| {
+    ///         p.checkbox("launch_app", "Launch My App now", true);
+    ///         p.checkbox("show_readme", "Show the README", false);
+    ///     });
+    /// ```
+    pub fn with_widgets(self, build: impl FnOnce(&mut CustomPageBuilder)) -> Self {
+        let mut b = CustomPageBuilder::new();
+        build(&mut b);
+        match &mut self.page.page {
+            WizardPage::Welcome { widgets, .. } | WizardPage::Finish { widgets, .. } => {
+                widgets.extend(b.widgets);
+            }
+            _ => panic!(
+                "with_widgets is only supported on welcome and finish pages; \
+                 use custom_page for other widget layouts"
+            ),
+        }
         self
     }
 }

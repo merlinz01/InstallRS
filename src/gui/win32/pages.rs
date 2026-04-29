@@ -124,6 +124,7 @@ pub enum PageKind {
 pub struct WelcomePage {
     _title_label: gui::Label,
     _message_label: gui::Label,
+    column: WidgetColumn,
 }
 
 impl WelcomePage {
@@ -131,6 +132,8 @@ impl WelcomePage {
         parent: &gui::WindowControl,
         title: &str,
         message: &str,
+        widgets: &[crate::gui::CustomWidget],
+        initial: &std::collections::HashMap<String, crate::OptionValue>,
         width: i32,
         _height: i32,
     ) -> Self {
@@ -146,25 +149,62 @@ impl WelcomePage {
             },
         );
 
+        // When the page has no widgets, the message gets the full remaining
+        // height; with widgets, it shrinks to a fixed band so the column fits
+        // below.
+        let message_height = if widgets.is_empty() { 200 } else { 80 };
         let message_label = gui::Label::new(
             parent,
             gui::LabelOpts {
                 control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
                 text: message,
                 position: gui::dpi(PAD, PAD + 40),
-                size: gui::dpi(width - 2 * PAD, 200),
-                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
+                size: gui::dpi(width - 2 * PAD, message_height),
+                resize_behavior: (
+                    gui::Horz::Resize,
+                    if widgets.is_empty() {
+                        gui::Vert::Resize
+                    } else {
+                        gui::Vert::None
+                    },
+                ),
                 ..Default::default()
             },
         );
 
-        register_bold_heading(parent, &title_label);
+        let column_start_y = PAD + 40 + message_height + 10;
+        let column = build_widget_column(parent, widgets, initial, column_start_y, width);
+
+        let title_c = title_label.clone();
+        let initial_checks = column.initial_checks.clone();
+        let initial_dropdowns = column.initial_dropdowns.clone();
+        parent.on().wm_create(move |_| {
+            let mut bold_font = make_bold_heading_font()?;
+            unsafe {
+                title_c.hwnd().SendMessage(wm::SetFont {
+                    hfont: bold_font.leak(),
+                    redraw: true,
+                });
+            }
+            for (check, val) in &initial_checks {
+                check.set_check(*val);
+            }
+            for (combo, idx) in &initial_dropdowns {
+                combo.items().select(Some(*idx as u32));
+            }
+            Ok(0)
+        });
         setup_transparent_labels(parent);
 
         Self {
             _title_label: title_label,
             _message_label: message_label,
+            column,
         }
+    }
+
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        self.column.collect_values()
     }
 }
 
@@ -685,6 +725,55 @@ impl InstallPage {
 
 // ── Custom Page ─────────────────────────────────────────────────────────────
 
+/// Result of laying out a widget column. Held by pages that embed widgets
+/// (Custom, Welcome-with-widgets, Finish-with-widgets). The `apply_initial_state`
+/// call must run from the parent's wm_create handler so the controls are
+/// fully realized before we touch them.
+struct WidgetColumn {
+    controls: Vec<(String, CustomControl)>,
+    _extras: Vec<gui::Label>,
+    _browse_btns: Vec<gui::Button>,
+    initial_checks: Vec<(gui::CheckBox, bool)>,
+    initial_dropdowns: Vec<(gui::ComboBox, usize)>,
+}
+
+impl WidgetColumn {
+    fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        let mut out = Vec::new();
+        for (key, ctl) in &self.controls {
+            let val = match ctl {
+                CustomControl::Text { edit } => {
+                    crate::OptionValue::String(edit.text().unwrap_or_default())
+                }
+                CustomControl::Number { edit } => {
+                    let t = edit.text().unwrap_or_default();
+                    crate::OptionValue::Int(t.trim().parse::<i64>().unwrap_or(0))
+                }
+                CustomControl::Multiline { edit } => {
+                    let raw = edit.text().unwrap_or_default();
+                    crate::OptionValue::String(raw.replace("\r\n", "\n"))
+                }
+                CustomControl::Checkbox { check } => crate::OptionValue::Bool(check.is_checked()),
+                CustomControl::Dropdown { combo, values } => {
+                    let idx = combo.items().selected_index().unwrap_or(0) as usize;
+                    let v = values.get(idx).cloned().unwrap_or_default();
+                    crate::OptionValue::String(v)
+                }
+                CustomControl::Radio { group, values } => {
+                    let idx = group.selected_index().unwrap_or(0);
+                    let v = values.get(idx).cloned().unwrap_or_default();
+                    crate::OptionValue::String(v)
+                }
+                CustomControl::PathPicker { edit } => {
+                    crate::OptionValue::String(edit.text().unwrap_or_default())
+                }
+            };
+            out.push((key.clone(), val));
+        }
+        out
+    }
+}
+
 enum CustomControl {
     Text {
         edit: gui::Edit,
@@ -714,9 +803,7 @@ enum CustomControl {
 pub struct CustomPage {
     _heading_label: gui::Label,
     _label: gui::Label,
-    controls: Vec<(String, CustomControl)>,
-    _extras: Vec<gui::Label>,
-    _browse_btns: Vec<gui::Button>,
+    column: WidgetColumn,
 }
 
 impl CustomPage {
@@ -753,16 +840,65 @@ impl CustomPage {
             },
         );
 
-        let mut y = PAD + 28 + 26;
-        let row_w = width - 2 * PAD;
-        let mut controls: Vec<(String, CustomControl)> = Vec::new();
-        let mut extras: Vec<gui::Label> = Vec::new();
-        let mut browse_btns: Vec<gui::Button> = Vec::new();
-        // Collect per-widget initial states to apply in a single wm_create
-        // handler — winsafe only keeps one wm_create registration per parent.
-        let mut initial_checks: Vec<(gui::CheckBox, bool)> = Vec::new();
-        let mut initial_dropdowns: Vec<(gui::ComboBox, usize)> = Vec::new();
+        let column = build_widget_column(parent, widgets, initial, PAD + 28 + 26, width);
 
+        // Single wm_create handler: apply the heading font, then seed every
+        // checkbox / dropbox's initial state in one shot.
+        {
+            let heading_c = heading_label.clone();
+            let initial_checks = column.initial_checks.clone();
+            let initial_dropdowns = column.initial_dropdowns.clone();
+            parent.on().wm_create(move |_| {
+                let mut bold_font = make_bold_heading_font()?;
+                unsafe {
+                    heading_c.hwnd().SendMessage(wm::SetFont {
+                        hfont: bold_font.leak(),
+                        redraw: true,
+                    });
+                }
+                for (check, val) in &initial_checks {
+                    check.set_check(*val);
+                }
+                for (combo, idx) in &initial_dropdowns {
+                    combo.items().select(Some(*idx as u32));
+                }
+                Ok(0)
+            });
+        }
+
+        setup_transparent_labels(parent);
+
+        Self {
+            _heading_label: heading_label,
+            _label: label,
+            column,
+        }
+    }
+
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        self.column.collect_values()
+    }
+}
+
+/// Lay out a column of [`CustomWidget`]s starting at `start_y`, returning
+/// the resulting controls plus the bookkeeping the parent's wm_create
+/// handler needs to seed initial state.
+fn build_widget_column(
+    parent: &gui::WindowControl,
+    widgets: &[crate::gui::CustomWidget],
+    initial: &std::collections::HashMap<String, crate::OptionValue>,
+    start_y: i32,
+    width: i32,
+) -> WidgetColumn {
+    let mut y = start_y;
+    let row_w = width - 2 * PAD;
+    let mut controls: Vec<(String, CustomControl)> = Vec::new();
+    let mut extras: Vec<gui::Label> = Vec::new();
+    let mut browse_btns: Vec<gui::Button> = Vec::new();
+    let mut initial_checks: Vec<(gui::CheckBox, bool)> = Vec::new();
+    let mut initial_dropdowns: Vec<(gui::ComboBox, usize)> = Vec::new();
+
+    {
         for w in widgets {
             use crate::gui::CustomWidget;
             match w {
@@ -1076,76 +1212,14 @@ impl CustomPage {
                 }
             }
         }
-
-        // Single wm_create handler: apply the heading font, then seed every
-        // checkbox / dropbox's initial state in one shot.
-        {
-            let heading_c = heading_label.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = make_bold_heading_font()?;
-                unsafe {
-                    heading_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                for (check, val) in &initial_checks {
-                    check.set_check(*val);
-                }
-                for (combo, idx) in &initial_dropdowns {
-                    combo.items().select(Some(*idx as u32));
-                }
-                Ok(0)
-            });
-        }
-
-        setup_transparent_labels(parent);
-
-        Self {
-            _heading_label: heading_label,
-            _label: label,
-            controls,
-            _extras: extras,
-            _browse_btns: browse_btns,
-        }
     }
 
-    /// Read the current value of every widget, keyed by option name. The
-    /// wizard calls this on forward navigation and stores each entry via
-    /// [`crate::Installer::set_option_value`].
-    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
-        let mut out = Vec::new();
-        for (key, ctl) in &self.controls {
-            let val = match ctl {
-                CustomControl::Text { edit } => {
-                    crate::OptionValue::String(edit.text().unwrap_or_default())
-                }
-                CustomControl::Number { edit } => {
-                    let t = edit.text().unwrap_or_default();
-                    crate::OptionValue::Int(t.trim().parse::<i64>().unwrap_or(0))
-                }
-                CustomControl::Multiline { edit } => {
-                    let raw = edit.text().unwrap_or_default();
-                    crate::OptionValue::String(raw.replace("\r\n", "\n"))
-                }
-                CustomControl::Checkbox { check } => crate::OptionValue::Bool(check.is_checked()),
-                CustomControl::Dropdown { combo, values } => {
-                    let idx = combo.items().selected_index().unwrap_or(0) as usize;
-                    let v = values.get(idx).cloned().unwrap_or_default();
-                    crate::OptionValue::String(v)
-                }
-                CustomControl::Radio { group, values } => {
-                    let idx = group.selected_index().unwrap_or(0);
-                    let v = values.get(idx).cloned().unwrap_or_default();
-                    crate::OptionValue::String(v)
-                }
-                CustomControl::PathPicker { edit } => {
-                    crate::OptionValue::String(edit.text().unwrap_or_default())
-                }
-            };
-            out.push((key.clone(), val));
-        }
-        out
+    WidgetColumn {
+        controls,
+        _extras: extras,
+        _browse_btns: browse_btns,
+        initial_checks,
+        initial_dropdowns,
     }
 }
 
@@ -1232,6 +1306,7 @@ impl ErrorPage {
 pub struct FinishPage {
     _title_label: gui::Label,
     _message_label: gui::Label,
+    column: WidgetColumn,
 }
 
 impl FinishPage {
@@ -1239,6 +1314,8 @@ impl FinishPage {
         parent: &gui::WindowControl,
         title: &str,
         message: &str,
+        widgets: &[crate::gui::CustomWidget],
+        initial: &std::collections::HashMap<String, crate::OptionValue>,
         width: i32,
         _height: i32,
     ) -> Self {
@@ -1254,24 +1331,58 @@ impl FinishPage {
             },
         );
 
+        let message_height = if widgets.is_empty() { 200 } else { 80 };
         let message_label = gui::Label::new(
             parent,
             gui::LabelOpts {
                 control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
                 text: message,
                 position: gui::dpi(PAD, PAD + 40),
-                size: gui::dpi(width - 2 * PAD, 200),
-                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
+                size: gui::dpi(width - 2 * PAD, message_height),
+                resize_behavior: (
+                    gui::Horz::Resize,
+                    if widgets.is_empty() {
+                        gui::Vert::Resize
+                    } else {
+                        gui::Vert::None
+                    },
+                ),
                 ..Default::default()
             },
         );
 
-        register_bold_heading(parent, &title_label);
+        let column_start_y = PAD + 40 + message_height + 10;
+        let column = build_widget_column(parent, widgets, initial, column_start_y, width);
+
+        let title_c = title_label.clone();
+        let initial_checks = column.initial_checks.clone();
+        let initial_dropdowns = column.initial_dropdowns.clone();
+        parent.on().wm_create(move |_| {
+            let mut bold_font = make_bold_heading_font()?;
+            unsafe {
+                title_c.hwnd().SendMessage(wm::SetFont {
+                    hfont: bold_font.leak(),
+                    redraw: true,
+                });
+            }
+            for (check, val) in &initial_checks {
+                check.set_check(*val);
+            }
+            for (combo, idx) in &initial_dropdowns {
+                combo.items().select(Some(*idx as u32));
+            }
+            Ok(0)
+        });
         setup_transparent_labels(parent);
 
         Self {
             _title_label: title_label,
             _message_label: message_label,
+            column,
         }
+    }
+
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        self.column.collect_values()
     }
 }

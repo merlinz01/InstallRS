@@ -190,6 +190,11 @@ installer.finish.message:
   de: "Alle Dateien wurden erfolgreich installiert.\n\nKlicken Sie auf „Fertigstellen“, um zu beenden."
   es: "Todos los archivos se han instalado correctamente.\n\nHaga clic en «Finalizar» para salir."
 
+installer.finish.launch_app:
+  en: "Launch the app now"
+  de: "App jetzt starten"
+  es: "Iniciar la aplicación ahora"
+
 installer.error.title:
   en: "Installation Failed"
   de: "Installation fehlgeschlagen"

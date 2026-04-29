@@ -140,13 +140,22 @@ pub fn run(
         );
 
         let kind = match page_cfg {
-            WizardPage::Welcome { title, message } => PageKind::Welcome(WelcomePage::new(
-                &panel,
-                &title,
-                &message,
-                content_width,
-                content_height,
-            )),
+            WizardPage::Welcome {
+                title,
+                message,
+                widgets,
+            } => {
+                let initial = installer.lock().unwrap().option_values_snapshot();
+                PageKind::Welcome(WelcomePage::new(
+                    &panel,
+                    &title,
+                    &message,
+                    &widgets,
+                    &initial,
+                    content_width,
+                    content_height,
+                ))
+            }
             WizardPage::License {
                 heading,
                 text,
@@ -193,13 +202,22 @@ pub fn run(
             WizardPage::Install { .. } => {
                 PageKind::Install(InstallPage::new(&panel, content_width, content_height))
             }
-            WizardPage::Finish { title, message } => PageKind::Finish(FinishPage::new(
-                &panel,
-                &title,
-                &message,
-                content_width,
-                content_height,
-            )),
+            WizardPage::Finish {
+                title,
+                message,
+                widgets,
+            } => {
+                let initial = installer.lock().unwrap().option_values_snapshot();
+                PageKind::Finish(FinishPage::new(
+                    &panel,
+                    &title,
+                    &message,
+                    &widgets,
+                    &initial,
+                    content_width,
+                    content_height,
+                ))
+            }
             WizardPage::Error { title, message } => PageKind::Error(ErrorPage::new(
                 &panel,
                 &title,
@@ -457,8 +475,13 @@ pub fn run(
                             inst.set_component_selected(&id, on);
                         }
                     }
-                    if let PageKind::Custom(ref cp) = pages_guard[idx].kind {
-                        let values = cp.collect_values();
+                    let values_opt = match &pages_guard[idx].kind {
+                        PageKind::Custom(cp) => Some(cp.collect_values()),
+                        PageKind::Welcome(wp) => Some(wp.collect_values()),
+                        PageKind::Finish(fp) => Some(fp.collect_values()),
+                        _ => None,
+                    };
+                    if let Some(values) = values_opt {
                         let mut inst = installer_c.lock().unwrap();
                         for (key, v) in values {
                             inst.set_option_value(&key, v);

@@ -37,10 +37,16 @@ pub enum PageKind {
 
 pub struct WelcomePage {
     widget: gtk::Box,
+    controls: Vec<(String, CustomControl)>,
 }
 
 impl WelcomePage {
-    pub fn new(title: &str, message: &str) -> Self {
+    pub fn new(
+        title: &str,
+        message: &str,
+        widgets: &[crate::gui::CustomWidget],
+        initial: &std::collections::HashMap<String, crate::OptionValue>,
+    ) -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
         set_page_margins(&vbox);
 
@@ -52,13 +58,31 @@ impl WelcomePage {
         msg.set_halign(gtk::Align::Start);
         msg.set_valign(gtk::Align::Start);
         msg.set_line_wrap(true);
-        vbox.pack_start(&msg, true, true, 0);
+        vbox.pack_start(&msg, widgets.is_empty(), widgets.is_empty(), 0);
 
-        Self { widget: vbox }
+        let controls = if widgets.is_empty() {
+            Vec::new()
+        } else {
+            let inner = gtk::Box::new(gtk::Orientation::Vertical, 6);
+            inner.set_margin_top(12);
+            inner.set_valign(gtk::Align::Start);
+            let c = pack_widget_column(&inner, widgets, initial);
+            vbox.pack_start(&inner, true, true, 0);
+            c
+        };
+
+        Self {
+            widget: vbox,
+            controls,
+        }
     }
 
     pub fn widget(&self) -> &gtk::Box {
         &self.widget
+    }
+
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        collect_widget_values(&self.controls)
     }
 }
 
@@ -435,8 +459,69 @@ impl CustomPage {
         inner.set_margin_bottom(6);
         inner.set_valign(gtk::Align::Start);
 
-        let mut controls: Vec<(String, CustomControl)> = Vec::new();
+        let controls = pack_widget_column(&inner, widgets, initial);
 
+        vbox.pack_start(&inner, true, true, 0);
+
+        Self {
+            widget: vbox,
+            controls,
+        }
+    }
+
+    pub fn widget(&self) -> &gtk::Box {
+        &self.widget
+    }
+
+    /// Read the current value of every widget, keyed by option name.
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        collect_widget_values(&self.controls)
+    }
+}
+
+fn collect_widget_values(
+    controls: &[(String, CustomControl)],
+) -> Vec<(String, crate::OptionValue)> {
+    let mut out = Vec::new();
+    for (key, ctl) in controls {
+        let val = match ctl {
+            CustomControl::Text(entry) => crate::OptionValue::String(entry.text().to_string()),
+            CustomControl::Number(entry) => {
+                let t = entry.text().to_string();
+                crate::OptionValue::Int(t.trim().parse::<i64>().unwrap_or(0))
+            }
+            CustomControl::Multiline(buffer) => {
+                let (start, end) = (buffer.start_iter(), buffer.end_iter());
+                let text = buffer.text(&start, &end, false);
+                crate::OptionValue::String(text.map(|s| s.to_string()).unwrap_or_default())
+            }
+            CustomControl::Checkbox(check) => crate::OptionValue::Bool(check.is_active()),
+            CustomControl::Dropdown { combo, values } => {
+                let idx = combo.active().unwrap_or(0) as usize;
+                let v = values.get(idx).cloned().unwrap_or_default();
+                crate::OptionValue::String(v)
+            }
+            CustomControl::Radio { buttons, values } => {
+                let idx = buttons.iter().position(|b| b.is_active()).unwrap_or(0);
+                let v = values.get(idx).cloned().unwrap_or_default();
+                crate::OptionValue::String(v)
+            }
+            CustomControl::PathPicker(entry) => {
+                crate::OptionValue::String(entry.text().to_string())
+            }
+        };
+        out.push((key.clone(), val));
+    }
+    out
+}
+
+fn pack_widget_column(
+    inner: &gtk::Box,
+    widgets: &[crate::gui::CustomWidget],
+    initial: &std::collections::HashMap<String, crate::OptionValue>,
+) -> Vec<(String, CustomControl)> {
+    let mut controls: Vec<(String, CustomControl)> = Vec::new();
+    {
         for w in widgets {
             use crate::gui::CustomWidget;
             match w {
@@ -711,53 +796,8 @@ impl CustomPage {
                 }
             }
         }
-
-        vbox.pack_start(&inner, true, true, 0);
-
-        Self {
-            widget: vbox,
-            controls,
-        }
     }
-
-    pub fn widget(&self) -> &gtk::Box {
-        &self.widget
-    }
-
-    /// Read the current value of every widget, keyed by option name.
-    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
-        let mut out = Vec::new();
-        for (key, ctl) in &self.controls {
-            let val = match ctl {
-                CustomControl::Text(entry) => crate::OptionValue::String(entry.text().to_string()),
-                CustomControl::Number(entry) => {
-                    let t = entry.text().to_string();
-                    crate::OptionValue::Int(t.trim().parse::<i64>().unwrap_or(0))
-                }
-                CustomControl::Multiline(buffer) => {
-                    let (start, end) = (buffer.start_iter(), buffer.end_iter());
-                    let text = buffer.text(&start, &end, false);
-                    crate::OptionValue::String(text.map(|s| s.to_string()).unwrap_or_default())
-                }
-                CustomControl::Checkbox(check) => crate::OptionValue::Bool(check.is_active()),
-                CustomControl::Dropdown { combo, values } => {
-                    let idx = combo.active().unwrap_or(0) as usize;
-                    let v = values.get(idx).cloned().unwrap_or_default();
-                    crate::OptionValue::String(v)
-                }
-                CustomControl::Radio { buttons, values } => {
-                    let idx = buttons.iter().position(|b| b.is_active()).unwrap_or(0);
-                    let v = values.get(idx).cloned().unwrap_or_default();
-                    crate::OptionValue::String(v)
-                }
-                CustomControl::PathPicker(entry) => {
-                    crate::OptionValue::String(entry.text().to_string())
-                }
-            };
-            out.push((key.clone(), val));
-        }
-        out
-    }
+    controls
 }
 
 // ── Error Page ──────────────────────────────────────────────────────────────
@@ -817,10 +857,16 @@ impl ErrorPage {
 
 pub struct FinishPage {
     widget: gtk::Box,
+    controls: Vec<(String, CustomControl)>,
 }
 
 impl FinishPage {
-    pub fn new(title: &str, message: &str) -> Self {
+    pub fn new(
+        title: &str,
+        message: &str,
+        widgets: &[crate::gui::CustomWidget],
+        initial: &std::collections::HashMap<String, crate::OptionValue>,
+    ) -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
         set_page_margins(&vbox);
 
@@ -832,12 +878,30 @@ impl FinishPage {
         msg.set_halign(gtk::Align::Start);
         msg.set_valign(gtk::Align::Start);
         msg.set_line_wrap(true);
-        vbox.pack_start(&msg, true, true, 0);
+        vbox.pack_start(&msg, widgets.is_empty(), widgets.is_empty(), 0);
 
-        Self { widget: vbox }
+        let controls = if widgets.is_empty() {
+            Vec::new()
+        } else {
+            let inner = gtk::Box::new(gtk::Orientation::Vertical, 6);
+            inner.set_margin_top(12);
+            inner.set_valign(gtk::Align::Start);
+            let c = pack_widget_column(&inner, widgets, initial);
+            vbox.pack_start(&inner, true, true, 0);
+            c
+        };
+
+        Self {
+            widget: vbox,
+            controls,
+        }
     }
 
     pub fn widget(&self) -> &gtk::Box {
         &self.widget
+    }
+
+    pub fn collect_values(&self) -> Vec<(String, crate::OptionValue)> {
+        collect_widget_values(&self.controls)
     }
 }

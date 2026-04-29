@@ -208,6 +208,25 @@ user on the page.
 Splitting widgets across multiple custom pages is fine — each
 `.custom_page(...)` call adds a new page.
 
+### Widgets on welcome / finish pages
+
+Welcome and finish pages also accept a column of widgets via
+`.with_widgets(|p| ...)` on the returned `PageHandle`. The widget API
+is identical to `custom_page`'s — same widgets, same option-key
+binding, same CLI pre-fill behaviour. The widgets render below the
+title/message:
+
+```rust
+w.finish_page("Done!", "Click Finish to exit.")
+    .with_widgets(|p| {
+        p.checkbox("launch", "Launch My App now", true);
+        p.checkbox("open_readme", "Show the README", false);
+    });
+```
+
+Read the values from `on_exit` (or any later callback) the same way
+custom-page values are read — `installer.get_option::<bool>("launch")`.
+
 ## Native dialogs
 
 For one-off prompts outside the wizard flow:

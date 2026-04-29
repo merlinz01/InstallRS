@@ -88,6 +88,10 @@ pub enum WizardPage {
     Welcome {
         title: String,
         message: String,
+        /// Optional column of widgets (same set as a custom page) shown
+        /// below the message. Populated via
+        /// [`PageHandle::with_widgets`](crate::gui::PageHandle::with_widgets).
+        widgets: Vec<CustomWidget>,
     },
     License {
         heading: String,
@@ -117,6 +121,10 @@ pub enum WizardPage {
     Finish {
         title: String,
         message: String,
+        /// Optional column of widgets (same set as a custom page) shown
+        /// below the message. Populated via
+        /// [`PageHandle::with_widgets`](crate::gui::PageHandle::with_widgets).
+        widgets: Vec<CustomWidget>,
     },
     /// Shown after the install page when the install callback returns an
     /// error or the user cancels mid-install. The actual error text is

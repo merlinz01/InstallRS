@@ -31,6 +31,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - **Breaking:** `InstallerGui::wizard(title)` takes the window title;
   the standalone `.title(...)` method is gone.
 - Improve font size and layout of heading labels on Windows.
+- Set SS_NOPREFIX styles on Win32 labels to allow ampersands in text.
 
 ## [0.1.0-rc9] — 2026-04-23
 

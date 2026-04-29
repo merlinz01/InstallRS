@@ -25,6 +25,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
   named option instead of a literal default. New helpers
   `set_option`, `set_option_default`, `is_option_registered`.
 - **Breaking:** `Installer::option` takes a third `help: impl AsRef<str>` argument.
+- **Breaking:** `InstallerGui::title`, `buttons`, `on_start`, `on_exit`
+  return `()` instead of `&mut Self` (statement-style, matching the rest
+  of the wizard API).
 
 ## [0.1.0-rc9] — 2026-04-23
 

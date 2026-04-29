@@ -66,17 +66,18 @@ w.error_page(
 w.run(i)?;
 ```
 
-Wizard-level methods (`title`, `buttons`, `on_start`, `on_exit`) take
-`&mut self` and return `&mut Self`, so they chain. Page-adding methods
-(`welcome`, `license`, `custom_page`, …) instead return a `PageHandle`
-that scopes the page-specific callbacks `on_enter`, `on_before_leave`,
-and `skip_if` — so those attach to the page you just added without any
+Wizard-level methods (`title`, `buttons`, `on_start`, `on_exit`) are
+statement-style — call them on their own line. Page-adding methods
+(`welcome`, `license`, `custom_page`, …) return a `PageHandle` that
+scopes the page-specific callbacks `on_enter`, `on_before_leave`, and
+`skip_if` — so those attach to the page you just added without any
 positional coupling. One page per statement reads naturally, and
 conditional / looped configuration drops in cleanly:
 
 ```rust
 let mut w = InstallerGui::wizard();
-w.title("My App").on_start(|i| { /* ... */ Ok(()) });
+w.title("My App");
+w.on_start(|i| { /* ... */ Ok(()) });
 w.welcome("Welcome!", "...");
 if include_license {
     w.license("License", LICENSE, "I accept");

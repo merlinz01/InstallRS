@@ -75,16 +75,14 @@ use crate::Installer;
 
 /// Builder for a wizard-style installer GUI.
 ///
-/// Wizard-level methods ([`title`](Self::title), [`buttons`](Self::buttons),
-/// [`on_start`](Self::on_start), [`on_exit`](Self::on_exit)) take `&mut self`
-/// and return `&mut Self`, so they chain freely. Page-adding methods
+/// Wizard configuration is statement-style — every method takes
+/// `&mut self` and you call them on their own line. Page-adding methods
 /// ([`welcome`](Self::welcome), [`license`](Self::license),
-/// [`custom_page`](Self::custom_page), etc.) instead return a
-/// [`PageHandle`] scoped to the page just added — chain
+/// [`custom_page`](Self::custom_page), etc.) return a [`PageHandle`]
+/// scoped to the page just added, so you can chain
 /// [`on_enter`](PageHandle::on_enter),
 /// [`on_before_leave`](PageHandle::on_before_leave), and
-/// [`skip_if`](PageHandle::skip_if) on that handle, then drop it and add
-/// the next page on a fresh statement.
+/// [`skip_if`](PageHandle::skip_if) on that handle.
 ///
 /// # Example
 ///
@@ -92,9 +90,9 @@ use crate::Installer;
 /// use installrs::gui::*;
 ///
 /// let mut w = InstallerGui::wizard();
-/// w.title("My App Installer")
-///     .on_start(|i| { /* ... */ Ok(()) })
-///     .on_exit(|i| { /* ... */ Ok(()) });
+/// w.title("My App Installer");
+/// w.on_start(|i| { /* ... */ Ok(()) });
+/// w.on_exit(|i| { /* ... */ Ok(()) });
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license("License", include_str!("../LICENSE"), "I accept")
 ///     .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false));
@@ -133,26 +131,20 @@ impl InstallerGui {
     /// Inspect `installer.headless` inside the callback to branch on mode.
     /// Useful for work that must happen regardless of UI — environment
     /// setup, argument validation, prerequisite checks.
-    pub fn on_start(
-        &mut self,
-        f: impl FnOnce(&mut Installer) -> Result<()> + 'static,
-    ) -> &mut Self {
+    pub fn on_start(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) {
         self.config.on_start = Some(Box::new(f));
-        self
     }
 
     /// Set a callback that runs at wizard exit, after the window closes (or
     /// after the install callback completes in headless mode). Runs even
     /// when the install flow fails.
-    pub fn on_exit(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) -> &mut Self {
+    pub fn on_exit(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) {
         self.config.on_exit = Some(Box::new(f));
-        self
     }
 
     /// Set the window title.
-    pub fn title(&mut self, title: impl AsRef<str>) -> &mut Self {
+    pub fn title(&mut self, title: impl AsRef<str>) {
         self.config.title = title.as_ref().to_string();
-        self
     }
 
     /// Override the navigation button labels (e.g. for translation).
@@ -166,9 +158,8 @@ impl InstallerGui {
     ///     ..Default::default()
     /// })
     /// ```
-    pub fn buttons(&mut self, labels: ButtonLabels) -> &mut Self {
+    pub fn buttons(&mut self, labels: ButtonLabels) {
         self.config.buttons = labels;
-        self
     }
 
     /// Add a welcome page with a title and description message.

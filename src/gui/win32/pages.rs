@@ -8,6 +8,12 @@ use winsafe::{HBRUSH, HFONT, LVHITTESTINFO, LVITEM, SIZE, TRACKMOUSEEVENT};
 /// Internal padding between the panel edge and its controls.
 const PAD: i32 = 20;
 
+/// Standard label style: left-aligned, sends WM_COMMAND notifications, and
+/// renders `&` literally instead of consuming it as a mnemonic prefix.
+fn label_style() -> co::SS {
+    co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX
+}
+
 /// Handle WM_CTLCOLORSTATIC on a parent panel to make all static (label)
 /// controls draw with a transparent background.
 fn setup_transparent_labels(parent: &gui::WindowControl) {
@@ -69,7 +75,7 @@ fn build_path_picker_row(
     let lbl_ctl = gui::Label::new(
         parent,
         gui::LabelOpts {
-            control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+            control_style: label_style(),
             text: label_text,
             position: gui::dpi(PAD, y),
             size: gui::dpi(row_w, 18),
@@ -140,7 +146,7 @@ impl WelcomePage {
         let title_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: title,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -156,7 +162,7 @@ impl WelcomePage {
         let message_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: message,
                 position: gui::dpi(PAD, PAD + 40),
                 size: gui::dpi(width - 2 * PAD, message_height),
@@ -231,7 +237,7 @@ impl LicensePage {
         let heading_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: heading,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -326,7 +332,7 @@ impl DirectoryPickerPage {
         let heading_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: heading,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -410,7 +416,7 @@ impl ComponentsPage {
         let heading_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: heading,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -423,7 +429,7 @@ impl ComponentsPage {
         let label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: label_text,
                 position: gui::dpi(PAD, label_y),
                 size: gui::dpi(width - 2 * PAD, 20),
@@ -538,7 +544,7 @@ impl ComponentsPage {
         let desc_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: "",
                 position: gui::dpi(PAD, desc_y),
                 size: gui::dpi(width - 2 * PAD, DESC_H),
@@ -659,7 +665,7 @@ impl InstallPage {
         let status_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: "Waiting to start...",
                 position: gui::dpi(PAD, PAD),
                 size: gui::dpi(width - 2 * PAD, 20),
@@ -819,7 +825,7 @@ impl CustomPage {
         let heading_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: heading,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -831,7 +837,7 @@ impl CustomPage {
         let label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: label_text,
                 position: gui::dpi(PAD, PAD + 28),
                 size: gui::dpi(width - 2 * PAD, 20),
@@ -911,7 +917,7 @@ fn build_widget_column(
                     let lbl_ctl = gui::Label::new(
                         parent,
                         gui::LabelOpts {
-                            control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                            control_style: label_style(),
                             text: lbl,
                             position: gui::dpi(PAD, y),
                             size: gui::dpi(row_w, 18),
@@ -977,7 +983,7 @@ fn build_widget_column(
                     let lbl_ctl = gui::Label::new(
                         parent,
                         gui::LabelOpts {
-                            control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                            control_style: label_style(),
                             text: lbl,
                             position: gui::dpi(PAD, y),
                             size: gui::dpi(row_w, 18),
@@ -1017,7 +1023,7 @@ fn build_widget_column(
                     let lbl_ctl = gui::Label::new(
                         parent,
                         gui::LabelOpts {
-                            control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                            control_style: label_style(),
                             text: lbl,
                             position: gui::dpi(PAD, y),
                             size: gui::dpi(row_w, 18),
@@ -1056,7 +1062,7 @@ fn build_widget_column(
                     let lbl_ctl = gui::Label::new(
                         parent,
                         gui::LabelOpts {
-                            control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                            control_style: label_style(),
                             text: lbl,
                             position: gui::dpi(PAD, y),
                             size: gui::dpi(row_w, 18),
@@ -1095,7 +1101,7 @@ fn build_widget_column(
                     let lbl_ctl = gui::Label::new(
                         parent,
                         gui::LabelOpts {
-                            control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                            control_style: label_style(),
                             text: lbl,
                             position: gui::dpi(PAD, y),
                             size: gui::dpi(row_w, 18),
@@ -1242,7 +1248,7 @@ impl ErrorPage {
         let title_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: title,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -1254,7 +1260,7 @@ impl ErrorPage {
         let message_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: message,
                 position: gui::dpi(PAD, PAD + 40),
                 size: gui::dpi(width - 2 * PAD, 40),
@@ -1322,7 +1328,7 @@ impl FinishPage {
         let title_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: title,
                 position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
@@ -1335,7 +1341,7 @@ impl FinishPage {
         let message_label = gui::Label::new(
             parent,
             gui::LabelOpts {
-                control_style: co::SS::LEFT | co::SS::NOTIFY | co::SS::NOPREFIX,
+                control_style: label_style(),
                 text: message,
                 position: gui::dpi(PAD, PAD + 40),
                 size: gui::dpi(width - 2 * PAD, message_height),

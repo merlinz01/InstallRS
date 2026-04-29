@@ -45,9 +45,10 @@ fn make_bold_heading_font() -> winsafe::SysResult<DeleteObjectGuard<HFONT>> {
 }
 
 /// Apply [`make_bold_heading_font`] to `label` once the parent's WM_CREATE
-/// fires. Use this for pages whose only WM_CREATE work is the heading font;
-/// pages that also need to do other init (Components, Custom) inline a call
-/// to `make_bold_heading_font` in their own combined handler instead.
+/// fires. Pages with no widget column use this; pages that own a
+/// [`WidgetColumn`] use [`register_bold_heading_with_widgets`] instead, so
+/// the seed work piggybacks on the same single wm_create registration
+/// (winsafe only allows one per window).
 fn register_bold_heading(parent: &gui::WindowControl, label: &gui::Label) {
     let label_c = label.clone();
     parent.on().wm_create(move |_| {
@@ -57,6 +58,36 @@ fn register_bold_heading(parent: &gui::WindowControl, label: &gui::Label) {
                 hfont: font.leak(),
                 redraw: true,
             });
+        }
+        Ok(0)
+    });
+}
+
+/// Combined wm_create handler for pages with both a bold heading and a
+/// widget column: applies the heading font, then seeds checkbox /
+/// dropdown initial state. Drains the seed Vecs out of `column` (they're
+/// only needed at WM_CREATE time).
+fn register_bold_heading_with_widgets(
+    parent: &gui::WindowControl,
+    heading: &gui::Label,
+    column: &mut WidgetColumn,
+) {
+    let heading_c = heading.clone();
+    let initial_checks = std::mem::take(&mut column.initial_checks);
+    let initial_dropdowns = std::mem::take(&mut column.initial_dropdowns);
+    parent.on().wm_create(move |_| {
+        let mut bold_font = make_bold_heading_font()?;
+        unsafe {
+            heading_c.hwnd().SendMessage(wm::SetFont {
+                hfont: bold_font.leak(),
+                redraw: true,
+            });
+        }
+        for (check, val) in &initial_checks {
+            check.set_check(*val);
+        }
+        for (combo, idx) in &initial_dropdowns {
+            combo.items().select(Some(*idx as u32));
         }
         Ok(0)
     });
@@ -179,27 +210,8 @@ impl WelcomePage {
         );
 
         let column_start_y = PAD + 40 + message_height + 10;
-        let column = build_widget_column(parent, widgets, initial, column_start_y, width);
-
-        let title_c = title_label.clone();
-        let initial_checks = column.initial_checks.clone();
-        let initial_dropdowns = column.initial_dropdowns.clone();
-        parent.on().wm_create(move |_| {
-            let mut bold_font = make_bold_heading_font()?;
-            unsafe {
-                title_c.hwnd().SendMessage(wm::SetFont {
-                    hfont: bold_font.leak(),
-                    redraw: true,
-                });
-            }
-            for (check, val) in &initial_checks {
-                check.set_check(*val);
-            }
-            for (combo, idx) in &initial_dropdowns {
-                combo.items().select(Some(*idx as u32));
-            }
-            Ok(0)
-        });
+        let mut column = build_widget_column(parent, widgets, initial, column_start_y, width);
+        register_bold_heading_with_widgets(parent, &title_label, &mut column);
         setup_transparent_labels(parent);
 
         Self {
@@ -732,9 +744,10 @@ impl InstallPage {
 // ── Custom Page ─────────────────────────────────────────────────────────────
 
 /// Result of laying out a widget column. Held by pages that embed widgets
-/// (Custom, Welcome-with-widgets, Finish-with-widgets). The `apply_initial_state`
-/// call must run from the parent's wm_create handler so the controls are
-/// fully realized before we touch them.
+/// (Custom, Welcome-with-widgets, Finish-with-widgets). Pages pass it to
+/// [`register_bold_heading_with_widgets`] before storing it, which drains
+/// `initial_checks` / `initial_dropdowns` into a wm_create closure that
+/// seeds the controls once they're realized.
 struct WidgetColumn {
     controls: Vec<(String, CustomControl)>,
     _extras: Vec<gui::Label>,
@@ -846,32 +859,8 @@ impl CustomPage {
             },
         );
 
-        let column = build_widget_column(parent, widgets, initial, PAD + 28 + 26, width);
-
-        // Single wm_create handler: apply the heading font, then seed every
-        // checkbox / dropbox's initial state in one shot.
-        {
-            let heading_c = heading_label.clone();
-            let initial_checks = column.initial_checks.clone();
-            let initial_dropdowns = column.initial_dropdowns.clone();
-            parent.on().wm_create(move |_| {
-                let mut bold_font = make_bold_heading_font()?;
-                unsafe {
-                    heading_c.hwnd().SendMessage(wm::SetFont {
-                        hfont: bold_font.leak(),
-                        redraw: true,
-                    });
-                }
-                for (check, val) in &initial_checks {
-                    check.set_check(*val);
-                }
-                for (combo, idx) in &initial_dropdowns {
-                    combo.items().select(Some(*idx as u32));
-                }
-                Ok(0)
-            });
-        }
-
+        let mut column = build_widget_column(parent, widgets, initial, PAD + 28 + 26, width);
+        register_bold_heading_with_widgets(parent, &heading_label, &mut column);
         setup_transparent_labels(parent);
 
         Self {
@@ -1358,27 +1347,8 @@ impl FinishPage {
         );
 
         let column_start_y = PAD + 40 + message_height + 10;
-        let column = build_widget_column(parent, widgets, initial, column_start_y, width);
-
-        let title_c = title_label.clone();
-        let initial_checks = column.initial_checks.clone();
-        let initial_dropdowns = column.initial_dropdowns.clone();
-        parent.on().wm_create(move |_| {
-            let mut bold_font = make_bold_heading_font()?;
-            unsafe {
-                title_c.hwnd().SendMessage(wm::SetFont {
-                    hfont: bold_font.leak(),
-                    redraw: true,
-                });
-            }
-            for (check, val) in &initial_checks {
-                check.set_check(*val);
-            }
-            for (combo, idx) in &initial_dropdowns {
-                combo.items().select(Some(*idx as u32));
-            }
-            Ok(0)
-        });
+        let mut column = build_widget_column(parent, widgets, initial, column_start_y, width);
+        register_bold_heading_with_widgets(parent, &title_label, &mut column);
         setup_transparent_labels(parent);
 
         Self {

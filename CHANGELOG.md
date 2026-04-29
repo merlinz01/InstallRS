@@ -30,6 +30,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
   of the wizard API).
 - **Breaking:** `InstallerGui::wizard(title)` takes the window title;
   the standalone `.title(...)` method is gone.
+- Improve font size and layout of heading labels on Windows.
 
 ## [0.1.0-rc9] — 2026-04-23
 

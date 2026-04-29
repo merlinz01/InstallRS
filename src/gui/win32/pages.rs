@@ -19,10 +19,10 @@ fn setup_transparent_labels(parent: &gui::WindowControl) {
         });
 }
 
-/// Build the bold "Segoe UI 18" font used for page headings/titles.
+/// Build the bold Segoe UI font used for page headings/titles.
 fn make_bold_heading_font() -> winsafe::SysResult<DeleteObjectGuard<HFONT>> {
     HFONT::CreateFont(
-        SIZE { cx: 0, cy: -18 },
+        SIZE { cx: 0, cy: -20 },
         0,
         0,
         co::FW::BOLD,
@@ -32,7 +32,7 @@ fn make_bold_heading_font() -> winsafe::SysResult<DeleteObjectGuard<HFONT>> {
         co::CHARSET::DEFAULT,
         co::OUT_PRECIS::DEFAULT,
         co::CLIP::DEFAULT_PRECIS,
-        co::QUALITY::DEFAULT,
+        co::QUALITY::CLEARTYPE_NATURAL,
         co::PITCH::DEFAULT,
         "Segoe UI",
     )
@@ -137,7 +137,7 @@ impl WelcomePage {
             parent,
             gui::LabelOpts {
                 text: title,
-                position: gui::dpi(PAD, PAD),
+                position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
@@ -189,8 +189,8 @@ impl LicensePage {
             parent,
             gui::LabelOpts {
                 text: heading,
-                position: gui::dpi(PAD, PAD),
-                size: gui::dpi(width - 2 * PAD, 24),
+                position: gui::dpi(PAD, 14),
+                size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -283,8 +283,8 @@ impl DirectoryPickerPage {
             parent,
             gui::LabelOpts {
                 text: heading,
-                position: gui::dpi(PAD, PAD),
-                size: gui::dpi(width - 2 * PAD, 24),
+                position: gui::dpi(PAD, 14),
+                size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -366,8 +366,8 @@ impl ComponentsPage {
             parent,
             gui::LabelOpts {
                 text: heading,
-                position: gui::dpi(PAD, PAD),
-                size: gui::dpi(width - 2 * PAD, 24),
+                position: gui::dpi(PAD, 14),
+                size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -724,8 +724,8 @@ impl CustomPage {
             parent,
             gui::LabelOpts {
                 text: heading,
-                position: gui::dpi(PAD, PAD),
-                size: gui::dpi(width - 2 * PAD, 24),
+                position: gui::dpi(PAD, 14),
+                size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
             },
@@ -1153,7 +1153,7 @@ impl ErrorPage {
             parent,
             gui::LabelOpts {
                 text: title,
-                position: gui::dpi(PAD, PAD),
+                position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()
@@ -1228,7 +1228,7 @@ impl FinishPage {
             parent,
             gui::LabelOpts {
                 text: title,
-                position: gui::dpi(PAD, PAD),
+                position: gui::dpi(PAD, 14),
                 size: gui::dpi(width - 2 * PAD, 30),
                 resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                 ..Default::default()

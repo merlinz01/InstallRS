@@ -28,6 +28,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - **Breaking:** `InstallerGui::title`, `buttons`, `on_start`, `on_exit`
   return `()` instead of `&mut Self` (statement-style, matching the rest
   of the wizard API).
+- **Breaking:** `InstallerGui::wizard(title)` takes the window title;
+  the standalone `.title(...)` method is gone.
 
 ## [0.1.0-rc9] — 2026-04-23
 

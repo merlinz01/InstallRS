@@ -10,8 +10,7 @@
 //! ```rust,ignore
 //! use installrs::gui::*;
 //!
-//! let mut w = InstallerGui::wizard();
-//! w.title("My App Installer");
+//! let mut w = InstallerGui::wizard("My App Installer");
 //! w.welcome("Welcome!", "Click Next to continue.");
 //! w.license("License", include_str!("../LICENSE"), "I accept");
 //! w.components_page("Components", "Choose features:");
@@ -89,8 +88,7 @@ use crate::Installer;
 /// ```rust,ignore
 /// use installrs::gui::*;
 ///
-/// let mut w = InstallerGui::wizard();
-/// w.title("My App Installer");
+/// let mut w = InstallerGui::wizard("My App Installer");
 /// w.on_start(|i| { /* ... */ Ok(()) });
 /// w.on_exit(|i| { /* ... */ Ok(()) });
 /// w.welcome("Welcome!", "Click Next to continue.");
@@ -112,11 +110,12 @@ pub struct InstallerGui {
 }
 
 impl InstallerGui {
-    /// Create a new wizard builder with default settings.
-    pub fn wizard() -> Self {
+    /// Create a new wizard builder. `title` is the window title shown by
+    /// the OS — typically your app name plus "Installer".
+    pub fn wizard(title: impl AsRef<str>) -> Self {
         Self {
             config: WizardConfig {
-                title: "Installer".to_string(),
+                title: title.as_ref().to_string(),
                 pages: Vec::new(),
                 buttons: ButtonLabels::default(),
                 on_start: None,
@@ -140,11 +139,6 @@ impl InstallerGui {
     /// when the install flow fails.
     pub fn on_exit(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) {
         self.config.on_exit = Some(Box::new(f));
-    }
-
-    /// Set the window title.
-    pub fn title(&mut self, title: impl AsRef<str>) {
-        self.config.title = title.as_ref().to_string();
     }
 
     /// Override the navigation button labels (e.g. for translation).

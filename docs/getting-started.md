@@ -156,8 +156,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     i.process_commandline()?;
 
-    let mut w = InstallerGui::wizard();
-    w.title("My App Installer");
+    let mut w = InstallerGui::wizard("My App Installer");
     w.welcome("Welcome", "This wizard will install My App.");
     w.license("License", include_str!("../LICENSE.txt"), "I accept");
     w.components_page("Components", "Select features:");

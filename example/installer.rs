@@ -90,43 +90,42 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // picker reads the current option value as its initial display.
     i.set_option_default("install-dir", default_install_dir());
 
-    let mut w = InstallerGui::wizard();
-    w.title(&t!("installer.title"))
-        .buttons(installrs::gui::ButtonLabels {
-            back: t!("wizard.back").into(),
-            next: t!("wizard.next").into(),
-            install: t!("wizard.install").into(),
-            uninstall: t!("wizard.uninstall").into(),
-            finish: t!("wizard.finish").into(),
-            cancel: t!("wizard.cancel").into(),
-        })
-        .on_start(|i| {
-            let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
-            if i.headless && !auto_yes {
-                eprintln!("Running headless install of {}", t!("installer.title"));
-                eprint!("Proceed? [y/N] ");
-                std::io::Write::flush(&mut std::io::stderr()).ok();
-                let mut answer = String::new();
-                std::io::stdin()
-                    .read_line(&mut answer)
-                    .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
-                if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
-                    return Err(anyhow::anyhow!("install cancelled by user"));
-                }
-            } else if i.headless && auto_yes {
-                eprintln!(
-                    "Running headless install of {} (auto-confirmed)",
-                    t!("installer.title")
-                );
+    let mut w = InstallerGui::wizard(&t!("installer.title"));
+    w.buttons(installrs::gui::ButtonLabels {
+        back: t!("wizard.back").into(),
+        next: t!("wizard.next").into(),
+        install: t!("wizard.install").into(),
+        uninstall: t!("wizard.uninstall").into(),
+        finish: t!("wizard.finish").into(),
+        cancel: t!("wizard.cancel").into(),
+    });
+    w.on_start(|i| {
+        let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+        if i.headless && !auto_yes {
+            eprintln!("Running headless install of {}", t!("installer.title"));
+            eprint!("Proceed? [y/N] ");
+            std::io::Write::flush(&mut std::io::stderr()).ok();
+            let mut answer = String::new();
+            std::io::stdin()
+                .read_line(&mut answer)
+                .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
+            if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+                return Err(anyhow::anyhow!("install cancelled by user"));
             }
-            Ok(())
-        })
-        .on_exit(|i| {
-            if i.headless {
-                eprintln!("Headless install complete.");
-            }
-            Ok(())
-        });
+        } else if i.headless && auto_yes {
+            eprintln!(
+                "Running headless install of {} (auto-confirmed)",
+                t!("installer.title")
+            );
+        }
+        Ok(())
+    });
+    w.on_exit(|i| {
+        if i.headless {
+            eprintln!("Headless install complete.");
+        }
+        Ok(())
+    });
     w.welcome(
         &t!("installer.welcome.title"),
         &t!("installer.welcome.message"),
@@ -388,31 +387,30 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     #[cfg(windows)]
     i.enable_self_delete();
 
-    let mut w = InstallerGui::wizard();
-    w.title(&t!("uninstaller.title"))
-        .buttons(installrs::gui::ButtonLabels {
-            back: t!("wizard.back").into(),
-            next: t!("wizard.next").into(),
-            install: t!("wizard.install").into(),
-            uninstall: t!("wizard.uninstall").into(),
-            finish: t!("wizard.finish").into(),
-            cancel: t!("wizard.cancel").into(),
-        })
-        .on_start(|i| {
-            let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
-            if i.headless && !auto_yes {
-                eprint!("Really uninstall? [y/N] ");
-                std::io::Write::flush(&mut std::io::stderr()).ok();
-                let mut answer = String::new();
-                std::io::stdin()
-                    .read_line(&mut answer)
-                    .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
-                if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
-                    return Err(anyhow::anyhow!("uninstall cancelled by user"));
-                }
+    let mut w = InstallerGui::wizard(&t!("uninstaller.title"));
+    w.buttons(installrs::gui::ButtonLabels {
+        back: t!("wizard.back").into(),
+        next: t!("wizard.next").into(),
+        install: t!("wizard.install").into(),
+        uninstall: t!("wizard.uninstall").into(),
+        finish: t!("wizard.finish").into(),
+        cancel: t!("wizard.cancel").into(),
+    });
+    w.on_start(|i| {
+        let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+        if i.headless && !auto_yes {
+            eprint!("Really uninstall? [y/N] ");
+            std::io::Write::flush(&mut std::io::stderr()).ok();
+            let mut answer = String::new();
+            std::io::stdin()
+                .read_line(&mut answer)
+                .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
+            if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+                return Err(anyhow::anyhow!("uninstall cancelled by user"));
             }
-            Ok(())
-        });
+        }
+        Ok(())
+    });
     w.welcome(
         &t!("uninstaller.welcome.title"),
         &t!("uninstaller.welcome.message"),

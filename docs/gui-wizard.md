@@ -32,14 +32,13 @@ Windows has no extra system dependency at build or runtime.
 
 ## Wizard builder
 
-Build the wizard with `InstallerGui::wizard()`, configure it via its
-builder methods, then call `run`:
+Build the wizard with `InstallerGui::wizard(title)`, configure it via
+its builder methods, then call `run`:
 
 ```rust
 use installrs::gui::*;
 
-let mut w = InstallerGui::wizard();
-w.title("My App Installer");
+let mut w = InstallerGui::wizard("My App Installer");
 w.welcome("Welcome!", "Click Next to continue.");
 w.license("License Agreement", include_str!("../LICENSE"), "I accept");
 w.components_page("Select Components", "Choose features to install:");
@@ -66,7 +65,7 @@ w.error_page(
 w.run(i)?;
 ```
 
-Wizard-level methods (`title`, `buttons`, `on_start`, `on_exit`) are
+Wizard-level methods (`buttons`, `on_start`, `on_exit`) are
 statement-style — call them on their own line. Page-adding methods
 (`welcome`, `license`, `custom_page`, …) return a `PageHandle` that
 scopes the page-specific callbacks `on_enter`, `on_before_leave`, and
@@ -75,8 +74,7 @@ positional coupling. One page per statement reads naturally, and
 conditional / looped configuration drops in cleanly:
 
 ```rust
-let mut w = InstallerGui::wizard();
-w.title("My App");
+let mut w = InstallerGui::wizard("My App");
 w.on_start(|i| { /* ... */ Ok(()) });
 w.welcome("Welcome!", "...");
 if include_license {
@@ -240,10 +238,8 @@ if let Some(code) = installrs::gui::choose_language(
 )? {
     rust_i18n::set_locale(&code);
 }
-let mut w = InstallerGui::wizard();
-w.title(&t!("installer.title")) // now uses chosen locale
-    // ...
-    ;
+let mut w = InstallerGui::wizard(&t!("installer.title")); // uses chosen locale
+// ...
 w.run(i)?;
 ```
 
@@ -261,14 +257,14 @@ The same wizard definition serves both modes. Use `.on_start(...)` and
 `.on_exit(...)` for setup and cleanup that must happen either way:
 
 ```rust
-let mut w = InstallerGui::wizard();
+let mut w = InstallerGui::wizard("My App Installer");
 w.on_start(|i| {
     if i.headless {
         eprintln!("Running headless install...");
     }
     Ok(())
-})
-.on_exit(|i| {
+});
+w.on_exit(|i| {
     if i.headless {
         eprintln!("Done.");
     }

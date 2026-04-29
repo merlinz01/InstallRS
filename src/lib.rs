@@ -149,6 +149,11 @@ impl Installer {
     /// let port: i64 = i.get_option("port").unwrap_or(8080);
     /// let verbose: bool = i.get_option("verbose").unwrap_or(false);
     /// ```
+    ///
+    /// **Ordering:** call this *before*
+    /// [`process_commandline`](Self::process_commandline). Unregistered
+    /// flags cause a parse error, so every `--<name>` your installer
+    /// accepts must be registered first.
     pub fn option(
         &mut self,
         name: impl AsRef<str>,
@@ -298,9 +303,13 @@ impl Installer {
     /// ```
     ///
     /// Components start selected (`default = true`); call `.default_off()`
-    /// on ones the user has to opt into. Call this before running the
-    /// wizard or parsing CLI args. Later calls with the same `id` update
-    /// the existing component in place.
+    /// on ones the user has to opt into. Later calls with the same `id`
+    /// update the existing component in place.
+    ///
+    /// **Ordering:** register every component *before* calling
+    /// [`process_commandline`](Self::process_commandline) — `--components`,
+    /// `--with`, `--without`, and `--list-components` resolve against the
+    /// registered set, and unknown ids error out.
     pub fn component(
         &mut self,
         id: impl AsRef<str>,

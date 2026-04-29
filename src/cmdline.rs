@@ -32,8 +32,16 @@ impl Installer {
     /// - `--log <path>` — tee all status / log / error messages to a file
     ///   (append mode; see [`Installer::set_log_file`])
     ///
-    /// Returns an error on unknown component ids or unknown flags. Register
-    /// custom flags via [`Installer::option`] before calling this.
+    /// Component-flag precedence: `--components` (when present) replaces
+    /// the default selection entirely; otherwise `--with` adds to defaults
+    /// and `--without` removes from them. `--with` and `--without` are
+    /// applied on top of `--components` when both appear. Required
+    /// components stay selected regardless.
+    ///
+    /// **Ordering:** register every component
+    /// ([`component`](Installer::component)) and every custom flag
+    /// ([`option`](Installer::option)) *before* calling this. Unknown
+    /// component ids and unregistered flags both error out.
     pub fn process_commandline(&mut self) -> Result<()> {
         let args: Vec<String> = std::env::args().collect();
         self.process_commandline_from(&args)

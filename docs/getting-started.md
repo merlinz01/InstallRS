@@ -198,8 +198,7 @@ file-version = "1.0.0.0"
 legal-copyright = "Copyright (c) 2026 Me"
 ```
 
-See the full [Windows resource config reference](../README.md#windows-resource-configuration)
-for every option.
+See [Windows Resources](windows-resources.md) for every option.
 
 ## What next?
 
@@ -207,10 +206,10 @@ for every option.
 - **Working example:** the [`example/`](../example) directory in the
   repo — it demonstrates components, custom pages, translation,
   cancellation, and the headless `--yes` flag.
-- **Component system:** see the [Components section in the README](../README.md#components)
-  for details on `--with` / `--without` / `--components` flags.
+- **Component system:** see the [Installer API](installer-api.md#components)
+  doc for details on `--with` / `--without` / `--components` flags.
 - **Custom wizard pages:** text inputs, checkboxes, dropdowns — see the
-  [Custom pages section](../README.md#custom-pages).
+  [GUI Wizard custom pages section](gui-wizard.md#custom-pages).
 
 ## Troubleshooting
 

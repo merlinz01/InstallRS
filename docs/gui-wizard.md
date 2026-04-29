@@ -141,17 +141,17 @@ page is the install page, the Next button reads "Install" (or
 
 ### Translatable buttons
 
-Customize button labels via `.buttons(...)`:
+Customize button labels via `w.buttons(...)`:
 
 ```rust
-.buttons(ButtonLabels {
+w.buttons(ButtonLabels {
     back: "Atrás".into(),
     next: "Siguiente".into(),
     install: "Instalar".into(),
     uninstall: "Desinstalar".into(),
     finish: "Finalizar".into(),
     cancel: "Cancelar".into(),
-})
+});
 ```
 
 ## Custom pages
@@ -290,7 +290,7 @@ w.on_exit(|i| {
     Ok(())
 });
 // ... pages ...
-w.install_page(|ctx| {
+w.install_page(|i| {
     // runs in both modes
     Ok(())
 });

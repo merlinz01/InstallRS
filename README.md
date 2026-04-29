@@ -72,6 +72,7 @@ use anyhow::Result;
 use installrs::{source, Installer};
 
 pub fn install(i: &mut Installer) -> Result<()> {
+    i.process_commandline()?;
     i.set_out_dir("C:/my_app");
     i.dir(source!("assets"), "assets").install()?;
     i.file(source!("app.exe"), "app.exe").install()?;
@@ -80,6 +81,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
 }
 
 pub fn uninstall(i: &mut Installer) -> Result<()> {
+    i.process_commandline()?;
     i.remove("C:/my_app").install()?;
     Ok(())
 }

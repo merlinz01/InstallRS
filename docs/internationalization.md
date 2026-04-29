@@ -154,17 +154,17 @@ Beyond the obvious (page titles, labels, button labels), don't forget:
 
 ### Button labels
 
-Pass a localized `ButtonLabels` to `.buttons(...)`:
+Pass a localized `ButtonLabels` to `w.buttons(...)`:
 
 ```rust
-.buttons(installrs::gui::ButtonLabels {
+w.buttons(installrs::gui::ButtonLabels {
     back: t!("wizard.back").into(),
     next: t!("wizard.next").into(),
     install: t!("wizard.install").into(),
     uninstall: t!("wizard.uninstall").into(),
     finish: t!("wizard.finish").into(),
     cancel: t!("wizard.cancel").into(),
-})
+});
 ```
 
 Without this, buttons render as English defaults ("< Back", "Next >",

@@ -24,7 +24,7 @@ Arguments:
   component.
 - `progress_weight` — how many step units the component contributes to
   the progress bar when selected. (See
-  [progress reporting](../README.md#progress-reporting).)
+  [progress reporting](embedded-files.md#progress-reporting).)
 
 Components start **selected** by default. Chain modifiers to change
 that:
@@ -109,6 +109,23 @@ Bool options accept `true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0` (case-insens
 `get_option::<T>` is generic over `FromOptionValue`, which is implemented
 for `bool`, `String`, `i64`, `i32`, `u64`, and `u32`. Mismatched types
 (e.g. `get_option::<i64>` on a `String` option) return `None`.
+
+### Seeding and overwriting option values
+
+Options can be set programmatically — useful for platform-dependent
+defaults that the user can override via CLI flags or wizard widgets:
+
+- `i.set_option_default(name, value)` — set only if no value is present.
+  Won't clobber a CLI-provided value or one set by an earlier callback.
+  Use this for sensible first-run defaults.
+- `i.set_option(name, value)` — always overwrite. Use this when user
+  code needs to force a value regardless of what's there.
+- `i.is_option_registered(name)` — check whether an option was
+  registered via `i.option(...)`. The wizard auto-registers
+  `directory_picker` keys so this rarely matters in user code.
+
+`value` is anything that converts to `OptionValue` (`bool`, `String`,
+`&str`, `i64`, etc.).
 
 ### Integration with custom wizard pages
 

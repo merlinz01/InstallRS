@@ -25,11 +25,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
   named option instead of a literal default. New helpers
   `set_option`, `set_option_default`, `is_option_registered`.
 - **Breaking:** `Installer::option` takes a third `help: impl AsRef<str>` argument.
-- **Breaking:** `InstallerGui::title`, `buttons`, `on_start`, `on_exit`
-  return `()` instead of `&mut Self` (statement-style, matching the rest
-  of the wizard API).
 - **Breaking:** `InstallerGui::wizard(title)` takes the window title;
-  the standalone `.title(...)` method is gone.
+  the standalone `.title(...)` method is gone. `buttons`, `on_start`,
+  `on_exit` return `()` instead of `&mut Self` (statement-style,
+  matching the rest of the wizard API).
 - Improve font size and layout of heading labels on Windows.
 - Set SS_NOPREFIX styles on Win32 labels to allow ampersands in text.
 - `PageHandle::with_widgets(|p| ...)` adds a column of input widgets

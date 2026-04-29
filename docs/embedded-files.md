@@ -199,26 +199,32 @@ i.end_step();
 ### Progress sinks
 
 Attach a `ProgressSink` via `set_progress_sink` to receive status,
-progress, and log events. The GUI wizard attaches one automatically —
-you don't need to touch this directly for wizard-based installers.
+progress, and log events. The GUI wizard attaches one automatically;
+non-GUI installers also auto-attach a built-in
+[`StderrProgressSink`](https://docs.rs/installrs/latest/installrs/struct.StderrProgressSink.html)
+that renders a TTY-aware progress bar to stderr — so the common
+headless path works without any setup.
 
-For custom pipelines (e.g., writing your own progress output or
-forwarding to an external bus), implement the `ProgressSink` trait:
+To replace the default with your own (e.g., to forward events to an
+external bus), implement the `ProgressSink` trait:
 
 ```rust
 use installrs::ProgressSink;
 
-struct StderrSink;
-impl ProgressSink for StderrSink {
+struct MySink;
+impl ProgressSink for MySink {
     fn set_status(&self, s: &str)      { eprintln!("[*] {s}"); }
     fn set_progress(&self, frac: f64)  { eprintln!("[{:.0}%]", frac * 100.0); }
     fn log(&self, m: &str)             { eprintln!("    {m}"); }
 }
 
-i.set_progress_sink(Box::new(StderrSink));
+i.set_progress_sink(Box::new(MySink));
 ```
 
 All `.status()`, `.log()`, and progress updates flow through the sink.
+`Installer` also exposes `set_status(...)`, `set_progress(...)`, and
+`log(...)` directly for emitting events from user code without
+constructing a builder op first.
 
 ## See also
 

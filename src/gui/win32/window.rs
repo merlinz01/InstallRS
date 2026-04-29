@@ -139,23 +139,24 @@ pub fn run(
             }
         );
 
+        // Snapshot once per page; used by any variant that needs to
+        // pre-fill widgets from the options store.
+        let initial = installer.lock().unwrap().option_values_snapshot();
+
         let kind = match page_cfg {
             WizardPage::Welcome {
                 title,
                 message,
                 widgets,
-            } => {
-                let initial = installer.lock().unwrap().option_values_snapshot();
-                PageKind::Welcome(WelcomePage::new(
-                    &panel,
-                    &title,
-                    &message,
-                    &widgets,
-                    &initial,
-                    content_width,
-                    content_height,
-                ))
-            }
+            } => PageKind::Welcome(WelcomePage::new(
+                &panel,
+                &title,
+                &message,
+                &widgets,
+                &initial,
+                content_width,
+                content_height,
+            )),
             WizardPage::License {
                 heading,
                 text,
@@ -184,7 +185,7 @@ pub fn run(
                 label,
                 key,
             } => {
-                let initial = installer
+                let initial_dir = installer
                     .lock()
                     .unwrap()
                     .get_option::<String>(&key)
@@ -194,7 +195,7 @@ pub fn run(
                     &heading,
                     &label,
                     &key,
-                    &initial,
+                    &initial_dir,
                     content_width,
                     content_height,
                 ))
@@ -206,18 +207,15 @@ pub fn run(
                 title,
                 message,
                 widgets,
-            } => {
-                let initial = installer.lock().unwrap().option_values_snapshot();
-                PageKind::Finish(FinishPage::new(
-                    &panel,
-                    &title,
-                    &message,
-                    &widgets,
-                    &initial,
-                    content_width,
-                    content_height,
-                ))
-            }
+            } => PageKind::Finish(FinishPage::new(
+                &panel,
+                &title,
+                &message,
+                &widgets,
+                &initial,
+                content_width,
+                content_height,
+            )),
             WizardPage::Error { title, message } => PageKind::Error(ErrorPage::new(
                 &panel,
                 &title,
@@ -229,18 +227,15 @@ pub fn run(
                 heading,
                 label,
                 widgets,
-            } => {
-                let initial = installer.lock().unwrap().option_values_snapshot();
-                PageKind::Custom(CustomPage::new(
-                    &panel,
-                    &heading,
-                    &label,
-                    &widgets,
-                    &initial,
-                    content_width,
-                    content_height,
-                ))
-            }
+            } => PageKind::Custom(CustomPage::new(
+                &panel,
+                &heading,
+                &label,
+                &widgets,
+                &initial,
+                content_width,
+                content_height,
+            )),
         };
 
         pages.push(Page {

@@ -110,13 +110,16 @@ pub fn run(
             }
         );
 
+        // Snapshot once per page; used by any variant that needs to
+        // pre-fill widgets from the options store.
+        let initial = installer.lock().unwrap().option_values_snapshot();
+
         let (widget, kind) = match page_cfg {
             WizardPage::Welcome {
                 title,
                 message,
                 widgets,
             } => {
-                let initial = installer.lock().unwrap().option_values_snapshot();
                 let p = WelcomePage::new(&title, &message, &widgets, &initial);
                 let w = p.widget().clone();
                 (w, PageKind::Welcome(p))
@@ -141,12 +144,12 @@ pub fn run(
                 label,
                 key,
             } => {
-                let initial = installer
+                let initial_dir = installer
                     .lock()
                     .unwrap()
                     .get_option::<String>(&key)
                     .unwrap_or_default();
-                let p = DirectoryPickerPage::new(&heading, &label, &key, &initial);
+                let p = DirectoryPickerPage::new(&heading, &label, &key, &initial_dir);
                 let w = p.widget().clone();
                 (w, PageKind::DirectoryPicker(p))
             }
@@ -160,7 +163,6 @@ pub fn run(
                 message,
                 widgets,
             } => {
-                let initial = installer.lock().unwrap().option_values_snapshot();
                 let p = FinishPage::new(&title, &message, &widgets, &initial);
                 let w = p.widget().clone();
                 (w, PageKind::Finish(p))
@@ -175,7 +177,6 @@ pub fn run(
                 label,
                 widgets,
             } => {
-                let initial = installer.lock().unwrap().option_values_snapshot();
                 let p = CustomPage::new(&heading, &label, &widgets, &initial);
                 let w = p.widget().clone();
                 (w, PageKind::Custom(p))

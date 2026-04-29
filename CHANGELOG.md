@@ -24,6 +24,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - **Breaking:** `directory_picker(heading, label, key)` binds to a
   named option instead of a literal default. New helpers
   `set_option`, `set_option_default`, `is_option_registered`.
+- **Breaking:** `Installer::option` takes a third `help: impl AsRef<str>` argument.
 
 ## [0.1.0-rc9] — 2026-04-23
 

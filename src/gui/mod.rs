@@ -365,7 +365,7 @@ impl InstallerGui {
         for configured in &self.config.pages {
             if let WizardPage::DirectoryPicker { key, .. } = &configured.page {
                 if !installer.is_option_registered(key) {
-                    installer.option(key.clone(), crate::OptionKind::String);
+                    installer.option(key.clone(), crate::OptionKind::String, "");
                 }
             }
         }

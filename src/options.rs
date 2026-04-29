@@ -117,4 +117,6 @@ impl FromOptionValue for u32 {
 pub(crate) struct CmdOption {
     pub(crate) name: String,
     pub(crate) kind: OptionKind,
+    /// One-line description for future `--help` output.
+    pub(crate) help: String,
 }

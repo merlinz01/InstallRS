@@ -202,7 +202,7 @@ installer option by key:
 Widgets pre-fill from the options store on entry and write back on
 forward navigation — so `--username=alice` on the command line pre-fills
 the field (as long as you registered the option via
-`i.option("username", OptionKind::String)` before `process_commandline`).
+`i.option("username", OptionKind::String, "")` before `process_commandline`).
 Validation lives in `on_before_leave`: return `Ok(false)` to keep the
 user on the page.
 

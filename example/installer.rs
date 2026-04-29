@@ -75,8 +75,12 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // (handy for CI / unattended installs); `--install-dir` overrides the
     // default install location. `--log <path>` is built-in — no need to
     // register it. All work in GUI and headless modes.
-    i.option("yes", OptionKind::Flag);
-    i.option("install-dir", OptionKind::String);
+    i.option("yes", OptionKind::Flag, "Skip confirmation prompts");
+    i.option(
+        "install-dir",
+        OptionKind::String,
+        "Override the install location",
+    );
 
     // Parse CLI (--headless, --list-components, --components, --log, etc.).
     i.process_commandline()?;
@@ -370,7 +374,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 
     init_locale();
 
-    i.option("yes", OptionKind::Flag);
+    i.option("yes", OptionKind::Flag, "Skip confirmation prompts");
     i.process_commandline()?;
 
     #[cfg(not(windows))]

@@ -75,15 +75,29 @@ use crate::Installer;
 
 /// Builder for a wizard-style installer GUI.
 ///
+/// Wizard-level methods ([`title`](Self::title), [`buttons`](Self::buttons),
+/// [`on_start`](Self::on_start), [`on_exit`](Self::on_exit)) take `&mut self`
+/// and return `&mut Self`, so they chain freely. Page-adding methods
+/// ([`welcome`](Self::welcome), [`license`](Self::license),
+/// [`custom_page`](Self::custom_page), etc.) instead return a
+/// [`PageHandle`] scoped to the page just added — chain
+/// [`on_enter`](PageHandle::on_enter),
+/// [`on_before_leave`](PageHandle::on_before_leave), and
+/// [`skip_if`](PageHandle::skip_if) on that handle, then drop it and add
+/// the next page on a fresh statement.
+///
 /// # Example
 ///
 /// ```rust,ignore
 /// use installrs::gui::*;
 ///
 /// let mut w = InstallerGui::wizard();
-/// w.title("My App Installer");
+/// w.title("My App Installer")
+///     .on_start(|i| { /* ... */ Ok(()) })
+///     .on_exit(|i| { /* ... */ Ok(()) });
 /// w.welcome("Welcome!", "Click Next to continue.");
-/// w.license(include_str!("../LICENSE"));
+/// w.license("License", include_str!("../LICENSE"), "I accept")
+///     .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false));
 /// w.directory_picker("Install Location", "Install to:", "install-dir");
 /// w.install_page(|i| {
 ///     i.set_status("Installing...");

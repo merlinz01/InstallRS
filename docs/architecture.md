@@ -112,7 +112,7 @@ Behind `gui` (implies exactly one platform backend — `gui-win32` or
 `gui-gtk`). The backend is picked at compile time by cfg:
 
 - **`mod.rs`** — `InstallerGui` wizard builder, page methods,
-  `on_start` / `on_exit` callbacks, `error_page(title, message)`,
+  `error_page(title, message)`,
   `install_page` vs `uninstall_page` distinction, `run_headless` path
   that extracts the install callback and invokes it inline on stderr.
   Reads `installer.cancellation_flag()` _before_ the `std::mem::replace`

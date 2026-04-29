@@ -65,8 +65,8 @@ w.error_page(
 w.run(i)?;
 ```
 
-Wizard-level methods (`buttons`, `on_start`, `on_exit`) are
-statement-style — call them on their own line. Page-adding methods
+Wizard-level methods (`buttons`) are statement-style — call them on
+their own line. Page-adding methods
 (`welcome`, `license`, `custom_page`, …) return a `PageHandle` that
 scopes the page-specific callbacks `on_enter`, `on_before_leave`, and
 `skip_if` — so those attach to the page you just added without any
@@ -75,7 +75,6 @@ conditional / looped configuration drops in cleanly:
 
 ```rust
 let mut w = InstallerGui::wizard("My App");
-w.on_start(|i| { /* ... */ Ok(()) });
 w.welcome("Welcome!", "...");
 if include_license {
     w.license("License", LICENSE, "I accept");
@@ -224,8 +223,8 @@ w.finish_page("Done!", "Click Finish to exit.")
     });
 ```
 
-Read the values from `on_exit` (or any later callback) the same way
-custom-page values are read — `installer.get_option::<bool>("launch")`.
+Read the values after `w.run(i)` returns the same way custom-page
+values are read — `installer.get_option::<bool>("launch")`.
 
 ## Native dialogs
 
@@ -272,34 +271,26 @@ entirely — running the `install_page` callback inline on the current
 thread. Status and log messages stream to stderr instead of an in-window
 log.
 
-The same wizard definition serves both modes. Use `.on_start(...)` and
-`.on_exit(...)` for setup and cleanup that must happen either way:
+The same wizard definition serves both modes. For setup and cleanup
+that must happen either way, just run code before and after `w.run(i)`:
 
 ```rust
 let mut w = InstallerGui::wizard("My App Installer");
-w.on_start(|i| {
-    if i.headless {
-        eprintln!("Running headless install...");
-    }
-    Ok(())
-});
-w.on_exit(|i| {
-    if i.headless {
-        eprintln!("Done.");
-    }
-    Ok(())
-});
 // ... pages ...
 w.install_page(|i| {
     // runs in both modes
     Ok(())
 });
-w.run(i)?;
-```
 
-`on_start` runs before the window opens (or before the install callback
-in headless mode). `on_exit` runs after the window closes (or after
-install in headless mode) — **even if the install failed**.
+if i.headless {
+    eprintln!("Running headless install...");
+}
+let result = w.run(i);
+if i.headless {
+    eprintln!("Done.");
+}
+result?;
+```
 
 ## See also
 

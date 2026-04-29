@@ -63,9 +63,8 @@ pub fn __set_window_icon_png(bytes: &'static [u8]) {
     }
 }
 pub use types::{
-    ButtonLabels, ConfiguredPage, CustomPageBuilder, CustomWidget, ExitCallback, GuiMessage,
-    InstallCallback, OnBeforeLeaveCallback, OnEnterCallback, StartCallback, WizardConfig,
-    WizardPage,
+    ButtonLabels, ConfiguredPage, CustomPageBuilder, CustomWidget, GuiMessage, InstallCallback,
+    OnBeforeLeaveCallback, OnEnterCallback, WizardConfig, WizardPage,
 };
 
 use anyhow::Result;
@@ -89,8 +88,6 @@ use crate::Installer;
 /// use installrs::gui::*;
 ///
 /// let mut w = InstallerGui::wizard("My App Installer");
-/// w.on_start(|i| { /* ... */ Ok(()) });
-/// w.on_exit(|i| { /* ... */ Ok(()) });
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license("License", include_str!("../LICENSE"), "I accept")
 ///     .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false));
@@ -118,27 +115,8 @@ impl InstallerGui {
                 title: title.as_ref().to_string(),
                 pages: Vec::new(),
                 buttons: ButtonLabels::default(),
-                on_start: None,
-                on_exit: None,
             },
         }
-    }
-
-    /// Set a callback that runs at wizard startup, before the window is
-    /// shown (or before the install callback fires in headless mode).
-    ///
-    /// Inspect `installer.headless` inside the callback to branch on mode.
-    /// Useful for work that must happen regardless of UI — environment
-    /// setup, argument validation, prerequisite checks.
-    pub fn on_start(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) {
-        self.config.on_start = Some(Box::new(f));
-    }
-
-    /// Set a callback that runs at wizard exit, after the window closes (or
-    /// after the install callback completes in headless mode). Runs even
-    /// when the install flow fails.
-    pub fn on_exit(&mut self, f: impl FnOnce(&mut Installer) -> Result<()> + 'static) {
-        self.config.on_exit = Some(Box::new(f));
     }
 
     /// Override the navigation button labels (e.g. for translation).
@@ -354,10 +332,7 @@ impl InstallerGui {
     ///
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.
     /// Falls back to an error on unsupported platforms.
-    pub fn run(mut self, installer: &mut Installer) -> Result<()> {
-        let on_start = self.config.on_start.take();
-        let on_exit = self.config.on_exit.take();
-
+    pub fn run(self, installer: &mut Installer) -> Result<()> {
         // Auto-register any directory_picker option keys not already
         // registered, so the picker's read/write via set_option works
         // without forcing the user to call `i.option(key, ...)`. Users
@@ -371,23 +346,11 @@ impl InstallerGui {
             }
         }
 
-        if let Some(cb) = on_start {
-            cb(installer)?;
-        }
-
-        let result = if installer.headless {
+        if installer.headless {
             self.run_headless(installer)
         } else {
             self.run_platform(installer)
-        };
-
-        if let Some(cb) = on_exit {
-            if let Err(e) = cb(installer) {
-                eprintln!("on_exit error: {e:#}");
-            }
         }
-
-        result
     }
 
     /// Headless runner: pulls the install callback out of the pages and
@@ -423,8 +386,7 @@ impl InstallerGui {
         }
 
         // Detach the progress sink so its Drop runs now (the StderrProgressSink
-        // finalizes its in-place progress line with a trailing newline) before
-        // any subsequent `on_exit` stderr output prints.
+        // finalizes its in-place progress line with a trailing newline).
         installer.clear_progress_sink();
 
         result

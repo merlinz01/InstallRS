@@ -60,8 +60,6 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
         title: config.title,
         pages: pages_without_callback,
         buttons: config.buttons,
-        on_start: None,
-        on_exit: None,
     };
 
     // Build and run the wizard window.

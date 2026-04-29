@@ -12,6 +12,11 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `InstallerGui::on_start` / `on_exit` callbacks. Run
+  setup and cleanup code directly before and after `w.run(i)` instead.
+
 ## [0.1.0-rc10] — 2026-04-29
 
 ### Changed

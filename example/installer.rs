@@ -99,40 +99,6 @@ pub fn install(i: &mut Installer) -> Result<()> {
         finish: t!("wizard.finish").into(),
         cancel: t!("wizard.cancel").into(),
     });
-    w.on_start(|i| {
-        let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
-        if i.headless && !auto_yes {
-            eprintln!("Running headless install of {}", t!("installer.title"));
-            eprint!("Proceed? [y/N] ");
-            std::io::Write::flush(&mut std::io::stderr()).ok();
-            let mut answer = String::new();
-            std::io::stdin()
-                .read_line(&mut answer)
-                .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
-            if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
-                return Err(anyhow::anyhow!("install cancelled by user"));
-            }
-        } else if i.headless && auto_yes {
-            eprintln!(
-                "Running headless install of {} (auto-confirmed)",
-                t!("installer.title")
-            );
-        }
-        Ok(())
-    });
-    w.on_exit(|i| {
-        if i.headless {
-            eprintln!("Headless install complete.");
-        }
-        if i.get_option::<bool>("launch_app").unwrap_or(false) {
-            #[cfg(windows)]
-            let cmd = "notepad.exe";
-            #[cfg(not(windows))]
-            let cmd = "xed";
-            let _ = std::process::Command::new(cmd).spawn();
-        }
-        Ok(())
-    });
     w.welcome(
         &t!("installer.welcome.title"),
         &t!("installer.welcome.message"),
@@ -373,9 +339,40 @@ pub fn install(i: &mut Installer) -> Result<()> {
         p.checkbox("launch_app", &t!("installer.finish.launch_app"), true);
     });
     w.error_page(&t!("installer.error.title"), &t!("installer.error.message"));
-    w.run(i)?;
 
-    Ok(())
+    let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+    if i.headless && !auto_yes {
+        eprintln!("Running headless install of {}", t!("installer.title"));
+        eprint!("Proceed? [y/N] ");
+        std::io::Write::flush(&mut std::io::stderr()).ok();
+        let mut answer = String::new();
+        std::io::stdin()
+            .read_line(&mut answer)
+            .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
+        if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+            return Err(anyhow::anyhow!("install cancelled by user"));
+        }
+    } else if i.headless && auto_yes {
+        eprintln!(
+            "Running headless install of {} (auto-confirmed)",
+            t!("installer.title")
+        );
+    }
+
+    let result = w.run(i);
+
+    if i.headless {
+        eprintln!("Headless install complete.");
+    }
+    if i.get_option::<bool>("launch_app").unwrap_or(false) {
+        #[cfg(windows)]
+        let cmd = "notepad.exe";
+        #[cfg(not(windows))]
+        let cmd = "xed";
+        let _ = std::process::Command::new(cmd).spawn();
+    }
+
+    result
 }
 
 pub fn uninstall(i: &mut Installer) -> Result<()> {
@@ -406,21 +403,18 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         finish: t!("wizard.finish").into(),
         cancel: t!("wizard.cancel").into(),
     });
-    w.on_start(|i| {
-        let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
-        if i.headless && !auto_yes {
-            eprint!("Really uninstall? [y/N] ");
-            std::io::Write::flush(&mut std::io::stderr()).ok();
-            let mut answer = String::new();
-            std::io::stdin()
-                .read_line(&mut answer)
-                .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
-            if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
-                return Err(anyhow::anyhow!("uninstall cancelled by user"));
-            }
+    let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+    if i.headless && !auto_yes {
+        eprint!("Really uninstall? [y/N] ");
+        std::io::Write::flush(&mut std::io::stderr()).ok();
+        let mut answer = String::new();
+        std::io::stdin()
+            .read_line(&mut answer)
+            .map_err(|e| anyhow::anyhow!("failed to read stdin: {e}"))?;
+        if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+            return Err(anyhow::anyhow!("uninstall cancelled by user"));
         }
-        Ok(())
-    });
+    }
     w.welcome(
         &t!("uninstaller.welcome.title"),
         &t!("uninstaller.welcome.message"),

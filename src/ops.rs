@@ -17,12 +17,12 @@ use crate::{Installer, Source};
 macro_rules! impl_common_op_setters {
     ($ty:ident) => {
         impl<'i> $ty<'i> {
-            pub fn status(mut self, s: impl Into<String>) -> Self {
-                self.status = Some(s.into());
+            pub fn status(mut self, s: impl AsRef<str>) -> Self {
+                self.status = Some(s.as_ref().to_string());
                 self
             }
-            pub fn log(mut self, s: impl Into<String>) -> Self {
-                self.log = Some(s.into());
+            pub fn log(mut self, s: impl AsRef<str>) -> Self {
+                self.log = Some(s.as_ref().to_string());
                 self
             }
             /// Step weight this op consumes from the component budget. Default 1.

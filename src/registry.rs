@@ -50,15 +50,15 @@ impl<'i> Registry<'i> {
     pub fn set<V: winreg::types::ToRegValue>(
         self,
         hive: RegistryHive,
-        subkey: impl Into<String>,
-        name: impl Into<String>,
+        subkey: impl AsRef<str>,
+        name: impl AsRef<str>,
         value: V,
     ) -> RegSetOp<'i> {
         RegSetOp {
             installer: self.installer,
             hive,
-            subkey: subkey.into(),
-            name: name.into(),
+            subkey: subkey.as_ref().to_string(),
+            name: name.as_ref().to_string(),
             value: value.to_reg_value(),
             weight: 1,
             status: None,
@@ -71,7 +71,7 @@ impl<'i> Registry<'i> {
     pub fn default<V: winreg::types::ToRegValue>(
         self,
         hive: RegistryHive,
-        subkey: impl Into<String>,
+        subkey: impl AsRef<str>,
         value: V,
     ) -> RegSetOp<'i> {
         self.set(hive, subkey, "", value)
@@ -96,11 +96,11 @@ impl<'i> Registry<'i> {
     /// Delete a subkey. Non-recursive by default (fails if the key has
     /// children); call `.recursive()` to delete children too. Missing
     /// keys are treated as success.
-    pub fn remove(self, hive: RegistryHive, subkey: impl Into<String>) -> RegRemoveKeyOp<'i> {
+    pub fn remove(self, hive: RegistryHive, subkey: impl AsRef<str>) -> RegRemoveKeyOp<'i> {
         RegRemoveKeyOp {
             installer: self.installer,
             hive,
-            subkey: subkey.into(),
+            subkey: subkey.as_ref().to_string(),
             recursive: false,
             weight: 1,
             status: None,
@@ -113,14 +113,14 @@ impl<'i> Registry<'i> {
     pub fn delete(
         self,
         hive: RegistryHive,
-        subkey: impl Into<String>,
-        name: impl Into<String>,
+        subkey: impl AsRef<str>,
+        name: impl AsRef<str>,
     ) -> RegDeleteValueOp<'i> {
         RegDeleteValueOp {
             installer: self.installer,
             hive,
-            subkey: subkey.into(),
-            name: name.into(),
+            subkey: subkey.as_ref().to_string(),
+            name: name.as_ref().to_string(),
             weight: 1,
             status: None,
             log: None,

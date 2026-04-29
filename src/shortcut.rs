@@ -24,25 +24,25 @@ impl_common_op_setters!(ShortcutOp);
 
 impl<'i> ShortcutOp<'i> {
     /// Command-line arguments passed to the target when the shortcut runs.
-    pub fn arguments(mut self, s: impl Into<String>) -> Self {
-        self.arguments = Some(s.into());
+    pub fn arguments(mut self, s: impl AsRef<str>) -> Self {
+        self.arguments = Some(s.as_ref().to_string());
         self
     }
     /// Working directory the target launches in. Resolved against
     /// `out_dir` when relative.
-    pub fn working_dir(mut self, s: impl Into<String>) -> Self {
-        self.working_dir = Some(s.into());
+    pub fn working_dir(mut self, s: impl AsRef<str>) -> Self {
+        self.working_dir = Some(s.as_ref().to_string());
         self
     }
     /// Tooltip / comment shown by Explorer.
-    pub fn description(mut self, s: impl Into<String>) -> Self {
-        self.description = Some(s.into());
+    pub fn description(mut self, s: impl AsRef<str>) -> Self {
+        self.description = Some(s.as_ref().to_string());
         self
     }
     /// Icon path (resolved against `out_dir` when relative) and resource
     /// index within it. Use index `0` for single-icon files.
-    pub fn icon(mut self, path: impl Into<String>, index: i32) -> Self {
-        self.icon = Some((path.into(), index));
+    pub fn icon(mut self, path: impl AsRef<str>, index: i32) -> Self {
+        self.icon = Some((path.as_ref().to_string(), index));
         self
     }
     pub fn install(self) -> Result<()> {

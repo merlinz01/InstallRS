@@ -303,14 +303,14 @@ impl Installer {
     /// the existing component in place.
     pub fn component(
         &mut self,
-        id: impl Into<String>,
-        label: impl Into<String>,
-        description: impl Into<String>,
+        id: impl AsRef<str>,
+        label: impl AsRef<str>,
+        description: impl AsRef<str>,
         progress_weight: u32,
     ) -> &mut Component {
-        let id = id.into();
-        let label = label.into();
-        let description = description.into();
+        let id = id.as_ref().to_string();
+        let label = label.as_ref().to_string();
+        let description = description.as_ref().to_string();
         if let Some(pos) = self.components.iter().position(|c| c.id == id) {
             let existing = &mut self.components[pos];
             existing.label = label;
@@ -474,11 +474,11 @@ impl Installer {
     ///     .status("Installing app.exe")
     ///     .install()?;
     /// ```
-    pub fn file<'i>(&'i mut self, source: Source, dst: impl Into<String>) -> FileOp<'i> {
+    pub fn file<'i>(&'i mut self, source: Source, dst: impl AsRef<str>) -> FileOp<'i> {
         FileOp {
             installer: self,
             source,
-            dst: dst.into(),
+            dst: dst.as_ref().to_string(),
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
@@ -488,11 +488,11 @@ impl Installer {
     }
 
     /// Install an embedded directory tree.
-    pub fn dir<'i>(&'i mut self, source: Source, dst: impl Into<String>) -> DirOp<'i> {
+    pub fn dir<'i>(&'i mut self, source: Source, dst: impl AsRef<str>) -> DirOp<'i> {
         DirOp {
             installer: self,
             source,
-            dst: dst.into(),
+            dst: dst.as_ref().to_string(),
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
@@ -504,10 +504,10 @@ impl Installer {
     }
 
     /// Write the embedded uninstaller executable.
-    pub fn uninstaller<'i>(&'i mut self, dst: impl Into<String>) -> UninstallerOp<'i> {
+    pub fn uninstaller<'i>(&'i mut self, dst: impl AsRef<str>) -> UninstallerOp<'i> {
         UninstallerOp {
             installer: self,
-            dst: dst.into(),
+            dst: dst.as_ref().to_string(),
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
@@ -516,10 +516,10 @@ impl Installer {
     }
 
     /// Create a directory (and its parents) on the target system.
-    pub fn mkdir<'i>(&'i mut self, dst: impl Into<String>) -> MkdirOp<'i> {
+    pub fn mkdir<'i>(&'i mut self, dst: impl AsRef<str>) -> MkdirOp<'i> {
         MkdirOp {
             installer: self,
-            dst: dst.into(),
+            dst: dst.as_ref().to_string(),
             weight: 1,
             status: None,
             log: None,
@@ -527,10 +527,10 @@ impl Installer {
     }
 
     /// Remove a file or directory from the target system.
-    pub fn remove<'i>(&'i mut self, path: impl Into<String>) -> RemoveOp<'i> {
+    pub fn remove<'i>(&'i mut self, path: impl AsRef<str>) -> RemoveOp<'i> {
         RemoveOp {
             installer: self,
-            path: path.into(),
+            path: path.as_ref().to_string(),
             weight: 1,
             status: None,
             log: None,
@@ -548,13 +548,13 @@ impl Installer {
     #[cfg(target_os = "windows")]
     pub fn shortcut<'i>(
         &'i mut self,
-        dst: impl Into<String>,
-        target: impl Into<String>,
+        dst: impl AsRef<str>,
+        target: impl AsRef<str>,
     ) -> ShortcutOp<'i> {
         ShortcutOp {
             installer: self,
-            dst: dst.into(),
-            target: target.into(),
+            dst: dst.as_ref().to_string(),
+            target: target.as_ref().to_string(),
             arguments: None,
             working_dir: None,
             description: None,

@@ -12,6 +12,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+## [0.1.0-rc10] — 2026-04-29
+
 ### Changed
 
 - String-taking setters now accept `impl AsRef<str>`, so `String`,
@@ -34,6 +36,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - `PageHandle::with_widgets(|p| ...)` adds a column of input widgets
   (text, checkbox, dropdown, etc.) below welcome and finish pages.
   Widgets bind to installer options the same way as `custom_page`.
+- Internal refactors
 
 ## [0.1.0-rc9] — 2026-04-23
 
@@ -96,7 +99,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Generated `build.rs` no longer warns `unused_mut` on `res` when no
   resource keys are set.
 
-[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc9...HEAD
+[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc10...HEAD
+[0.1.0-rc10]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc9...v0.1.0-rc10
 [0.1.0-rc9]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc8...v0.1.0-rc9
 [0.1.0-rc8]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc7...v0.1.0-rc8
 [0.1.0-rc7]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc6...v0.1.0-rc7

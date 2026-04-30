@@ -14,8 +14,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
-- LZMA backend swapped from `lzma-rs` to `xz2` (liblzma) at preset 9
-  EXTREME, yielding much smaller installers. Now pulls in a C dependency.
+- LZMA backend swapped from `lzma-rs` to `lzma-rust2` (pure-Rust, with
+  the `optimization` feature) at preset 9, yielding much smaller
+  installers. Output format is now `.xz`.
 
 ### Fixed
 

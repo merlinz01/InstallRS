@@ -611,7 +611,7 @@ gui = true
     fn compress_lzma_roundtrip() {
         let compressed = compress::compress(SAMPLE, "lzma").unwrap();
         let mut out = Vec::new();
-        xz2::read::XzDecoder::new(compressed.as_slice())
+        lzma_rust2::XzReader::new(compressed.as_slice(), false)
             .read_to_end(&mut out)
             .unwrap();
         assert_eq!(out, SAMPLE);

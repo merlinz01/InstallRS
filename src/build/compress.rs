@@ -7,12 +7,10 @@ pub fn compress(data: &[u8], method: &str) -> Result<Vec<u8>> {
         "none" | "" => Ok(data.to_vec()),
         #[cfg(feature = "lzma")]
         "lzma" => {
-            // Preset 9 + EXTREME flag (the high bit, per liblzma's
-            // `LZMA_PRESET_EXTREME` constant): strongest setting.
-            let preset = 9 | 0x8000_0000_u32;
-            let stream = xz2::stream::Stream::new_easy_encoder(preset, xz2::stream::Check::Crc64)
+            // Preset 9 — `lzma-rust2`'s strongest setting.
+            let options = lzma_rust2::XzOptions::with_preset(9);
+            let mut encoder = lzma_rust2::XzWriter::new(Vec::new(), options)
                 .context("LZMA encoder init failed")?;
-            let mut encoder = xz2::write::XzEncoder::new_stream(Vec::new(), stream);
             encoder.write_all(data).context("LZMA write failed")?;
             encoder.finish().context("LZMA finish failed")
         }
@@ -40,7 +38,7 @@ pub fn decompress(data: &[u8], method: &str) -> Result<Vec<u8>> {
         #[cfg(feature = "lzma")]
         "lzma" => {
             let mut out = Vec::new();
-            xz2::read::XzDecoder::new(data)
+            lzma_rust2::XzReader::new(data, false)
                 .read_to_end(&mut out)
                 .context("LZMA decompression failed")?;
             Ok(out)

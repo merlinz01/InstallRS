@@ -430,7 +430,7 @@ impl Installer {
             #[cfg(feature = "lzma")]
             "lzma" => {
                 let mut out = Vec::new();
-                xz2::read::XzDecoder::new(data)
+                lzma_rust2::XzReader::new(data, false)
                     .read_to_end(&mut out)
                     .context("LZMA decompression failed")?;
                 Ok(out)
@@ -741,10 +741,8 @@ mod tests {
 
     fn compress_lzma(data: &[u8]) -> Vec<u8> {
         use std::io::Write;
-        let preset = 9 | 0x8000_0000_u32;
-        let stream =
-            xz2::stream::Stream::new_easy_encoder(preset, xz2::stream::Check::Crc64).unwrap();
-        let mut enc = xz2::write::XzEncoder::new_stream(Vec::new(), stream);
+        let options = lzma_rust2::XzOptions::with_preset(9);
+        let mut enc = lzma_rust2::XzWriter::new(Vec::new(), options).unwrap();
         enc.write_all(data).unwrap();
         enc.finish().unwrap()
     }

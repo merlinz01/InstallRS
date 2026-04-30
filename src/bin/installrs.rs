@@ -321,10 +321,7 @@ file-version = "1.0.0.0"
             pack_version_u64("1.2.3-rc4"),
             (1u64 << 48) | (2u64 << 32) | (3u64 << 16)
         );
-        assert_eq!(
-            pack_version_u64("0.1.0-rc12+sha.abc"),
-            (0u64 << 48) | (1u64 << 32)
-        );
+        assert_eq!(pack_version_u64("0.1.0-rc12+sha.abc"), 1u64 << 32);
         // Non-numeric segments → 0; leading digits within a segment are kept.
         assert_eq!(pack_version_u64("1.beta.3"), (1u64 << 48) | (3u64 << 16));
         assert_eq!(pack_version_u64(""), 0);

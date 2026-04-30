@@ -199,6 +199,14 @@ fn choose_language_gtk(
 
     content.show_all();
 
+    // Focus the OK button so Enter immediately accepts the default
+    // selection. set_default_response alone makes Enter activate OK,
+    // but only when focus is not on a widget that consumes Return
+    // itself (the combo's popup, etc.) — explicit grab is safer.
+    if let Some(ok_btn) = dialog.widget_for_response(gtk::ResponseType::Ok) {
+        ok_btn.grab_focus();
+    }
+
     let response = dialog.run();
     let selected = if response == gtk::ResponseType::Ok {
         combo.active_id().map(|s| s.to_string())
@@ -296,8 +304,14 @@ fn choose_language_win32(
 
     {
         let combo_c = combo.clone();
+        let btn_ok_c = btn_ok.clone();
         wnd.on().wm_create(move |_| {
             combo_c.items().select(Some(default_idx as u32));
+            // Focus the OK button so Enter immediately accepts the
+            // default selection. WindowMain doesn't auto-route Enter to
+            // BS_DEFPUSHBUTTON the way a true dialog would; this is the
+            // explicit equivalent.
+            let _ = btn_ok_c.hwnd().SetFocus();
             Ok(0)
         });
     }

@@ -308,6 +308,13 @@ impl LicensePage {
         self.accept_check.is_checked()
     }
 
+    /// Place keyboard focus on the accept checkbox so the user can toggle
+    /// it with Space without first clicking. Used as the License page's
+    /// default focus instead of the wizard's Next button.
+    pub fn focus_accept(&self) {
+        let _ = self.accept_check.hwnd().SetFocus();
+    }
+
     /// Register a callback to run whenever the acceptance checkbox is clicked.
     pub fn on_accept_changed<F>(&self, f: F)
     where

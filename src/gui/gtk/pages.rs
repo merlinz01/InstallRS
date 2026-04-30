@@ -139,6 +139,13 @@ impl LicensePage {
     {
         self.accept_check.connect_toggled(move |_| f());
     }
+
+    /// Place keyboard focus on the accept checkbox so the user can toggle
+    /// it with Space without first clicking. Used as the License page's
+    /// default focus instead of the wizard's Next button.
+    pub fn focus_accept(&self) {
+        self.accept_check.grab_focus();
+    }
 }
 
 // ── Directory Picker Page ───────────────────────────────────────────────────

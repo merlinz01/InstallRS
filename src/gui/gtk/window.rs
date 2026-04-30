@@ -46,6 +46,20 @@ fn next_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Opti
     None
 }
 
+/// Place the keyboard focus where the user most likely wants it on the
+/// given page so Enter advances the wizard. License pages focus the
+/// accept checkbox (Space toggles acceptance, Enter on a disabled Next
+/// would do nothing). Every other page focuses Next, so users can step
+/// through the wizard with repeated Enter presses.
+fn set_page_default_focus(page: &Page, btn_next: &gtk::Button) {
+    use gtk::prelude::WidgetExt;
+    if let PageKind::License(ref lp) = page.kind {
+        lp.focus_accept();
+    } else {
+        btn_next.grab_focus();
+    }
+}
+
 /// Find the previous visible page strictly before `from`. Returns None
 /// when every earlier page is hidden or `from` is already at the start.
 fn prev_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Option<usize> {
@@ -341,6 +355,7 @@ pub fn run(
         let stack_c = stack.clone();
         let installer_back = installer.clone();
 
+        let btn_next_focus = btn_next.clone();
         btn_back.connect_clicked(move |_| {
             let idx = *current_c.borrow();
             if idx == 0 {
@@ -361,6 +376,7 @@ pub fn run(
             drop(pages_b);
             *current_c.borrow_mut() = new_idx;
             update();
+            set_page_default_focus(&pages_c.borrow()[new_idx], &btn_next_focus);
         });
     }
 
@@ -373,6 +389,7 @@ pub fn run(
         let window_c = window.clone();
         let stack_c = stack.clone();
         let installer_c = installer.clone();
+        let btn_next_focus = btn_next.clone();
 
         btn_next.connect_clicked(move |_| {
             let idx = *current_c.borrow();
@@ -439,6 +456,7 @@ pub fn run(
                 stack_c.set_visible_child(&pages_c.borrow()[new_idx].widget);
                 *current_c.borrow_mut() = new_idx;
                 update();
+                set_page_default_focus(&pages_c.borrow()[new_idx], &btn_next_focus);
 
                 {
                     let pages_b = pages_c.borrow();
@@ -488,6 +506,7 @@ pub fn run(
         let update = update_buttons.clone();
         let stack_c = stack.clone();
         let installer_timer = installer.clone();
+        let btn_next_focus = btn_next.clone();
 
         glib::timeout_add_local(Duration::from_millis(50), move || {
             loop {
@@ -581,6 +600,12 @@ pub fn run(
                         }
 
                         update();
+
+                        // Refocus *after* update() flips btn_next sensitivity
+                        // for the new page; grabbing focus on an insensitive
+                        // button silently fails.
+                        let cur = *current_c.borrow();
+                        set_page_default_focus(&pages_c.borrow()[cur], &btn_next_focus);
                     }
                     Err(mpsc::TryRecvError::Empty) => break,
                     Err(mpsc::TryRecvError::Disconnected) => break,
@@ -592,7 +617,10 @@ pub fn run(
 
     // Initial state + on_enter for the first page + auto-start if install.
     update_buttons();
-    btn_next.grab_focus();
+    {
+        let idx = *current_page.borrow();
+        set_page_default_focus(&pages.borrow()[idx], &btn_next);
+    }
     {
         let idx = *current_page.borrow();
         let is_install = {

@@ -19,6 +19,11 @@ breaking changes; patch bumps (`0.x.y`) will not.
   `--feature <name>`, so one crate can produce multiple installers
   that differ in product name, icon, version info, GUI mode, etc.
 
+### Fixed
+
+- Focus is set to the Next button on navigation so users can just hit Enter to proceed,
+  except for the license page where the focus starts on the checkbox.
+
 ### Removed
 
 - **Breaking:** `InstallerGui::on_start` / `on_exit` callbacks. Run

@@ -51,6 +51,19 @@ fn prev_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Opti
     }
 }
 
+/// Place the keyboard focus where the user most likely wants it on the
+/// given page so Enter advances the wizard. License pages focus the
+/// accept checkbox (Enter would otherwise activate a disabled Next, and
+/// Space toggles acceptance). Every other page focuses Next, so users
+/// can step through the wizard with repeated Enter presses.
+fn set_page_default_focus(page: &Page, btn_next: &gui::Button) {
+    if let PageKind::License(ref lp) = page.kind {
+        lp.focus_accept();
+    } else {
+        let _ = btn_next.hwnd().SetFocus();
+    }
+}
+
 /// Page wrapper that holds the panel, its kind, and navigation callbacks.
 struct Page {
     panel: gui::WindowControl,
@@ -419,6 +432,7 @@ pub fn run(
             let current_c = current_page.clone();
             let update = update_buttons.clone();
             let installer_back = installer.clone();
+            let btn_next_focus = btn_next.clone();
             btn_back.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
                 if idx == 0 {
@@ -440,6 +454,8 @@ pub fn run(
                 drop(pages_guard);
                 *current_c.lock().unwrap() = new_idx;
                 update();
+                let pages_guard = pages_c.lock().unwrap();
+                set_page_default_focus(&pages_guard[new_idx], &btn_next_focus);
                 Ok(())
             });
         }
@@ -451,6 +467,7 @@ pub fn run(
             let start_install_c = start_install.clone();
             let wnd_c = wnd.clone();
             let installer_c = installer.clone();
+            let btn_next_focus = btn_next.clone();
 
             btn_next.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
@@ -525,6 +542,9 @@ pub fn run(
                     drop(pages_guard);
                     *current_c.lock().unwrap() = new_idx;
                     update();
+                    let pages_guard = pages_c.lock().unwrap();
+                    set_page_default_focus(&pages_guard[new_idx], &btn_next_focus);
+                    drop(pages_guard);
 
                     // on_enter of the new page.
                     {
@@ -616,6 +636,7 @@ pub fn run(
             let install_result_timer = install_result.clone();
             let update_timer = update_buttons.clone();
             let installer_timer = installer.clone();
+            let btn_next_focus = btn_next.clone();
 
             wnd.on().wm_timer(TIMER_ID, move || {
                 // Drain all pending messages.
@@ -723,6 +744,13 @@ pub fn run(
                             }
 
                             update_timer();
+
+                            // Refocus *after* update_timer enables / re-labels
+                            // btn_next on the new page; SetFocus on a disabled
+                            // button is a silent no-op, so the order matters.
+                            let pages_guard = pages_timer.lock().unwrap();
+                            let cur = *current_timer.lock().unwrap();
+                            set_page_default_focus(&pages_guard[cur], &btn_next_focus);
                         }
                         Err(mpsc::TryRecvError::Empty) => break,
                         Err(mpsc::TryRecvError::Disconnected) => break,
@@ -744,10 +772,9 @@ pub fn run(
             wnd.on().wm_show_window(move |_| {
                 update();
                 if !focus_set.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    let _ = btn_next_c.hwnd().SetFocus();
-
                     let pages_guard = pages_c.lock().unwrap();
                     let idx = *current_c.lock().unwrap();
+                    set_page_default_focus(&pages_guard[idx], &btn_next_c);
                     let is_install = matches!(&pages_guard[idx].kind, PageKind::Install(_));
 
                     // on_enter of the initial page.

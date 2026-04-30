@@ -352,12 +352,11 @@ pub struct InstallPage {
     widget: gtk::Box,
     status_label: gtk::Label,
     progress_bar: gtk::ProgressBar,
-    log_buffer: gtk::TextBuffer,
-    log_view: gtk::TextView,
+    log: Option<(gtk::TextBuffer, gtk::TextView)>,
 }
 
 impl InstallPage {
-    pub fn new() -> Self {
+    pub fn new(show_log: bool) -> Self {
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
         set_page_margins(&vbox);
 
@@ -369,25 +368,29 @@ impl InstallPage {
         let progress_bar = gtk::ProgressBar::new();
         vbox.pack_start(&progress_bar, false, false, 0);
 
-        let scrolled = gtk::ScrolledWindow::builder()
-            .vexpand(true)
-            .hexpand(true)
-            .shadow_type(gtk::ShadowType::In)
-            .build();
-        let log_view = gtk::TextView::new();
-        log_view.set_editable(false);
-        log_view.set_cursor_visible(false);
-        log_view.set_wrap_mode(gtk::WrapMode::WordChar);
-        let log_buffer = log_view.buffer().expect("TextView has no buffer");
-        scrolled.add(&log_view);
-        vbox.pack_start(&scrolled, true, true, 0);
+        let log = if show_log {
+            let scrolled = gtk::ScrolledWindow::builder()
+                .vexpand(true)
+                .hexpand(true)
+                .shadow_type(gtk::ShadowType::In)
+                .build();
+            let log_view = gtk::TextView::new();
+            log_view.set_editable(false);
+            log_view.set_cursor_visible(false);
+            log_view.set_wrap_mode(gtk::WrapMode::WordChar);
+            let log_buffer = log_view.buffer().expect("TextView has no buffer");
+            scrolled.add(&log_view);
+            vbox.pack_start(&scrolled, true, true, 0);
+            Some((log_buffer, log_view))
+        } else {
+            None
+        };
 
         Self {
             widget: vbox,
             status_label,
             progress_bar,
-            log_buffer,
-            log_view,
+            log,
         }
     }
 
@@ -404,19 +407,19 @@ impl InstallPage {
     }
 
     pub fn append_log(&self, message: &str) {
-        let mut end = self.log_buffer.end_iter();
-        let text = if self.log_buffer.char_count() == 0 {
+        let Some((log_buffer, log_view)) = self.log.as_ref() else {
+            return;
+        };
+        let mut end = log_buffer.end_iter();
+        let text = if log_buffer.char_count() == 0 {
             message.to_string()
         } else {
             format!("\n{message}")
         };
-        self.log_buffer.insert(&mut end, &text);
-        if let Some(end_mark) =
-            self.log_buffer
-                .create_mark(None, &self.log_buffer.end_iter(), false)
-        {
-            self.log_view.scroll_to_mark(&end_mark, 0.0, true, 0.0, 1.0);
-            self.log_buffer.delete_mark(&end_mark);
+        log_buffer.insert(&mut end, &text);
+        if let Some(end_mark) = log_buffer.create_mark(None, &log_buffer.end_iter(), false) {
+            log_view.scroll_to_mark(&end_mark, 0.0, true, 0.0, 1.0);
+            log_buffer.delete_mark(&end_mark);
         }
     }
 }

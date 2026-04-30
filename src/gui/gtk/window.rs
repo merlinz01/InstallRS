@@ -167,8 +167,8 @@ pub fn run(
                 let w = p.widget().clone();
                 (w, PageKind::DirectoryPicker(p))
             }
-            WizardPage::Install { .. } => {
-                let p = InstallPage::new();
+            WizardPage::Install { show_log, .. } => {
+                let p = InstallPage::new(show_log);
                 let w = p.widget().clone();
                 (w, PageKind::Install(p))
             }

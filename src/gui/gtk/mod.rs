@@ -73,11 +73,13 @@ pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()>
             WizardPage::Install {
                 callback,
                 is_uninstall,
+                show_log,
             } => {
                 install_callback = Some(callback);
                 WizardPage::Install {
                     callback: Box::new(|_| Ok(())),
                     is_uninstall,
+                    show_log,
                 }
             }
             other => other,

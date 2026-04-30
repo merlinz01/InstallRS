@@ -105,6 +105,10 @@ pub enum WizardPage {
         /// on it) renders `buttons.uninstall` instead of `buttons.install`.
         /// Set via [`crate::gui::InstallerGui::uninstall_page`].
         is_uninstall: bool,
+        /// When false, the rolling log textbox is omitted from the page —
+        /// only the status label and progress bar are shown. Toggle via
+        /// [`crate::gui::PageHandle::hide_log`].
+        show_log: bool,
     },
     Finish {
         title: String,

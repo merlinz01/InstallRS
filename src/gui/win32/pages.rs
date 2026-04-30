@@ -676,11 +676,11 @@ fn get_lv_check(list: &gui::ListView, index: u32) -> bool {
 pub struct InstallPage {
     status_label: gui::Label,
     progress_bar: gui::ProgressBar,
-    log_edit: gui::Edit,
+    log_edit: Option<gui::Edit>,
 }
 
 impl InstallPage {
-    pub fn new(parent: &gui::WindowControl, width: i32, height: i32) -> Self {
+    pub fn new(parent: &gui::WindowControl, width: i32, height: i32, show_log: bool) -> Self {
         let status_label = gui::Label::new(
             parent,
             gui::LabelOpts {
@@ -703,21 +703,25 @@ impl InstallPage {
             },
         );
 
-        let (lw, lh) = gui::dpi(width - 2 * PAD, height - 100 - PAD);
-        let log_edit = gui::Edit::new(
-            parent,
-            gui::EditOpts {
-                position: gui::dpi(PAD, PAD + 62),
-                width: lw,
-                height: lh,
-                control_style: co::ES::MULTILINE
-                    | co::ES::READONLY
-                    | co::ES::AUTOVSCROLL
-                    | co::ES::WANTRETURN,
-                resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
-                ..Default::default()
-            },
-        );
+        let log_edit = if show_log {
+            let (lw, lh) = gui::dpi(width - 2 * PAD, height - 100 - PAD);
+            Some(gui::Edit::new(
+                parent,
+                gui::EditOpts {
+                    position: gui::dpi(PAD, PAD + 62),
+                    width: lw,
+                    height: lh,
+                    control_style: co::ES::MULTILINE
+                        | co::ES::READONLY
+                        | co::ES::AUTOVSCROLL
+                        | co::ES::WANTRETURN,
+                    resize_behavior: (gui::Horz::Resize, gui::Vert::Resize),
+                    ..Default::default()
+                },
+            ))
+        } else {
+            None
+        };
 
         setup_transparent_labels(parent);
 
@@ -738,13 +742,16 @@ impl InstallPage {
     }
 
     pub fn append_log(&self, message: &str) {
-        let current = self.log_edit.text().unwrap_or_default();
+        let Some(edit) = self.log_edit.as_ref() else {
+            return;
+        };
+        let current = edit.text().unwrap_or_default();
         let new_text = if current.is_empty() {
             message.to_string()
         } else {
             format!("{current}\r\n{message}")
         };
-        let _ = self.log_edit.set_text(&new_text);
+        let _ = edit.set_text(&new_text);
     }
 }
 

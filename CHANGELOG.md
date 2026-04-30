@@ -12,6 +12,11 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- `PageHandle::hide_log()` on install / uninstall pages to omit the
+  rolling log textbox, leaving only the status label and progress bar.
+
 ## [0.1.0-rc11] — 2026-04-30
 
 ### Added

@@ -213,9 +213,12 @@ pub fn run(
                     content_height,
                 ))
             }
-            WizardPage::Install { .. } => {
-                PageKind::Install(InstallPage::new(&panel, content_width, content_height))
-            }
+            WizardPage::Install { show_log, .. } => PageKind::Install(InstallPage::new(
+                &panel,
+                content_width,
+                content_height,
+                show_log,
+            )),
             WizardPage::Finish {
                 title,
                 message,

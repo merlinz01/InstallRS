@@ -230,6 +230,7 @@ impl InstallerGui {
         self.push_page(WizardPage::Install {
             callback: Box::new(callback),
             is_uninstall: false,
+            show_log: true,
         })
     }
 
@@ -244,6 +245,7 @@ impl InstallerGui {
         self.push_page(WizardPage::Install {
             callback: Box::new(callback),
             is_uninstall: true,
+            show_log: true,
         })
     }
 
@@ -477,6 +479,22 @@ impl<'a> PageHandle<'a> {
     ///         p.checkbox("show_readme", "Show the README", false);
     ///     });
     /// ```
+    /// Hide the rolling log textbox on an install / uninstall page so
+    /// only the status label and progress bar are visible. Useful when
+    /// the install steps' status messages alone are sufficient feedback
+    /// and the per-line log would be noisy.
+    ///
+    /// Panics if called on a page kind other than install / uninstall.
+    pub fn hide_log(self) -> Self {
+        match &mut self.page.page {
+            WizardPage::Install { show_log, .. } => {
+                *show_log = false;
+            }
+            _ => panic!("hide_log is only supported on install / uninstall pages"),
+        }
+        self
+    }
+
     pub fn with_widgets(self, build: impl FnOnce(&mut CustomPageBuilder)) -> Self {
         let mut b = CustomPageBuilder::new();
         build(&mut b);

@@ -103,6 +103,17 @@ Behaves identically but the preceding Next button renders
 `ButtonLabels::install` — so users see "Uninstall" rather than "Install"
 on the button that kicks off the operation.
 
+### Hiding the log
+
+By default the install / uninstall page shows a rolling log textbox
+under the progress bar. Chain `.hide_log()` on the page handle to omit
+it — useful when the per-step status messages are sufficient and the
+log would just be noise:
+
+```rust
+w.install_page(|i| { /* ... */ Ok(()) }).hide_log();
+```
+
 ### Forward-only callbacks
 
 `on_enter` and `on_before_leave` fire only on forward navigation. The

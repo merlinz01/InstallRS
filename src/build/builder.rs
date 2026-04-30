@@ -145,13 +145,18 @@ impl CargoManifest {
 
     /// `[package.metadata.installrs]` with `[…feature.<name>]` overlays
     /// for each active feature merged on top, in CLI argument order
-    /// (later wins). Top-level keys are replaced wholesale, except for
+    /// (later wins), then any CLI `--metadata KEY=VALUE` overrides
+    /// applied last. Top-level keys are replaced wholesale, except for
     /// the `installer` and `uninstaller` subtables — those are merged
     /// key-by-key, so `[…feature.pro.installer]` overrides individual
     /// installer fields without forcing the user to restate the whole
     /// subtable. The `feature` subtable itself is stripped from the
     /// returned value so downstream parsers don't see it.
-    fn installrs_meta_merged(&self, features: &[String]) -> Option<toml::Value> {
+    fn installrs_meta_merged(
+        &self,
+        features: &[String],
+        cli_overrides: &[(Vec<String>, toml::Value)],
+    ) -> Option<toml::Value> {
         let base = self.installrs_meta()?;
         let mut merged = base.clone();
         let merged_table = match &mut merged {
@@ -177,13 +182,23 @@ impl CargoManifest {
             }
         }
         merged_table.remove("feature");
+
+        // Apply CLI --metadata overrides last so they always win.
+        for (path, value) in cli_overrides {
+            insert_at_path(merged_table, path, value.clone());
+        }
+
         Some(merged)
     }
 
     /// Read `gui = true` from `[package.metadata.installrs]`, with
     /// `[…feature.<name>]` overlays applied for each active feature.
-    pub fn gui_enabled(&self, features: &[String]) -> bool {
-        self.installrs_meta_merged(features)
+    pub fn gui_enabled(
+        &self,
+        features: &[String],
+        cli_overrides: &[(Vec<String>, toml::Value)],
+    ) -> bool {
+        self.installrs_meta_merged(features, cli_overrides)
             .as_ref()
             .and_then(|i| i.get("gui"))
             .and_then(|v| v.as_bool())
@@ -199,8 +214,9 @@ impl CargoManifest {
     pub fn win_resource_config(
         &self,
         features: &[String],
+        cli_overrides: &[(Vec<String>, toml::Value)],
     ) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
-        let meta = match self.installrs_meta_merged(features) {
+        let meta = match self.installrs_meta_merged(features, cli_overrides) {
             Some(v) => v,
             None => return Ok((None, None)),
         };
@@ -255,6 +271,35 @@ fn installrs_dep_spec(features_suffix: &str) -> String {
             version = INSTALLRS_CRATE_VERSION,
         )
     }
+}
+
+/// Insert `value` at the given dotted-key `path` inside `table`,
+/// creating intermediate sub-tables as needed. Used to apply CLI
+/// `--metadata KEY.SUBKEY=VALUE` overrides on top of the merged
+/// `[package.metadata.installrs]` table. Non-table intermediates are
+/// replaced with fresh tables so the path can be walked.
+fn insert_at_path(
+    table: &mut toml::map::Map<String, toml::Value>,
+    path: &[String],
+    value: toml::Value,
+) {
+    let Some((last, rest)) = path.split_last() else {
+        return;
+    };
+    let mut cursor = table;
+    for segment in rest {
+        let entry = cursor
+            .entry(segment.clone())
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+        if !matches!(entry, toml::Value::Table(_)) {
+            *entry = toml::Value::Table(toml::map::Map::new());
+        }
+        cursor = match entry {
+            toml::Value::Table(t) => t,
+            _ => unreachable!(),
+        };
+    }
+    cursor.insert(last.clone(), value);
 }
 
 /// Format a ", features = [\"a\", \"b\"]" suffix for the user-crate dep,
@@ -610,15 +655,20 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 pub fn read_win_resource_config(
     target_dir: &Path,
     features: &[String],
+    cli_overrides: &[(Vec<String>, toml::Value)],
 ) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
-    CargoManifest::load(target_dir)?.win_resource_config(features)
+    CargoManifest::load(target_dir)?.win_resource_config(features, cli_overrides)
 }
 
 /// Read `gui = true` from `[package.metadata.installrs]`. Parses on
 /// every call — prefer [`CargoManifest::gui_enabled`] when you already
 /// have a manifest.
-pub fn read_gui_config(target_dir: &Path, features: &[String]) -> Result<bool> {
-    Ok(CargoManifest::load(target_dir)?.gui_enabled(features))
+pub fn read_gui_config(
+    target_dir: &Path,
+    features: &[String],
+    cli_overrides: &[(Vec<String>, toml::Value)],
+) -> Result<bool> {
+    Ok(CargoManifest::load(target_dir)?.gui_enabled(features, cli_overrides))
 }
 
 const VERSION_INFO_KEYS: &[(&str, &str)] = &[

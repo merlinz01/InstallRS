@@ -20,6 +20,11 @@ breaking changes; patch bumps (`0.x.y`) will not.
   `[package].version` when not set in
   `[package.metadata.installrs]`, so bumping `Cargo.toml` automatically
   restamps the installer. Explicit metadata values still win.
+- `--metadata KEY=VALUE` (alias `-m`) on the CLI overrides any
+  `[package.metadata.installrs]` key for a build, including dotted
+  paths like `installer.file-version=1.2.3` for subtable-specific
+  overrides. Useful for stamping CI-provided versions without
+  touching `Cargo.toml`.
 
 ## [0.1.0-rc11] — 2026-04-30
 

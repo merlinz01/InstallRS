@@ -40,6 +40,21 @@ struct Cli {
     #[arg(long = "feature", value_name = "NAME", action = clap::ArgAction::Append)]
     features: Vec<String>,
 
+    /// Override a `[package.metadata.installrs]` key. Repeatable. Format:
+    /// `key=value`. Use a dotted path (`installer.file-version=1.2.3`,
+    /// `uninstaller.file-description=...`) to target the installer or
+    /// uninstaller subtable. Values parse as TOML (bool / int /
+    /// otherwise string), so `-m gui=true` and `-m language=0x0409`
+    /// work. Useful for stamping CI-provided version strings without
+    /// touching `Cargo.toml`.
+    #[arg(
+        long = "metadata",
+        short = 'm',
+        value_name = "KEY=VALUE",
+        action = clap::ArgAction::Append,
+    )]
+    metadata: Vec<String>,
+
     /// Enable debug output (-v) or trace output (-vv)
     #[arg(long, short, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -106,10 +121,12 @@ fn run(cli: Cli) -> Result<()> {
     // Always read the [package.metadata.installrs] config — the builder
     // decides per-target whether to emit Windows resources vs. embed the
     // icon as PNG for the GTK backend.
-    let (installer_win_resource, uninstaller_win_resource) =
-        build::builder::read_win_resource_config(&target, &cli.features)?;
+    let metadata_overrides = parse_metadata_overrides(&cli.metadata)?;
 
-    let gui_enabled = build::builder::read_gui_config(&target, &cli.features)?;
+    let (installer_win_resource, uninstaller_win_resource) =
+        build::builder::read_win_resource_config(&target, &cli.features, &metadata_overrides)?;
+
+    let gui_enabled = build::builder::read_gui_config(&target, &cli.features, &metadata_overrides)?;
     if gui_enabled {
         log::info!("GUI support enabled");
     }
@@ -129,6 +146,49 @@ fn run(cli: Cli) -> Result<()> {
     };
 
     build::builder::build(params)
+}
+
+fn parse_override_value(value: &str) -> toml::Value {
+    if let Ok(b) = value.parse::<bool>() {
+        return toml::Value::Boolean(b);
+    }
+    let hex = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"));
+    if let Some(stripped) = hex {
+        if let Ok(n) = i64::from_str_radix(stripped, 16) {
+            return toml::Value::Integer(n);
+        }
+    }
+    if let Ok(n) = value.parse::<i64>() {
+        return toml::Value::Integer(n);
+    }
+    toml::Value::String(value.to_string())
+}
+
+/// Parse each `--metadata KEY=VALUE` entry into a (path, value) pair.
+/// `KEY` is split on `.` for nested overrides; `VALUE` parses as TOML
+/// (bool / integer first, falling back to string) so booleans and
+/// numeric metadata keys work without quoting.
+fn parse_metadata_overrides(raw: &[String]) -> Result<Vec<(Vec<String>, toml::Value)>> {
+    let mut out = Vec::with_capacity(raw.len());
+    for entry in raw {
+        let (key, value) = entry
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("--metadata expects KEY=VALUE, got {entry:?}"))?;
+        if key.is_empty() {
+            return Err(anyhow::anyhow!("--metadata key is empty in {entry:?}"));
+        }
+        let path: Vec<String> = key.split('.').map(|s| s.to_string()).collect();
+        if path.iter().any(|s| s.is_empty()) {
+            return Err(anyhow::anyhow!(
+                "--metadata key {key:?} has an empty path segment"
+            ));
+        }
+        let parsed = parse_override_value(value);
+        out.push((path, parsed));
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -163,7 +223,7 @@ product-name = "App"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, uninstaller) = m.win_resource_config(&[]).unwrap();
+        let (installer, uninstaller) = m.win_resource_config(&[], &[]).unwrap();
         let i_v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         let u_v: std::collections::HashMap<_, _> =
@@ -185,12 +245,95 @@ file-version = "9.9.9.9"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, _) = m.win_resource_config(&[]).unwrap();
+        let (installer, _) = m.win_resource_config(&[], &[]).unwrap();
         let v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         assert_eq!(v.get("FileVersion").unwrap(), "9.9.9.9");
         // ProductVersion still falls back to package version.
         assert_eq!(v.get("ProductVersion").unwrap(), "1.2.3");
+    }
+
+    #[test]
+    fn cli_metadata_override_wins_over_base_and_package_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest_with_version(
+            tmp.path(),
+            "1.2.3",
+            r#"
+[package.metadata.installrs]
+file-version = "1.0.0.0"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let overrides: Vec<(Vec<String>, toml::Value)> = vec![(
+            vec!["file-version".to_string()],
+            toml::Value::String("9.9.9.9".to_string()),
+        )];
+        let (installer, _) = m.win_resource_config(&[], &overrides).unwrap();
+        let v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        assert_eq!(v.get("FileVersion").unwrap(), "9.9.9.9");
+        // ProductVersion still falls back to package version.
+        assert_eq!(v.get("ProductVersion").unwrap(), "1.2.3");
+    }
+
+    #[test]
+    fn cli_metadata_dotted_path_targets_installer_subtable() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+file-version = "1.0.0.0"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let overrides: Vec<(Vec<String>, toml::Value)> = vec![(
+            vec!["installer".to_string(), "file-version".to_string()],
+            toml::Value::String("7.7.7.7".to_string()),
+        )];
+        let (installer, uninstaller) = m.win_resource_config(&[], &overrides).unwrap();
+        let i_v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        let u_v: std::collections::HashMap<_, _> =
+            uninstaller.unwrap().version_info.into_iter().collect();
+        // Installer side overridden via dotted path.
+        assert_eq!(i_v.get("FileVersion").unwrap(), "7.7.7.7");
+        // Uninstaller still inherits the base value.
+        assert_eq!(u_v.get("FileVersion").unwrap(), "1.0.0.0");
+    }
+
+    #[test]
+    fn cli_metadata_can_toggle_gui() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        assert!(!m.gui_enabled(&[], &[]));
+        let overrides: Vec<(Vec<String>, toml::Value)> =
+            vec![(vec!["gui".to_string()], toml::Value::Boolean(true))];
+        assert!(m.gui_enabled(&[], &overrides));
+    }
+
+    #[test]
+    fn parse_override_value_distinguishes_types() {
+        use super::parse_override_value;
+        assert_eq!(parse_override_value("true"), toml::Value::Boolean(true));
+        assert_eq!(parse_override_value("false"), toml::Value::Boolean(false));
+        assert_eq!(parse_override_value("42"), toml::Value::Integer(42));
+        assert_eq!(parse_override_value("0x0409"), toml::Value::Integer(0x0409));
+        assert_eq!(
+            parse_override_value("1.2.3"),
+            toml::Value::String("1.2.3".to_string())
+        );
+        assert_eq!(
+            parse_override_value("My App"),
+            toml::Value::String("My App".to_string())
+        );
     }
 
     #[test]
@@ -205,7 +348,7 @@ file-version = "7.0.0.0"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, uninstaller) = m.win_resource_config(&[]).unwrap();
+        let (installer, uninstaller) = m.win_resource_config(&[], &[]).unwrap();
         let i_v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         let u_v: std::collections::HashMap<_, _> =
@@ -230,7 +373,7 @@ product-name = "Pro"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, _) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let (installer, _) = m.win_resource_config(&["pro".to_string()], &[]).unwrap();
         let v = installer.unwrap().version_info;
         let by_key: std::collections::HashMap<_, _> = v.into_iter().collect();
         assert_eq!(by_key.get("ProductName").unwrap(), "Pro");
@@ -251,7 +394,7 @@ product-name = "Pro"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, _) = m.win_resource_config(&[]).unwrap();
+        let (installer, _) = m.win_resource_config(&[], &[]).unwrap();
         let v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         assert_eq!(v.get("ProductName").unwrap(), "Base");
@@ -275,7 +418,7 @@ product-name = "B"
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
         let (installer, _) = m
-            .win_resource_config(&["a".to_string(), "b".to_string()])
+            .win_resource_config(&["a".to_string(), "b".to_string()], &[])
             .unwrap();
         let v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
@@ -300,7 +443,7 @@ file-description = "App Pro Installer"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, _) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let (installer, _) = m.win_resource_config(&["pro".to_string()], &[]).unwrap();
         let v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         // Overridden by the feature overlay.
@@ -323,7 +466,7 @@ file-description = "App Pro Installer"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, _) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let (installer, _) = m.win_resource_config(&["pro".to_string()], &[]).unwrap();
         let v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         assert_eq!(v.get("ProductName").unwrap(), "App");
@@ -344,7 +487,7 @@ file-description = "App Pro Uninstaller"
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        let (installer, uninstaller) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let (installer, uninstaller) = m.win_resource_config(&["pro".to_string()], &[]).unwrap();
         let i_v: std::collections::HashMap<_, _> =
             installer.unwrap().version_info.into_iter().collect();
         let u_v: std::collections::HashMap<_, _> =
@@ -369,8 +512,8 @@ gui = true
 "#,
         );
         let m = CargoManifest::load(tmp.path()).unwrap();
-        assert!(!m.gui_enabled(&[]));
-        assert!(m.gui_enabled(&["gui".to_string()]));
+        assert!(!m.gui_enabled(&[], &[]));
+        assert!(m.gui_enabled(&["gui".to_string()], &[]));
     }
 
     // ── compress::validate_method ─────────────────────────────────────────────

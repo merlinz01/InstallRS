@@ -21,6 +21,7 @@ installrs --target <dir> --output <file> [options]
 | `--ignore <patterns>`      | Comma-separated glob patterns to ignore when gathering directories |
 | `--target-triple <triple>` | Rust target triple for cross-compilation                           |
 | `--feature <name>`         | Enable a user-library cargo feature (repeatable)                   |
+| `-m` / `--metadata <K=V>`  | Override a `[package.metadata.installrs]` key (repeatable)         |
 | `-v` / `-vv`               | Debug output / trace output                                        |
 | `-q` / `--quiet`           | Suppress non-error output                                          |
 | `-s` / `--silent`          | Suppress all output                                                |
@@ -65,6 +66,25 @@ in your installer library:
 ```sh
 installrs --target my-installer --feature pro --feature docs
 ```
+
+Override individual `[package.metadata.installrs]` keys at build time
+without touching `Cargo.toml` — handy for stamping CI-supplied version
+strings or per-build values:
+
+```sh
+installrs --target . -m file-version="$(cat version.txt)" \
+                     -m product-version="$(cat version.txt)" \
+                     -m installer.file-description="My App Installer (CI)" \
+                     -m gui=true \
+                     -m language=0x0409
+```
+
+`KEY` is a dotted path into the metadata table (`file-version`,
+`installer.file-description`, etc.). `VALUE` parses as TOML — `true` /
+`false` become booleans, integers (decimal or `0x`-hex) become
+integers, everything else stays a string. Overrides apply *after*
+feature overlays and after the package-version fallback for
+`file-version` / `product-version`, so they always win.
 
 The named features must exist in your installer crate's `[features]`
 table. The builder passes them through to the user-crate dependency of

@@ -262,7 +262,7 @@ pub fn run(
     }
 
     // Navigation buttons.
-    let btn_y = WINDOW_HEIGHT - button_bar_height + MARGIN / 2;
+    let btn_y = WINDOW_HEIGHT - BUTTON_HEIGHT - MARGIN;
     let (bw, bh) = gui::dpi(BUTTON_WIDTH, BUTTON_HEIGHT);
 
     let btn_back = gui::Button::new(

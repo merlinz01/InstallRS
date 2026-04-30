@@ -281,7 +281,7 @@ file-description = "App Pro Uninstaller"
             uninstaller.unwrap().version_info.into_iter().collect();
         // Installer keeps the base ProductName and gets no FileDescription.
         assert_eq!(i_v.get("ProductName").unwrap(), "App");
-        assert!(i_v.get("FileDescription").is_none());
+        assert!(!i_v.contains_key("FileDescription"));
         // Uninstaller picks up the feature override.
         assert_eq!(u_v.get("FileDescription").unwrap(), "App Pro Uninstaller");
     }

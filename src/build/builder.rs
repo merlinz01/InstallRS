@@ -101,6 +101,17 @@ impl CargoManifest {
             })
     }
 
+    /// `[package].version`, if declared. Used as the default value for
+    /// `file-version` / `product-version` when those keys aren't set
+    /// explicitly in `[package.metadata.installrs]`.
+    fn package_version(&self) -> Option<String> {
+        self.raw
+            .get("package")
+            .and_then(|p| p.get("version"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+
     /// Returns (package_name, lib_crate_name, lib_path).
     fn package_info(&self) -> Result<(String, String, PathBuf)> {
         let package_name = self
@@ -194,7 +205,20 @@ impl CargoManifest {
             None => return Ok((None, None)),
         };
 
-        let base = parse_win_resource_table(&meta, &self.target_dir)?;
+        let mut base = parse_win_resource_table(&meta, &self.target_dir)?;
+        // Default file-version / product-version to [package].version so
+        // bumping the user crate's Cargo.toml automatically restamps the
+        // installer without an explicit metadata entry. Only fills keys
+        // that aren't already set; installer/uninstaller subtable
+        // overrides applied below still win.
+        if let Some(pkg_ver) = self.package_version() {
+            for win_key in ["FileVersion", "ProductVersion"] {
+                if !base.version_info.iter().any(|(k, _)| k == win_key) {
+                    base.version_info
+                        .push((win_key.to_string(), pkg_ver.clone()));
+                }
+            }
+        }
 
         let installer = if let Some(sub) = meta.get("installer") {
             let overrides = parse_win_resource_table(sub, &self.target_dir)?;

@@ -57,8 +57,8 @@ All keys use kebab-case.
 | `manifest-raw`      | string           | Raw manifest XML                                        |
 | `product-name`      | string           | VERSIONINFO ProductName                                 |
 | `file-description`  | string           | VERSIONINFO FileDescription                             |
-| `file-version`      | string           | VERSIONINFO FileVersion                                 |
-| `product-version`   | string           | VERSIONINFO ProductVersion                              |
+| `file-version`      | string           | VERSIONINFO FileVersion (default `package.version`)     |
+| `product-version`   | string           | VERSIONINFO ProductVersion (default `package.version`)  |
 | `original-filename` | string           | VERSIONINFO OriginalFilename                            |
 | `legal-copyright`   | string           | VERSIONINFO LegalCopyright                              |
 | `legal-trademarks`  | string           | VERSIONINFO LegalTrademarks                             |

@@ -145,6 +145,76 @@ mod tests {
         std::fs::write(dir.join("Cargo.toml"), format!("{header}{body}")).unwrap();
     }
 
+    fn write_manifest_with_version(dir: &std::path::Path, version: &str, body: &str) {
+        let header =
+            format!("[package]\nname = \"t\"\nversion = \"{version}\"\nedition = \"2021\"\n\n");
+        std::fs::write(dir.join("Cargo.toml"), format!("{header}{body}")).unwrap();
+    }
+
+    #[test]
+    fn file_version_defaults_to_package_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest_with_version(
+            tmp.path(),
+            "1.2.3",
+            r#"
+[package.metadata.installrs]
+product-name = "App"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, uninstaller) = m.win_resource_config(&[]).unwrap();
+        let i_v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        let u_v: std::collections::HashMap<_, _> =
+            uninstaller.unwrap().version_info.into_iter().collect();
+        assert_eq!(i_v.get("FileVersion").unwrap(), "1.2.3");
+        assert_eq!(i_v.get("ProductVersion").unwrap(), "1.2.3");
+        assert_eq!(u_v.get("FileVersion").unwrap(), "1.2.3");
+    }
+
+    #[test]
+    fn explicit_file_version_overrides_package_version_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest_with_version(
+            tmp.path(),
+            "1.2.3",
+            r#"
+[package.metadata.installrs]
+file-version = "9.9.9.9"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, _) = m.win_resource_config(&[]).unwrap();
+        let v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        assert_eq!(v.get("FileVersion").unwrap(), "9.9.9.9");
+        // ProductVersion still falls back to package version.
+        assert_eq!(v.get("ProductVersion").unwrap(), "1.2.3");
+    }
+
+    #[test]
+    fn installer_subtable_override_wins_over_package_version_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest_with_version(
+            tmp.path(),
+            "1.2.3",
+            r#"
+[package.metadata.installrs.installer]
+file-version = "7.0.0.0"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, uninstaller) = m.win_resource_config(&[]).unwrap();
+        let i_v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        let u_v: std::collections::HashMap<_, _> =
+            uninstaller.unwrap().version_info.into_iter().collect();
+        assert_eq!(i_v.get("FileVersion").unwrap(), "7.0.0.0");
+        // Uninstaller has no override, so it gets the package fallback.
+        assert_eq!(u_v.get("FileVersion").unwrap(), "1.2.3");
+    }
+
     #[test]
     fn feature_overlay_overrides_base_scalars() {
         let tmp = tempfile::tempdir().unwrap();

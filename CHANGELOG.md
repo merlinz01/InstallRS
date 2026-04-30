@@ -16,6 +16,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 - `PageHandle::hide_log()` on install / uninstall pages to omit the
   rolling log textbox, leaving only the status label and progress bar.
+- `file-version` and `product-version` default to the user crate's
+  `[package].version` when not set in
+  `[package.metadata.installrs]`, so bumping `Cargo.toml` automatically
+  restamps the installer. Explicit metadata values still win.
 
 ## [0.1.0-rc11] — 2026-04-30
 

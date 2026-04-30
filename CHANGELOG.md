@@ -12,6 +12,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+## [0.1.0-rc12] — 2026-04-30
+
 ### Added
 
 - `PageHandle::hide_log()` on install / uninstall pages to omit the
@@ -132,7 +134,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Generated `build.rs` no longer warns `unused_mut` on `res` when no
   resource keys are set.
 
-[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc11...HEAD
+[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc12...HEAD
+[0.1.0-rc12]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc11...v0.1.0-rc12
 [0.1.0-rc11]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc10...v0.1.0-rc11
 [0.1.0-rc10]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc9...v0.1.0-rc10
 [0.1.0-rc9]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc8...v0.1.0-rc9

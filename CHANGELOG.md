@@ -12,6 +12,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+## [0.1.0-rc11] — 2026-04-30
+
 ### Added
 
 - `[package.metadata.installrs.feature.<name>]` subtables are
@@ -116,7 +118,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Generated `build.rs` no longer warns `unused_mut` on `res` when no
   resource keys are set.
 
-[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc10...HEAD
+[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc11...HEAD
+[0.1.0-rc11]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc10...v0.1.0-rc11
 [0.1.0-rc10]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc9...v0.1.0-rc10
 [0.1.0-rc9]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc8...v0.1.0-rc9
 [0.1.0-rc8]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc7...v0.1.0-rc8

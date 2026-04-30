@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "installrs"
-version = "0.1.0-rc10"
+version = "0.1.0-rc11"
 dependencies = [
  "anyhow",
  "bzip2",

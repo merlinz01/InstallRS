@@ -304,6 +304,50 @@ file-version = "1.0.0.0"
     }
 
     #[test]
+    fn pack_version_u64_handles_common_shapes() {
+        use super::build::builder::pack_version_u64;
+        assert_eq!(
+            pack_version_u64("1.2.3.4"),
+            (1u64 << 48) | (2u64 << 32) | (3u64 << 16) | 4u64
+        );
+        // Missing parts default to 0.
+        assert_eq!(
+            pack_version_u64("1.2.3"),
+            (1u64 << 48) | (2u64 << 32) | (3u64 << 16)
+        );
+        assert_eq!(pack_version_u64("1.2"), (1u64 << 48) | (2u64 << 32));
+        // Pre-release / build suffixes are stripped before parsing.
+        assert_eq!(
+            pack_version_u64("1.2.3-rc4"),
+            (1u64 << 48) | (2u64 << 32) | (3u64 << 16)
+        );
+        assert_eq!(
+            pack_version_u64("0.1.0-rc12+sha.abc"),
+            (0u64 << 48) | (1u64 << 32)
+        );
+        // Non-numeric segments → 0; leading digits within a segment are kept.
+        assert_eq!(pack_version_u64("1.beta.3"), (1u64 << 48) | (3u64 << 16));
+        assert_eq!(pack_version_u64(""), 0);
+    }
+
+    #[test]
+    fn pack_version_u64_handles_calver_with_commit_sha() {
+        use super::build::builder::pack_version_u64;
+        // CalVer like 2026.04.30 with a git-sha build suffix — the
+        // suffix should be stripped, leaving the date components in
+        // the FIXEDFILEINFO numeric block.
+        assert_eq!(
+            pack_version_u64("2026.04.30-abc123def"),
+            (2026u64 << 48) | (4u64 << 32) | (30u64 << 16)
+        );
+        // Year-only CalVer with a 4-digit year still fits in u16.
+        assert_eq!(
+            pack_version_u64("2026.04.30.7-rc1+sha.deadbeef"),
+            (2026u64 << 48) | (4u64 << 32) | (30u64 << 16) | 7u64
+        );
+    }
+
+    #[test]
     fn cli_metadata_can_toggle_gui() {
         let tmp = tempfile::tempdir().unwrap();
         write_manifest(

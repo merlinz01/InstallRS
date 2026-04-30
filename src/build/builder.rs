@@ -273,6 +273,27 @@ fn installrs_dep_spec(features_suffix: &str) -> String {
     }
 }
 
+/// Pack a "1.2.3.4"-style version string into the u64 layout that
+/// `winresource::VersionInfo::{FILEVERSION, PRODUCTVERSION}` expects:
+/// `(major << 48) | (minor << 32) | (patch << 16) | build`. Tolerant
+/// of fewer than four parts (missing components default to 0), of
+/// pre-release suffixes (`1.2.3-rc4` → `1.2.3.0`), and of non-numeric
+/// segments (treated as 0). The string field is set separately and is
+/// unaffected by this normalization.
+pub fn pack_version_u64(version: &str) -> u64 {
+    // Strip pre-release / build metadata so "1.2.3-rc4+sha.abc" → "1.2.3".
+    let core = version.split(['-', '+']).next().unwrap_or(version);
+    let mut parts: [u64; 4] = [0; 4];
+    for (i, segment) in core.split('.').take(4).enumerate() {
+        // Take leading digits only — handles "1rc" or "1_dev" gracefully.
+        let digits: String = segment.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(n) = digits.parse::<u64>() {
+            parts[i] = n.min(0xFFFF);
+        }
+    }
+    (parts[0] << 48) | (parts[1] << 32) | (parts[2] << 16) | parts[3]
+}
+
 /// Insert `value` at the given dotted-key `path` inside `table`,
 /// creating intermediate sub-tables as needed. Used to apply CLI
 /// `--metadata KEY.SUBKEY=VALUE` overrides on top of the merged
@@ -1473,6 +1494,21 @@ fn write_build_rs(dir: &Path, config: &WinResourceConfig, gui_enabled: bool) -> 
 
     for (key, val) in &config.version_info {
         code.push_str(&format!("    res.set({key:?}, {val:?});\n"));
+        // Also populate the FIXEDFILEINFO numeric version block so the
+        // 4-part version shown by `Get-Item .exe | % VersionInfo` and
+        // by Explorer's Properties → Details panel matches the string
+        // field, instead of staying at 0.0.0.0.
+        let fixed_kind = match key.as_str() {
+            "FileVersion" => Some("FILEVERSION"),
+            "ProductVersion" => Some("PRODUCTVERSION"),
+            _ => None,
+        };
+        if let Some(kind) = fixed_kind {
+            let packed = pack_version_u64(val);
+            code.push_str(&format!(
+                "    res.set_version_info(winresource::VersionInfo::{kind}, {packed:#x});\n",
+            ));
+        }
     }
 
     code.push_str("    res.compile().unwrap();\n}\n");

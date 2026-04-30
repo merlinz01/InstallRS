@@ -12,6 +12,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Fixed
+
+- `FileVersion` and `ProductVersion` now also populate the
+  VERSIONINFO `FIXEDFILEINFO` numeric block. Pre-release suffixes are
+  stripped when converting to integer format for these fields.
+
 ## [0.1.0-rc12] — 2026-04-30
 
 ### Added

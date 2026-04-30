@@ -12,6 +12,13 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- `[package.metadata.installrs.feature.<name>]` subtables are
+  deep-merged onto the base metadata when the feature is active via
+  `--feature <name>`, so one crate can produce multiple installers
+  that differ in product name, icon, version info, GUI mode, etc.
+
 ### Removed
 
 - **Breaking:** `InstallerGui::on_start` / `on_exit` callbacks. Run

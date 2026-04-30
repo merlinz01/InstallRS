@@ -72,6 +72,58 @@ the generated installer and uninstaller, so one `--feature` flag
 covers both the embedded-file gating and the compile-time code
 gating.
 
+### Per-feature metadata overlays
+
+`[package.metadata.installrs.feature.<name>]` subtables are merged
+onto the base `[package.metadata.installrs]` table when `<name>` is
+passed via `--feature`. This lets one crate produce multiple installers
+that differ in product name, icon, version info, or any other metadata
+key — without duplicating source.
+
+```toml
+[package.metadata.installrs]
+product-name = "My App"
+icon = "assets/base.png"
+
+[package.metadata.installrs.feature.pro]
+product-name = "My App Pro"
+icon = "assets/pro.png"
+file-version = "1.2.3.4"
+
+[package.metadata.installrs.feature.lite]
+product-name = "My App Lite"
+```
+
+```sh
+installrs --target . --feature pro  --output installer-pro
+installrs --target . --feature lite --output installer-lite
+installrs --target . --output installer-base   # no overlay
+```
+
+Per-feature overlays can also override individual keys inside the
+`installer` / `uninstaller` subtables — useful when only the installer
+or uninstaller side differs per edition:
+
+```toml
+[package.metadata.installrs.installer]
+file-description = "My App Installer"
+internal-name = "myapp-installer"
+
+[package.metadata.installrs.feature.pro.installer]
+file-description = "My App Pro Installer"
+# internal-name inherits "myapp-installer" from the base
+```
+
+Merge rules:
+
+- Top-level keys: overlay keys replace base keys wholesale.
+- `installer` / `uninstaller` subtables: merged key-by-key, so an
+  overlay can override individual fields without restating the rest.
+- Multiple `--feature` flags apply in argument order; later wins on
+  conflicts.
+- Overlay subtables can set `gui = true` to enable the wizard for
+  certain editions only.
+
 ## Customizing the generated release profile
 
 The generated installer/uninstaller crates use an aggressive

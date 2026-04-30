@@ -107,9 +107,9 @@ fn run(cli: Cli) -> Result<()> {
     // decides per-target whether to emit Windows resources vs. embed the
     // icon as PNG for the GTK backend.
     let (installer_win_resource, uninstaller_win_resource) =
-        build::builder::read_win_resource_config(&target)?;
+        build::builder::read_win_resource_config(&target, &cli.features)?;
 
-    let gui_enabled = build::builder::read_gui_config(&target)?;
+    let gui_enabled = build::builder::read_gui_config(&target, &cli.features)?;
     if gui_enabled {
         log::info!("GUI support enabled");
     }
@@ -133,9 +133,175 @@ fn run(cli: Cli) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::build::builder::CargoManifest;
     use super::build::compress;
     use super::build::scanner;
     use std::io::Read;
+
+    // ── per-feature metadata overlays ────────────────────────────────────────
+
+    fn write_manifest(dir: &std::path::Path, body: &str) {
+        let header = "[package]\nname = \"t\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n";
+        std::fs::write(dir.join("Cargo.toml"), format!("{header}{body}")).unwrap();
+    }
+
+    #[test]
+    fn feature_overlay_overrides_base_scalars() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+product-name = "Base"
+file-version = "1.0.0.0"
+
+[package.metadata.installrs.feature.pro]
+product-name = "Pro"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, _) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let v = installer.unwrap().version_info;
+        let by_key: std::collections::HashMap<_, _> = v.into_iter().collect();
+        assert_eq!(by_key.get("ProductName").unwrap(), "Pro");
+        assert_eq!(by_key.get("FileVersion").unwrap(), "1.0.0.0");
+    }
+
+    #[test]
+    fn feature_overlay_inactive_uses_base() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+product-name = "Base"
+
+[package.metadata.installrs.feature.pro]
+product-name = "Pro"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, _) = m.win_resource_config(&[]).unwrap();
+        let v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        assert_eq!(v.get("ProductName").unwrap(), "Base");
+    }
+
+    #[test]
+    fn feature_overlay_last_wins_in_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+product-name = "Base"
+
+[package.metadata.installrs.feature.a]
+product-name = "A"
+
+[package.metadata.installrs.feature.b]
+product-name = "B"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, _) = m
+            .win_resource_config(&["a".to_string(), "b".to_string()])
+            .unwrap();
+        let v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        assert_eq!(v.get("ProductName").unwrap(), "B");
+    }
+
+    #[test]
+    fn feature_overlay_merges_installer_subtable_keywise() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+product-name = "App"
+
+[package.metadata.installrs.installer]
+file-description = "App Installer"
+internal-name = "app-installer"
+
+[package.metadata.installrs.feature.pro.installer]
+file-description = "App Pro Installer"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, _) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        // Overridden by the feature overlay.
+        assert_eq!(v.get("FileDescription").unwrap(), "App Pro Installer");
+        // Inherited from the base installer subtable — not wiped.
+        assert_eq!(v.get("InternalName").unwrap(), "app-installer");
+    }
+
+    #[test]
+    fn feature_overlay_installer_works_without_base_installer_subtable() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+product-name = "App"
+
+[package.metadata.installrs.feature.pro.installer]
+file-description = "App Pro Installer"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, _) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        assert_eq!(v.get("ProductName").unwrap(), "App");
+        assert_eq!(v.get("FileDescription").unwrap(), "App Pro Installer");
+    }
+
+    #[test]
+    fn feature_overlay_uninstaller_subtable_isolated_from_installer() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+product-name = "App"
+
+[package.metadata.installrs.feature.pro.uninstaller]
+file-description = "App Pro Uninstaller"
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        let (installer, uninstaller) = m.win_resource_config(&["pro".to_string()]).unwrap();
+        let i_v: std::collections::HashMap<_, _> =
+            installer.unwrap().version_info.into_iter().collect();
+        let u_v: std::collections::HashMap<_, _> =
+            uninstaller.unwrap().version_info.into_iter().collect();
+        // Installer keeps the base ProductName and gets no FileDescription.
+        assert_eq!(i_v.get("ProductName").unwrap(), "App");
+        assert!(i_v.get("FileDescription").is_none());
+        // Uninstaller picks up the feature override.
+        assert_eq!(u_v.get("FileDescription").unwrap(), "App Pro Uninstaller");
+    }
+
+    #[test]
+    fn feature_overlay_can_enable_gui() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_manifest(
+            tmp.path(),
+            r#"
+[package.metadata.installrs]
+
+[package.metadata.installrs.feature.gui]
+gui = true
+"#,
+        );
+        let m = CargoManifest::load(tmp.path()).unwrap();
+        assert!(!m.gui_enabled(&[]));
+        assert!(m.gui_enabled(&["gui".to_string()]));
+    }
 
     // ── compress::validate_method ─────────────────────────────────────────────
 

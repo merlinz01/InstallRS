@@ -132,9 +132,48 @@ impl CargoManifest {
             .and_then(|m| m.get("installrs"))
     }
 
-    /// Read `gui = true` from `[package.metadata.installrs]`.
-    pub fn gui_enabled(&self) -> bool {
-        self.installrs_meta()
+    /// `[package.metadata.installrs]` with `[…feature.<name>]` overlays
+    /// for each active feature merged on top, in CLI argument order
+    /// (later wins). Top-level keys are replaced wholesale, except for
+    /// the `installer` and `uninstaller` subtables — those are merged
+    /// key-by-key, so `[…feature.pro.installer]` overrides individual
+    /// installer fields without forcing the user to restate the whole
+    /// subtable. The `feature` subtable itself is stripped from the
+    /// returned value so downstream parsers don't see it.
+    fn installrs_meta_merged(&self, features: &[String]) -> Option<toml::Value> {
+        let base = self.installrs_meta()?;
+        let mut merged = base.clone();
+        let merged_table = match &mut merged {
+            toml::Value::Table(t) => t,
+            _ => return Some(merged),
+        };
+        for f in features {
+            if let Some(toml::Value::Table(overlay)) = base.get("feature").and_then(|fs| fs.get(f))
+            {
+                for (k, v) in overlay {
+                    if k == "installer" || k == "uninstaller" {
+                        if let toml::Value::Table(overlay_sub) = v {
+                            if let Some(toml::Value::Table(existing)) = merged_table.get_mut(k) {
+                                for (k2, v2) in overlay_sub {
+                                    existing.insert(k2.clone(), v2.clone());
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                    merged_table.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        merged_table.remove("feature");
+        Some(merged)
+    }
+
+    /// Read `gui = true` from `[package.metadata.installrs]`, with
+    /// `[…feature.<name>]` overlays applied for each active feature.
+    pub fn gui_enabled(&self, features: &[String]) -> bool {
+        self.installrs_meta_merged(features)
+            .as_ref()
             .and_then(|i| i.get("gui"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
@@ -144,16 +183,18 @@ impl CargoManifest {
     ///
     /// Base keys in `[package.metadata.installrs]` apply to both. Keys in
     /// `[package.metadata.installrs.installer]` or `…uninstaller` override
-    /// the base.
+    /// the base. `[…feature.<name>]` subtables are merged onto the base
+    /// (in `features` order) before installer/uninstaller overrides.
     pub fn win_resource_config(
         &self,
+        features: &[String],
     ) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
-        let meta = match self.installrs_meta() {
+        let meta = match self.installrs_meta_merged(features) {
             Some(v) => v,
             None => return Ok((None, None)),
         };
 
-        let base = parse_win_resource_table(meta, &self.target_dir)?;
+        let base = parse_win_resource_table(&meta, &self.target_dir)?;
 
         let installer = if let Some(sub) = meta.get("installer") {
             let overrides = parse_win_resource_table(sub, &self.target_dir)?;
@@ -544,15 +585,16 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 /// you already have a manifest.
 pub fn read_win_resource_config(
     target_dir: &Path,
+    features: &[String],
 ) -> Result<(Option<WinResourceConfig>, Option<WinResourceConfig>)> {
-    CargoManifest::load(target_dir)?.win_resource_config()
+    CargoManifest::load(target_dir)?.win_resource_config(features)
 }
 
 /// Read `gui = true` from `[package.metadata.installrs]`. Parses on
 /// every call — prefer [`CargoManifest::gui_enabled`] when you already
 /// have a manifest.
-pub fn read_gui_config(target_dir: &Path) -> Result<bool> {
-    Ok(CargoManifest::load(target_dir)?.gui_enabled())
+pub fn read_gui_config(target_dir: &Path, features: &[String]) -> Result<bool> {
+    Ok(CargoManifest::load(target_dir)?.gui_enabled(features))
 }
 
 const VERSION_INFO_KEYS: &[(&str, &str)] = &[

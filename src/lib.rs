@@ -430,7 +430,8 @@ impl Installer {
             #[cfg(feature = "lzma")]
             "lzma" => {
                 let mut out = Vec::new();
-                lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut out)
+                xz2::read::XzDecoder::new(data)
+                    .read_to_end(&mut out)
                     .context("LZMA decompression failed")?;
                 Ok(out)
             }
@@ -739,9 +740,13 @@ mod tests {
     }
 
     fn compress_lzma(data: &[u8]) -> Vec<u8> {
-        let mut out = Vec::new();
-        lzma_rs::lzma_compress(&mut std::io::Cursor::new(data), &mut out).unwrap();
-        out
+        use std::io::Write;
+        let preset = 9 | 0x8000_0000_u32;
+        let stream =
+            xz2::stream::Stream::new_easy_encoder(preset, xz2::stream::Check::Crc64).unwrap();
+        let mut enc = xz2::write::XzEncoder::new_stream(Vec::new(), stream);
+        enc.write_all(data).unwrap();
+        enc.finish().unwrap()
     }
 
     fn compress_bzip2(data: &[u8]) -> Vec<u8> {

@@ -23,7 +23,7 @@ path = "src/bin/installrs.rs"
 
 [features]
 default = ["lzma", "gzip", "bzip2"]
-lzma = ["dep:lzma-rs"]
+lzma = ["dep:xz2"]
 gzip = ["dep:flate2"]
 bzip2 = ["dep:bzip2"]
 gui = []
@@ -32,7 +32,7 @@ gui-gtk = ["gui", "dep:gtk", "dep:glib"]
 
 [dependencies]
 anyhow = "1"
-lzma-rs = { version = "0.3", optional = true }
+xz2 = { version = "0.1", optional = true }
 flate2 = { version = "1", features = ["rust_backend"], optional = true }
 bzip2 = { version = "0.4", optional = true }
 clap = { version = "4", features = ["derive"] }

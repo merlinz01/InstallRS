@@ -12,6 +12,11 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Changed
+
+- LZMA backend swapped from `lzma-rs` to `xz2` (liblzma) at preset 9
+  EXTREME, yielding much smaller installers. Now pulls in a C dependency.
+
 ### Fixed
 
 - `FileVersion` and `ProductVersion` now also populate the

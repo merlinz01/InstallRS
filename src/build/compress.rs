@@ -7,10 +7,14 @@ pub fn compress(data: &[u8], method: &str) -> Result<Vec<u8>> {
         "none" | "" => Ok(data.to_vec()),
         #[cfg(feature = "lzma")]
         "lzma" => {
-            let mut out = Vec::new();
-            lzma_rs::lzma_compress(&mut std::io::Cursor::new(data), &mut out)
-                .context("LZMA compression failed")?;
-            Ok(out)
+            // Preset 9 + EXTREME flag (the high bit, per liblzma's
+            // `LZMA_PRESET_EXTREME` constant): strongest setting.
+            let preset = 9 | 0x8000_0000_u32;
+            let stream = xz2::stream::Stream::new_easy_encoder(preset, xz2::stream::Check::Crc64)
+                .context("LZMA encoder init failed")?;
+            let mut encoder = xz2::write::XzEncoder::new_stream(Vec::new(), stream);
+            encoder.write_all(data).context("LZMA write failed")?;
+            encoder.finish().context("LZMA finish failed")
         }
         #[cfg(feature = "gzip")]
         "gzip" => {
@@ -36,7 +40,8 @@ pub fn decompress(data: &[u8], method: &str) -> Result<Vec<u8>> {
         #[cfg(feature = "lzma")]
         "lzma" => {
             let mut out = Vec::new();
-            lzma_rs::lzma_decompress(&mut std::io::Cursor::new(data), &mut out)
+            xz2::read::XzDecoder::new(data)
+                .read_to_end(&mut out)
                 .context("LZMA decompression failed")?;
             Ok(out)
         }

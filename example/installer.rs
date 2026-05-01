@@ -75,7 +75,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // (handy for CI / unattended installs); `--install-dir` overrides the
     // default install location. `--log <path>` is built-in — no need to
     // register it. All work in GUI and headless modes.
-    i.option("yes", OptionKind::Flag, "Skip confirmation prompts");
+    i.add_option("yes", OptionKind::Flag, "Skip confirmation prompts");
     i.option(
         "install-dir",
         OptionKind::String,
@@ -88,7 +88,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // Seed the install-dir option to the platform default if neither
     // `--install-dir` nor user code has already set it. The directory
     // picker reads the current option value as its initial display.
-    i.set_option_default("install-dir", default_install_dir());
+    i.set_option_if_unset("install-dir", default_install_dir());
 
     let mut w = InstallerGui::wizard(&t!("installer.title"));
     w.buttons(installrs::gui::ButtonLabels {
@@ -119,10 +119,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
     )
     .on_before_leave(|i| {
         // --yes skips the confirmation dialog.
-        if i.get_option::<bool>("yes").unwrap_or(false) {
+        if i.option::<bool>("yes").unwrap_or(false) {
             return Ok(true);
         }
-        let dir: String = i.get_option("install-dir").unwrap_or_default();
+        let dir: String = i.option("install-dir").unwrap_or_default();
         installrs::gui::confirm(
             &t!("installer.confirm.title"),
             &t!("installer.confirm.message", dir = dir),
@@ -138,7 +138,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         },
     )
     .on_before_leave(|i| {
-        let user: String = i.get_option("username").unwrap_or_default();
+        let user: String = i.option("username").unwrap_or_default();
         if user.trim().is_empty() {
             let _ = installrs::gui::error(
                 &t!("installer.account.missing_title"),
@@ -186,7 +186,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.custom_info.title"),
         &t!("installer.custom_info.message"),
     )
-    .skip_if(|i| i.get_option::<String>("install_type").as_deref() != Some("custom"));
+    .skip_if(|i| i.option::<String>("install_type").as_deref() != Some("custom"));
     w.custom_page(
         &t!("installer.paths.heading"),
         &t!("installer.paths.label"),
@@ -208,7 +208,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     );
     w.install_page(|i| {
         // Lift the picker's option into the relative-path resolution slot.
-        let out_dir: String = i.get_option("install-dir").unwrap_or_default();
+        let out_dir: String = i.option("install-dir").unwrap_or_default();
         i.set_out_dir(&out_dir);
 
         // core: always installed (required component)
@@ -340,7 +340,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     });
     w.error_page(&t!("installer.error.title"), &t!("installer.error.message"));
 
-    let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+    let auto_yes = i.option::<bool>("yes").unwrap_or(false);
     if i.headless && !auto_yes {
         eprintln!("Running headless install of {}", t!("installer.title"));
         eprint!("Proceed? [y/N] ");
@@ -364,7 +364,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     if i.headless {
         eprintln!("Headless install complete.");
     }
-    if i.get_option::<bool>("launch_app").unwrap_or(false) {
+    if i.option::<bool>("launch_app").unwrap_or(false) {
         #[cfg(windows)]
         let cmd = "notepad.exe";
         #[cfg(not(windows))]
@@ -380,7 +380,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 
     init_locale();
 
-    i.option("yes", OptionKind::Flag, "Skip confirmation prompts");
+    i.add_option("yes", OptionKind::Flag, "Skip confirmation prompts");
     i.process_commandline()?;
 
     #[cfg(not(windows))]
@@ -403,7 +403,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         finish: t!("wizard.finish").into(),
         cancel: t!("wizard.cancel").into(),
     });
-    let auto_yes = i.get_option::<bool>("yes").unwrap_or(false);
+    let auto_yes = i.option::<bool>("yes").unwrap_or(false);
     if i.headless && !auto_yes {
         eprint!("Really uninstall? [y/N] ");
         std::io::Write::flush(&mut std::io::stderr()).ok();

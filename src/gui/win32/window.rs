@@ -201,7 +201,7 @@ pub(crate) fn run(
                 let initial_dir = installer
                     .lock()
                     .unwrap()
-                    .get_option::<String>(&key)
+                    .option::<String>(&key)
                     .unwrap_or_default();
                 PageKind::DirectoryPicker(DirectoryPickerPage::new(
                     &panel,

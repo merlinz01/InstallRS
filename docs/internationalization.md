@@ -230,7 +230,7 @@ confirm.install_to:
 ```
 
 ```rust
-let dir: String = i.get_option("install-dir").unwrap_or_default();
+let dir: String = i.option("install-dir").unwrap_or_default();
 t!("confirm.install_to", dir = dir)
 ```
 

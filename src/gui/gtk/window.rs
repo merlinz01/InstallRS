@@ -161,7 +161,7 @@ pub(crate) fn run(
                 let initial_dir = installer
                     .lock()
                     .unwrap()
-                    .get_option::<String>(&key)
+                    .option::<String>(&key)
                     .unwrap_or_default();
                 let p = DirectoryPickerPage::new(&heading, &label, &key, &initial_dir);
                 let w = p.widget().clone();

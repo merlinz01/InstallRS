@@ -12,6 +12,14 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** option-API renames. `get_option` → `option`,
+  `set_option_default` → `set_option_if_unset`, and the registration
+  method previously named `option` is now `add_option`. The raw
+  `option_value` / `set_option_value` accessors are no longer public —
+  use the typed `option<T>` / `set_option` instead.
+
 ### Fixed
 
 - Files referenced from both `install` and `uninstall` no longer fail
@@ -81,7 +89,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
   Non-GUI installs auto-attach a stderr progress sink.
 - **Breaking:** `directory_picker(heading, label, key)` binds to a
   named option instead of a literal default. New helpers
-  `set_option`, `set_option_default`, `is_option_registered`.
+  `set_option`, `set_option_if_unset`, `is_option_registered`.
 - **Breaking:** `Installer::option` takes a third `help: impl AsRef<str>` argument.
 - **Breaking:** `InstallerGui::wizard(title)` takes the window title;
   the standalone `.title(...)` method is gone. `buttons`, `on_start`,

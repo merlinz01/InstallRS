@@ -212,10 +212,10 @@ pub enum CustomWidget {
 /// Builds the widget list for a [`WizardPage::Custom`]. Each method
 /// appends one widget to the column; the returned `&mut Self` lets you
 /// chain. Widget keys are the same string used by
-/// [`crate::Installer::get_option`] / [`crate::Installer::option_value`]
-/// — so CLI `--<key>=<value>` overrides (when the matching option is
-/// registered via [`crate::Installer::option`] before
-/// `process_commandline`) pre-fill the field.
+/// [`crate::Installer::option`] — so CLI `--<key>=<value>` overrides
+/// (when the matching option is registered via
+/// [`crate::Installer::add_option`] before `process_commandline`)
+/// pre-fill the field.
 pub struct CustomPageBuilder {
     pub(crate) widgets: Vec<CustomWidget>,
 }

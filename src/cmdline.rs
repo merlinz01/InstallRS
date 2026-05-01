@@ -145,7 +145,7 @@ impl Installer {
             i += 1;
         }
 
-        // Flags default to `false` so `get_option::<bool>("flag")` always
+        // Flags default to `false` so `option::<bool>("flag")` always
         // returns `Some(...)` for registered flags, regardless of presence.
         for opt in &self.options {
             if matches!(opt.kind, OptionKind::Flag) && !self.option_values.contains_key(&opt.name) {

@@ -42,14 +42,14 @@ let mut w = InstallerGui::wizard("My App Installer");
 w.welcome("Welcome!", "Click Next to continue.");
 w.license("License Agreement", include_str!("../LICENSE"), "I accept");
 w.components_page("Select Components", "Choose features to install:");
-i.set_option_default("install-dir", "C:/MyApp");
+i.set_option_if_unset("install-dir", "C:/MyApp");
 w.directory_picker("Choose Install Location", "Install to:", "install-dir")
     .on_before_leave(|i| {
-        let dir: String = i.get_option("install-dir").unwrap_or_default();
+        let dir: String = i.option("install-dir").unwrap_or_default();
         confirm("Confirm", &format!("Install to {dir}?"))
     });
 w.install_page(|i| {
-    i.set_out_dir(i.get_option::<String>("install-dir").unwrap_or_default());
+    i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());
     i.file(source!("app.exe"), "app.exe").install()?;
     if i.is_component_selected("docs") {
         i.dir(source!("docs"), "docs").install()?;
@@ -134,10 +134,10 @@ CLI flags:
 
 ```rust
 .license("License", include_str!("../LICENSE"), "I accept")
-.skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false))
+.skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false))
 
 .directory_picker("Install Location", "Install to:", "install-dir")
-.skip_if(|i| i.get_option::<String>("install-dir").map(|s| !s.is_empty()).unwrap_or(false))
+.skip_if(|i| i.option::<String>("install-dir").map(|s| !s.is_empty()).unwrap_or(false))
 ```
 
 The predicate must be **pure** — no side effects, no I/O. Side effects
@@ -199,7 +199,7 @@ installer option by key:
     p.multiline("notes", "Notes:", "", 3);
 })
 .on_before_leave(|i| {
-    let user: String = i.get_option("username").unwrap_or_default();
+    let user: String = i.option("username").unwrap_or_default();
     if user.trim().is_empty() {
         let _ = installrs::gui::error("Required", "Please enter a username.");
         return Ok(false);
@@ -211,7 +211,7 @@ installer option by key:
 Widgets pre-fill from the options store on entry and write back on
 forward navigation — so `--username=alice` on the command line pre-fills
 the field (as long as you registered the option via
-`i.option("username", OptionKind::String, "")` before `process_commandline`).
+`i.add_option("username", OptionKind::String, "")` before `process_commandline`).
 Validation lives in `on_before_leave`: return `Ok(false)` to keep the
 user on the page.
 
@@ -235,7 +235,7 @@ w.finish_page("Done!", "Click Finish to exit.")
 ```
 
 Read the values after `w.run(i)` returns the same way custom-page
-values are read — `installer.get_option::<bool>("launch")`.
+values are read — `installer.option::<bool>("launch")`.
 
 ## Native dialogs
 

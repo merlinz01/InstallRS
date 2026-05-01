@@ -160,10 +160,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
     w.welcome("Welcome", "This wizard will install My App.");
     w.license("License", include_str!("../LICENSE.txt"), "I accept");
     w.components_page("Components", "Select features:");
-    i.set_option_default("install-dir", "/opt/my-app");
+    i.set_option_if_unset("install-dir", "/opt/my-app");
     w.directory_picker("Install Location", "Install to:", "install-dir");
     w.install_page(|i| {
-        i.set_out_dir(i.get_option::<String>("install-dir").unwrap_or_default());
+        i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());
         i.file(source!("app"), "app").mode(0o755).install()?;
         if i.is_component_selected("docs") {
             i.dir(source!("docs"), "docs").install()?;

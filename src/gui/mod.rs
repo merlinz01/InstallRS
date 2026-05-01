@@ -90,7 +90,7 @@ use crate::Installer;
 /// let mut w = InstallerGui::wizard("My App Installer");
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license("License", include_str!("../LICENSE"), "I accept")
-///     .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false));
+///     .skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false));
 /// w.directory_picker("Install Location", "Install to:", "install-dir");
 /// w.install_page(|i| {
 ///     i.set_status("Installing...");
@@ -187,7 +187,7 @@ impl InstallerGui {
     /// name of the [`crate::OptionValue::String`] option the picker reads
     /// and writes. Initial display value is the option's current value (or
     /// empty if unset) — seed it via `installer.set_option(key, ...)` (or
-    /// the helper `set_option_default`) before [`run`](Self::run) for a
+    /// the helper `set_option_if_unset`) before [`run`](Self::run) for a
     /// sensible first-run default. The option is auto-registered as
     /// [`crate::OptionKind::String`] at `run()` if the user hasn't already
     /// registered it; register it explicitly before
@@ -199,7 +199,7 @@ impl InstallerGui {
     ///
     /// ```rust,ignore
     /// w.install_page(|i| {
-    ///     i.set_out_dir(i.get_option::<String>("install-dir").unwrap_or_default());
+    ///     i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());
     ///     // ...
     /// });
     /// ```
@@ -264,10 +264,9 @@ impl InstallerGui {
 
     /// Add a custom page — a labeled column of text inputs, checkboxes,
     /// and dropdowns. Each widget is tied to an installer option by key:
-    /// values are pre-filled from `installer.option_value(key)` (useful
-    /// for CLI overrides), and written back to the options store on
-    /// forward navigation. Validate via `.on_before_leave(...)` on the
-    /// returned page handle:
+    /// values are pre-filled from the option store (useful for CLI
+    /// overrides), and written back on forward navigation. Validate via
+    /// `.on_before_leave(...)` on the returned page handle:
     ///
     /// ```rust,ignore
     /// w.custom_page("Settings", "Configure your install:", |p| {
@@ -282,7 +281,7 @@ impl InstallerGui {
     ///     );
     /// })
     /// .on_before_leave(|i| {
-    ///     let u: String = i.get_option("username").unwrap_or_default();
+    ///     let u: String = i.option("username").unwrap_or_default();
     ///     if u.is_empty() {
     ///         installrs::gui::error("Required", "Enter a username.");
     ///         return Ok(false);
@@ -343,7 +342,7 @@ impl InstallerGui {
         for configured in &self.config.pages {
             if let WizardPage::DirectoryPicker { key, .. } = &configured.page {
                 if !installer.is_option_registered(key) {
-                    installer.option(key.clone(), crate::OptionKind::String, "");
+                    installer.add_option(key.clone(), crate::OptionKind::String, "");
                 }
             }
         }
@@ -453,10 +452,10 @@ impl<'a> PageHandle<'a> {
     ///
     /// ```rust,ignore
     /// w.license("License", include_str!("../LICENSE"), "I accept")
-    ///     .skip_if(|i| i.get_option::<bool>("accept-license").unwrap_or(false));
+    ///     .skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false));
     ///
     /// w.directory_picker("Install Location", "Install to:", default_dir)
-    ///     .skip_if(|i| i.get_option::<String>("install-dir").is_some());
+    ///     .skip_if(|i| i.option::<String>("install-dir").is_some());
     /// ```
     pub fn skip_if<F>(self, f: F) -> Self
     where

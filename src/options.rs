@@ -3,7 +3,7 @@
 
 /// Declared shape of a user-defined command-line option. Register via
 /// [`crate::Installer::option`]; read parsed results via
-/// [`crate::Installer::get_option`].
+/// [`crate::Installer::option`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptionKind {
     /// Presence-only switch. `--name` → `true`, absent → `false`.
@@ -58,7 +58,7 @@ impl From<i32> for OptionValue {
 }
 
 /// Types that can be pulled out of an [`OptionValue`] via
-/// [`crate::Installer::get_option`]. Implemented for `bool`, `String`, `i64`,
+/// [`crate::Installer::option`]. Implemented for `bool`, `String`, `i64`,
 /// `i32`, `u64`, `u32`.
 pub trait FromOptionValue: Sized {
     fn from_option_value(v: &OptionValue) -> Option<Self>;

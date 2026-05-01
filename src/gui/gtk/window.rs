@@ -494,7 +494,7 @@ pub(crate) fn run(
     // Window close → quit main loop.
     window.connect_delete_event(|_, _| {
         gtk::main_quit();
-        glib::Propagation::Proceed
+        gtk::glib::Propagation::Proceed
     });
 
     // Timer: drain background → GUI messages.
@@ -508,7 +508,7 @@ pub(crate) fn run(
         let installer_timer = installer.clone();
         let btn_next_focus = btn_next.clone();
 
-        glib::timeout_add_local(Duration::from_millis(50), move || {
+        gtk::glib::timeout_add_local(Duration::from_millis(50), move || {
             loop {
                 match rx.try_recv() {
                     Ok(GuiMessage::SetStatus(s)) => {
@@ -611,7 +611,7 @@ pub(crate) fn run(
                     Err(mpsc::TryRecvError::Disconnected) => break,
                 }
             }
-            glib::ControlFlow::Continue
+            gtk::glib::ControlFlow::Continue
         })
     };
 

@@ -14,7 +14,7 @@ fn bold_heading(text: &str, size: &str) -> gtk::Label {
     let label = gtk::Label::new(None);
     label.set_markup(&format!(
         "<span weight='bold' size='{size}'>{}</span>",
-        glib::markup_escape_text(text)
+        gtk::glib::markup_escape_text(text)
     ));
     label.set_xalign(0.0);
     label.set_halign(gtk::Align::Start);
@@ -304,12 +304,12 @@ impl ComponentsPage {
             };
             cb.connect_enter_notify_event(move |_, _| {
                 desc_enter.set_text(&description);
-                glib::Propagation::Proceed
+                gtk::glib::Propagation::Proceed
             });
             let desc_leave_cb = desc_label.clone();
             cb.connect_leave_notify_event(move |_, _| {
                 desc_leave_cb.set_text("");
-                glib::Propagation::Proceed
+                gtk::glib::Propagation::Proceed
             });
             list_box.pack_start(&cb, false, false, 0);
             checks.push((c.id.clone(), cb));
@@ -324,7 +324,7 @@ impl ComponentsPage {
         let desc_leave = desc_label.clone();
         scrolled.connect_leave_notify_event(move |_, _| {
             desc_leave.set_text("");
-            glib::Propagation::Proceed
+            gtk::glib::Propagation::Proceed
         });
 
         Self {

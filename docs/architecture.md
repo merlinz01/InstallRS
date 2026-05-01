@@ -38,7 +38,7 @@ src/
   types.rs              # OverwriteMode, ErrorAction, DirFilter / DirErrorHandler
   progress.rs           # ProgressSink trait + internal ProgressState
   options.rs            # OptionKind / OptionValue / FromOptionValue + CmdOption
-  component.rs          # Component struct with default_off / required
+  component.rs          # Component struct with .required() builder
   ops.rs                # FileOp / DirOp / UninstallerOp / MkdirOp / RemoveOp
                         # plus install_children / backup / write helpers
   shortcut.rs           # (Windows-only) ShortcutOp + SHChangeNotify plumbing
@@ -96,8 +96,8 @@ Everything users touch at runtime:
 - `EmbeddedEntry` / `DirChild` / `DirChildKind` — the entries table
   the generated `ENTRIES` static is shaped to; `verify_payload`
   checks its SHA-256 on process start.
-- `Component { id, label, description, progress_weight, default,
-  required, selected }` with `.default_off()` / `.required()`.
+- `Component { id, label, description, progress_weight, required,
+  selected }` with `.required()`.
 - User-defined CLI options (`OptionKind`, `OptionValue`,
   `FromOptionValue` for `bool`/`String`/`i64`/`i32`/`u64`/`u32`) and
   `process_commandline()` — errors on unknown flags.

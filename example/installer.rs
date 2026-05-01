@@ -68,8 +68,8 @@ pub fn install(i: &mut Installer) -> Result<()> {
         t!("installer.components.extras"),
         t!("installer.components.extras_desc"),
         1,
-    )
-    .default_off();
+    );
+    i.set_component_selected("extras", false);
 
     // Register custom CLI options. `--yes` skips every confirmation prompt
     // (handy for CI / unattended installs); `--install-dir` overrides the

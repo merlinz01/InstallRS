@@ -26,19 +26,17 @@ Arguments:
   the progress bar when selected. (See
   [progress reporting](embedded-files.md#progress-reporting).)
 
-Components start **selected** by default. Chain modifiers to change
-that:
-
-- `.default_off()` — start unchecked; user has to opt in.
-- `.required()` — start checked and cannot be unchecked (renders
-  greyed-out in the wizard, always on in headless mode).
+Components start **selected** by default. To make one opt-in, call
+`set_component_selected(id, false)` after registration. Chain
+`.required()` to mark a component as required (always selected,
+greyed-out in the wizard, always on in headless mode):
 
 ```rust
 i.add_component("core", "Core files", "Always installed", 10)
     .required();
 i.add_component("docs", "Documentation", "User manual and readme", 3);
-i.add_component("extras", "Extra samples", "Optional example files", 1)
-    .default_off();
+i.add_component("extras", "Extra samples", "Optional example files", 1);
+i.set_component_selected("extras", false);
 ```
 
 Query selection state inside the install callback:

@@ -368,13 +368,16 @@ impl Installer {
     ///
     /// ```rust,ignore
     /// i.add_component("docs", "Documentation", "User-facing docs", 3);
-    /// i.add_component("extras", "Extras", "Optional samples", 1).default_off();
     /// i.add_component("core", "Core files", "Always installed", 10).required();
+    /// // Opt-in component: register, then deselect.
+    /// i.add_component("extras", "Extras", "Optional samples", 1);
+    /// i.set_component_selected("extras", false);
     /// ```
     ///
-    /// Components start selected (`default = true`); call `.default_off()`
-    /// on ones the user has to opt into. Panics if a component with the
-    /// same `id` is already registered.
+    /// Components start selected. To make one opt-in, call
+    /// [`set_component_selected`](Self::set_component_selected) with
+    /// `false` after registration. Panics if a component with the same
+    /// `id` is already registered.
     ///
     /// **Ordering:** register every component *before* calling
     /// [`process_commandline`](Self::process_commandline) — `--components`,
@@ -398,7 +401,6 @@ impl Installer {
             label,
             description,
             progress_weight,
-            default: true,
             required: false,
             selected: true,
         });
@@ -1236,7 +1238,8 @@ mod tests {
         let mut i = make_bare_installer();
         i.add_component("core", "Core", "", 5).required();
         i.add_component("docs", "Docs", "", 3);
-        i.add_component("extras", "Extras", "", 2).default_off();
+        i.add_component("extras", "Extras", "", 2);
+        i.set_component_selected("extras", false);
         assert_eq!(i.total_steps(), 8);
         i.set_component_selected("extras", true);
         assert_eq!(i.total_steps(), 10);
@@ -1250,7 +1253,8 @@ mod tests {
     fn component_register_and_query() {
         let mut i = make_bare_installer();
         i.add_component("core", "Core", "", 1).required();
-        i.add_component("docs", "Docs", "", 1).default_off();
+        i.add_component("docs", "Docs", "", 1);
+        i.set_component_selected("docs", false);
         i.add_component("extras", "Extras", "", 1);
 
         assert_eq!(i.components().len(), 3);
@@ -1303,7 +1307,8 @@ mod tests {
     #[test]
     fn cli_with_and_without_delta() {
         let mut i = make_bare_installer();
-        i.add_component("a", "A", "", 1).default_off();
+        i.add_component("a", "A", "", 1);
+        i.set_component_selected("a", false);
         i.add_component("b", "B", "", 1);
         let args = vec![
             "installer".into(),

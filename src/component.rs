@@ -10,8 +10,10 @@
 ///
 /// ```rust,ignore
 /// i.add_component("docs", "Documentation", "User-facing docs", 3);
-/// i.add_component("extras", "Extras", "Optional samples", 1).default_off();
 /// i.add_component("core", "Core files", "Always installed", 10).required();
+/// // Opt-in component: register, then deselect.
+/// i.add_component("extras", "Extras", "Optional samples", 1);
+/// i.set_component_selected("extras", false);
 /// ```
 ///
 /// Query with [`crate::Installer::is_component_selected`] inside the install
@@ -25,7 +27,6 @@ pub struct Component {
     /// when selected. Over/undershoot is possible if the actual op count
     /// diverges from this number.
     pub(crate) progress_weight: u32,
-    pub(crate) default: bool,
     pub(crate) required: bool,
     pub(crate) selected: bool,
 }
@@ -36,17 +37,6 @@ impl Component {
     pub fn required(&mut self) -> &mut Self {
         self.required = true;
         self.selected = true;
-        self.default = true;
-        self
-    }
-
-    /// Start this component unchecked. Components default to on — call this
-    /// on ones the user has to opt into.
-    pub fn default_off(&mut self) -> &mut Self {
-        self.default = false;
-        if !self.required {
-            self.selected = false;
-        }
         self
     }
 }

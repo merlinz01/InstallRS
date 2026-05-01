@@ -159,7 +159,7 @@ impl Installer {
             for c in &self.components {
                 let marker = if c.required {
                     "*"
-                } else if c.default {
+                } else if c.selected {
                     "+"
                 } else {
                     "-"
@@ -169,7 +169,7 @@ impl Installer {
                     println!("    {}", c.description);
                 }
             }
-            println!("\n  * required   + default on   - default off");
+            println!("\n  * required   + selected   - unselected");
             std::process::exit(0);
         }
 

@@ -76,7 +76,7 @@ struct Page {
     is_uninstall: bool,
 }
 
-pub fn run(
+pub(crate) fn run(
     config: WizardConfig,
     installer: Arc<Mutex<Installer>>,
     cancelled: Arc<AtomicBool>,

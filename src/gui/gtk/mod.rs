@@ -49,7 +49,7 @@ pub(crate) fn apply_default_window_icon() {
 
 /// Run the wizard GUI on the main thread, spawning the install callback on a
 /// background thread when the install page is reached.
-pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()> {
+pub(crate) fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()> {
     // Grab the real installer's cancellation flag BEFORE we swap it out, so
     // the Cancel button, the Ctrl+C handler, and `check_cancelled()` inside
     // the install callback all see the same flag.

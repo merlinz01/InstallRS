@@ -9,7 +9,7 @@ use crate::Installer;
 
 /// Run the wizard GUI on the main thread, spawning the install callback on a
 /// background thread when the install page is reached.
-pub fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()> {
+pub(crate) fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Result<()> {
     // Take ownership of the installer into a shared handle so the background
     // thread can use it.  We swap in a dummy that will be replaced after the
     // wizard finishes.

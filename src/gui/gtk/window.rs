@@ -73,7 +73,7 @@ fn prev_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Opti
     }
 }
 
-pub fn run(
+pub(crate) fn run(
     config: WizardConfig,
     installer: Arc<Mutex<Installer>>,
     cancelled: Arc<AtomicBool>,

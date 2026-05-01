@@ -50,20 +50,20 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // Register selectable components. "core" is required; "docs" is on by
     // default; "extras" is off by default. Progress weights approximate the
     // number of operations each component performs during install.
-    i.component(
+    i.add_component(
         "core",
         t!("installer.components.core"),
         t!("installer.components.core_desc"),
         6,
     )
     .required();
-    i.component(
+    i.add_component(
         "docs",
         t!("installer.components.docs"),
         t!("installer.components.docs_desc"),
         1,
     );
-    i.component(
+    i.add_component(
         "extras",
         t!("installer.components.extras"),
         t!("installer.components.extras_desc"),

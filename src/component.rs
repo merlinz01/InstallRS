@@ -1,17 +1,17 @@
-//! The [`Component`] type — registered via [`crate::Installer::component`]
+//! The [`Component`] type — registered via [`crate::Installer::add_component`]
 //! for optional wizard/CLI-selectable install features.
 
 /// An optional feature the user can select or deselect at install time.
 ///
-/// Registered via [`crate::Installer::component`]. The component's progress weight
+/// Registered via [`crate::Installer::add_component`]. The component's progress weight
 /// contributes to the installer's step total whenever the component is
 /// selected; operations performed while the component is active each advance
 /// the cursor by their own weight (default 1).
 ///
 /// ```rust,ignore
-/// i.component("docs", "Documentation", "User-facing docs", 3);
-/// i.component("extras", "Extras", "Optional samples", 1).default_off();
-/// i.component("core", "Core files", "Always installed", 10).required();
+/// i.add_component("docs", "Documentation", "User-facing docs", 3);
+/// i.add_component("extras", "Extras", "Optional samples", 1).default_off();
+/// i.add_component("core", "Core files", "Always installed", 10).required();
 /// ```
 ///
 /// Query with [`crate::Installer::is_component_selected`] inside the install

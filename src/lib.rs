@@ -367,9 +367,9 @@ impl Installer {
     /// diverges from `progress_weight`.
     ///
     /// ```rust,ignore
-    /// i.component("docs", "Documentation", "User-facing docs", 3);
-    /// i.component("extras", "Extras", "Optional samples", 1).default_off();
-    /// i.component("core", "Core files", "Always installed", 10).required();
+    /// i.add_component("docs", "Documentation", "User-facing docs", 3);
+    /// i.add_component("extras", "Extras", "Optional samples", 1).default_off();
+    /// i.add_component("core", "Core files", "Always installed", 10).required();
     /// ```
     ///
     /// Components start selected (`default = true`); call `.default_off()`
@@ -380,7 +380,7 @@ impl Installer {
     /// [`process_commandline`](Self::process_commandline) — `--components`,
     /// `--with`, `--without`, and `--list-components` resolve against the
     /// registered set, and unknown ids error out.
-    pub fn component(
+    pub fn add_component(
         &mut self,
         id: impl AsRef<str>,
         label: impl AsRef<str>,
@@ -1222,7 +1222,7 @@ mod tests {
             }
         }
         i.set_progress_sink(Box::new(Forward(sink.clone())));
-        i.component("core", "Core", "", 1).required();
+        i.add_component("core", "Core", "", 1).required();
         i.file(src("a.txt"), "out.txt")
             .status("installing")
             .log("copying a.txt")
@@ -1240,9 +1240,9 @@ mod tests {
     #[test]
     fn total_steps_sums_selected_components() {
         let mut i = make_bare_installer();
-        i.component("core", "Core", "", 5).required();
-        i.component("docs", "Docs", "", 3);
-        i.component("extras", "Extras", "", 2).default_off();
+        i.add_component("core", "Core", "", 5).required();
+        i.add_component("docs", "Docs", "", 3);
+        i.add_component("extras", "Extras", "", 2).default_off();
         assert_eq!(i.total_steps(), 8);
         i.set_component_selected("extras", true);
         assert_eq!(i.total_steps(), 10);
@@ -1255,9 +1255,9 @@ mod tests {
     #[test]
     fn component_register_and_query() {
         let mut i = make_bare_installer();
-        i.component("core", "Core", "", 1).required();
-        i.component("docs", "Docs", "", 1).default_off();
-        i.component("extras", "Extras", "", 1);
+        i.add_component("core", "Core", "", 1).required();
+        i.add_component("docs", "Docs", "", 1).default_off();
+        i.add_component("extras", "Extras", "", 1);
 
         assert_eq!(i.components().len(), 3);
         assert!(i.is_component_selected("core"));
@@ -1269,7 +1269,7 @@ mod tests {
     #[test]
     fn component_required_cannot_be_deselected() {
         let mut i = make_bare_installer();
-        i.component("core", "Core", "", 1).required();
+        i.add_component("core", "Core", "", 1).required();
         i.set_component_selected("core", false);
         assert!(i.is_component_selected("core"));
     }
@@ -1277,8 +1277,8 @@ mod tests {
     #[test]
     fn component_reregistration_updates_in_place() {
         let mut i = make_bare_installer();
-        i.component("docs", "v1", "", 1);
-        i.component("docs", "v2", "", 1).default_off();
+        i.add_component("docs", "v1", "", 1);
+        i.add_component("docs", "v2", "", 1).default_off();
         assert_eq!(i.components().len(), 1);
         assert_eq!(i.components()[0].label, "v2");
         assert!(!i.is_component_selected("docs"));
@@ -1287,9 +1287,9 @@ mod tests {
     #[test]
     fn cli_exact_components_selects_only_listed() {
         let mut i = make_bare_installer();
-        i.component("a", "A", "", 1);
-        i.component("b", "B", "", 1);
-        i.component("c", "C", "", 1);
+        i.add_component("a", "A", "", 1);
+        i.add_component("b", "B", "", 1);
+        i.add_component("c", "C", "", 1);
         let args = vec!["installer".into(), "--components".into(), "a,c".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("a"));
@@ -1300,8 +1300,8 @@ mod tests {
     #[test]
     fn cli_exact_components_keeps_required() {
         let mut i = make_bare_installer();
-        i.component("core", "Core", "", 1).required();
-        i.component("docs", "Docs", "", 1);
+        i.add_component("core", "Core", "", 1).required();
+        i.add_component("docs", "Docs", "", 1);
         let args = vec!["installer".into(), "--components=docs".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("core"));
@@ -1311,8 +1311,8 @@ mod tests {
     #[test]
     fn cli_with_and_without_delta() {
         let mut i = make_bare_installer();
-        i.component("a", "A", "", 1).default_off();
-        i.component("b", "B", "", 1);
+        i.add_component("a", "A", "", 1).default_off();
+        i.add_component("b", "B", "", 1);
         let args = vec![
             "installer".into(),
             "--with".into(),
@@ -1328,7 +1328,7 @@ mod tests {
     #[test]
     fn cli_unknown_component_errors() {
         let mut i = make_bare_installer();
-        i.component("a", "A", "", 1);
+        i.add_component("a", "A", "", 1);
         let args = vec!["installer".into(), "--with=bogus".into()];
         assert!(i.process_commandline_from(&args).is_err());
     }
@@ -1336,7 +1336,7 @@ mod tests {
     #[test]
     fn cli_without_cannot_disable_required() {
         let mut i = make_bare_installer();
-        i.component("core", "Core", "", 1).required();
+        i.add_component("core", "Core", "", 1).required();
         let args = vec!["installer".into(), "--without=core".into()];
         i.process_commandline_from(&args).unwrap();
         assert!(i.is_component_selected("core"));

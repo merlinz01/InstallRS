@@ -163,7 +163,7 @@ impl InstallerGui {
     /// Add a components page (list of checkboxes for optional features).
     ///
     /// Components must be registered on the `Installer` via
-    /// [`Installer::component`](crate::Installer::component) before calling
+    /// [`Installer::add_component`](crate::Installer::add_component) before calling
     /// [`run`](Self::run). The page renders one checkbox per registered
     /// component; required components render greyed-out.
     ///

@@ -173,7 +173,7 @@ etc.) regardless of your page-string translations.
 ### Component labels and descriptions
 
 ```rust
-i.component(
+i.add_component(
     "core",
     t!("components.core"),           // label
     t!("components.core_desc"),      // description

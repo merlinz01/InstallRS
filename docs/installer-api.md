@@ -9,10 +9,10 @@ doc covers both.
 
 ## Components
 
-Register optional features with `Installer::component`:
+Register optional features with `Installer::add_component`:
 
 ```rust
-i.component(id, label, description, progress_weight)
+i.add_component(id, label, description, progress_weight)
 ```
 
 Arguments:
@@ -34,10 +34,10 @@ that:
   greyed-out in the wizard, always on in headless mode).
 
 ```rust
-i.component("core", "Core files", "Always installed", 10)
+i.add_component("core", "Core files", "Always installed", 10)
     .required();
-i.component("docs", "Documentation", "User manual and readme", 3);
-i.component("extras", "Extra samples", "Optional example files", 1)
+i.add_component("docs", "Documentation", "User manual and readme", 3);
+i.add_component("extras", "Extra samples", "Optional example files", 1)
     .default_off();
 ```
 

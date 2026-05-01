@@ -26,6 +26,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
   method previously named `option` is now `add_option`. The raw
   `option_value` / `set_option_value` accessors are no longer public —
   use the typed `option<T>` / `set_option` instead.
+- **Breaking:** Rename `Installer::component` to `Installer::add_component`.
 
 ### Fixed
 

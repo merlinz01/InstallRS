@@ -151,8 +151,8 @@ Then update `install()` to build a wizard:
 use installrs::gui::*;
 
 pub fn install(i: &mut Installer) -> Result<()> {
-    i.component("core", "Core files", "Required files", 5).required();
-    i.component("docs", "Documentation", "User guide + examples", 2);
+    i.add_component("core", "Core files", "Required files", 5).required();
+    i.add_component("docs", "Documentation", "User guide + examples", 2);
 
     i.process_commandline()?;
 

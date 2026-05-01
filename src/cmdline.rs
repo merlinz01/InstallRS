@@ -17,7 +17,7 @@ impl Installer {
     ///
     /// ```rust,ignore
     /// pub fn install(i: &mut Installer) -> Result<()> {
-    ///     i.component("docs", "Documentation", "", 3);
+    ///     i.add_component("docs", "Documentation", "", 3);
     ///     i.process_commandline()?;
     ///     // ... wizard or headless install flow ...
     /// }
@@ -39,7 +39,7 @@ impl Installer {
     /// components stay selected regardless.
     ///
     /// **Ordering:** register every component
-    /// ([`component`](Installer::component)) and every custom flag
+    /// ([`component`](Installer::add_component)) and every custom flag
     /// ([`option`](Installer::option)) *before* calling this. Unknown
     /// component ids and unregistered flags both error out.
     pub fn process_commandline(&mut self) -> Result<()> {

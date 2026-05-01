@@ -8,6 +8,7 @@ use anyhow::{anyhow, Result};
 /// storage file, in `D_*` declaration order); `uninstaller_data` is the
 /// embedded uninstaller (empty slice for an uninstaller binary). Call at
 /// process start — the generated `main()` invokes it before anything else.
+#[doc(hidden)]
 pub fn verify_payload(blobs: &[&[u8]], uninstaller_data: &[u8], expected: &[u8; 32]) -> Result<()> {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
@@ -25,6 +26,7 @@ pub fn verify_payload(blobs: &[&[u8]], uninstaller_data: &[u8], expected: &[u8; 
 }
 
 /// A top-level embedded entry baked into the installer binary at compile time.
+#[doc(hidden)]
 pub enum EmbeddedEntry {
     File {
         source_path_hash: u64,
@@ -38,12 +40,14 @@ pub enum EmbeddedEntry {
 }
 
 /// A named child inside an [`EmbeddedEntry::Dir`] tree.
+#[doc(hidden)]
 pub struct DirChild {
     pub name: &'static str,
     pub kind: DirChildKind,
 }
 
 /// The payload of a [`DirChild`] — either file data or a nested directory.
+#[doc(hidden)]
 pub enum DirChildKind {
     File {
         data: &'static [u8],

@@ -3,6 +3,7 @@
 /// Compile-time FNV-1a 64-bit hash of a path string (backslashes normalized to forward slashes).
 ///
 /// Used by the [`crate::source!`] macro.
+#[doc(hidden)]
 pub const fn source_path_hash_const(path: &str) -> u64 {
     let bytes = path.as_bytes();
     let mut h: u64 = 14695981039346656037;
@@ -21,7 +22,7 @@ pub const fn source_path_hash_const(path: &str) -> u64 {
 /// Create one with the [`crate::source!`] macro, then pass it to
 /// [`crate::Installer::file`] or [`crate::Installer::dir`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Source(pub u64);
+pub struct Source(#[doc(hidden)] pub u64);
 
 /// Produce a [`Source`] from a literal path, hashed at compile time.
 ///

@@ -56,6 +56,7 @@ pub struct Installer {
 }
 
 impl Installer {
+    #[doc(hidden)]
     pub fn new(
         entries: &'static [EmbeddedEntry],
         uninstaller_data: &'static [u8],
@@ -650,6 +651,7 @@ impl Installer {
     /// The user's `install_fn` is expected to call
     /// [`Installer::process_commandline`] itself (typically right after
     /// registering components).
+    #[doc(hidden)]
     pub fn install_main(&mut self, install_fn: impl Fn(&mut Installer) -> Result<()>) {
         if self.sink.is_none() {
             self.sink = Some(Box::new(progress::StderrProgressSink::new()));
@@ -661,6 +663,7 @@ impl Installer {
     }
 
     /// Entry point for uninstaller binaries. Call this from `main()`.
+    #[doc(hidden)]
     pub fn uninstall_main(&mut self, uninstall_fn: impl Fn(&mut Installer) -> Result<()>) {
         if self.sink.is_none() {
             self.sink = Some(Box::new(progress::StderrProgressSink::new()));

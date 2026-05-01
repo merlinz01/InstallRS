@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 
 use crate::ops::impl_common_op_setters;
+use crate::types::OverwriteMode;
 use crate::Installer;
 
 /// Windows registry root hive. Maps to the `HKEY_*` constants.
@@ -78,6 +79,7 @@ impl<'i> Registry<'i> {
             subkey: subkey.as_ref().to_string(),
             name: name.as_ref().to_string(),
             value: owned,
+            overwrite: OverwriteMode::Overwrite,
             weight: 1,
             status: None,
             log: None,
@@ -143,6 +145,7 @@ pub struct RegSetOp<'i> {
     subkey: String,
     name: String,
     value: winreg::RegValue<'static>,
+    overwrite: OverwriteMode,
     weight: u32,
     status: Option<String>,
     log: Option<String>,
@@ -151,7 +154,18 @@ pub struct RegSetOp<'i> {
 impl_common_op_setters!(RegSetOp);
 
 impl<'i> RegSetOp<'i> {
-    /// Run the op: create the subkey if needed and write the value.
+    /// How to react when the named value already exists. Defaults to
+    /// [`OverwriteMode::Overwrite`]. [`OverwriteMode::Skip`] leaves the
+    /// existing value untouched; [`OverwriteMode::Error`] aborts the
+    /// install with an error. [`OverwriteMode::Backup`] is treated as
+    /// `Overwrite` for registry values (no sidecar backup is created).
+    pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
+        self.overwrite = mode;
+        self
+    }
+
+    /// Run the op: create the subkey if needed and write the value,
+    /// honoring the configured overwrite policy.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -160,11 +174,39 @@ impl<'i> RegSetOp<'i> {
         let subkey = self.subkey;
         let name = self.name;
         let value = self.value;
+        let overwrite = self.overwrite;
         self.installer.run_weighted_step(self.weight, || {
             let hkey = winreg::RegKey::predef(hive.to_hkey());
             let (k, _) = hkey
                 .create_subkey(&subkey)
                 .with_context(|| format!("failed to create {}\\{subkey}", hive.display()))?;
+            // Skip / Error modes need to know whether the named value
+            // already exists. `get_raw_value` returns NotFound for
+            // missing values, which we treat as "doesn't exist".
+            let exists = match k.get_raw_value(&name) {
+                Ok(_) => true,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                // Any other error (e.g. access denied) bubbles up here
+                // rather than during set_raw_value, which would be
+                // misleading.
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("failed to inspect {}\\{subkey}\\{name}", hive.display())
+                    });
+                }
+            };
+            if exists {
+                match overwrite {
+                    OverwriteMode::Skip => return Ok(()),
+                    OverwriteMode::Error => {
+                        return Err(anyhow::anyhow!(
+                            "registry value {}\\{subkey}\\{name} already exists",
+                            hive.display()
+                        ));
+                    }
+                    OverwriteMode::Overwrite | OverwriteMode::Backup => {}
+                }
+            }
             k.set_raw_value(&name, &value)
                 .with_context(|| format!("failed to set {}\\{subkey}\\{name}", hive.display()))?;
             Ok(())

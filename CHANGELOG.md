@@ -17,6 +17,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - **Breaking:** `Registry::default` (which was a misnamed shorthand
   for `set(..., "", value)`) removed. Pass `""` as the name argument
   to `set` to write the unnamed default value.
+- `RegSetOp::overwrite(OverwriteMode)` now mirrors the file/dir
+  overwrite policy: `Skip` leaves an existing value untouched,
+  `Error` fails if it exists, `Overwrite` (default) and `Backup`
+  always write.
 - **Breaking:** option-API renames. `get_option` → `option`,
   `set_option_default` → `set_option_if_unset`, and the registration
   method previously named `option` is now `add_option`. The raw

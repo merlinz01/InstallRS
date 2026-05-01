@@ -27,6 +27,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
   `option_value` / `set_option_value` accessors are no longer public —
   use the typed `option<T>` / `set_option` instead.
 - **Breaking:** Rename `Installer::component` to `Installer::add_component`.
+- `Installer::add_component` now panics if the same component ID is added more than once.
 
 ### Fixed
 

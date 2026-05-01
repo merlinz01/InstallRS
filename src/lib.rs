@@ -373,8 +373,8 @@ impl Installer {
     /// ```
     ///
     /// Components start selected (`default = true`); call `.default_off()`
-    /// on ones the user has to opt into. Later calls with the same `id`
-    /// update the existing component in place.
+    /// on ones the user has to opt into. Panics if a component with the
+    /// same `id` is already registered.
     ///
     /// **Ordering:** register every component *before* calling
     /// [`process_commandline`](Self::process_commandline) — `--components`,
@@ -390,14 +390,8 @@ impl Installer {
         let id = id.as_ref().to_string();
         let label = label.as_ref().to_string();
         let description = description.as_ref().to_string();
-        if let Some(pos) = self.components.iter().position(|c| c.id == id) {
-            let existing = &mut self.components[pos];
-            existing.label = label;
-            existing.description = description;
-            existing.progress_weight = progress_weight;
-            existing.default = true;
-            existing.selected = true;
-            return existing;
+        if self.components.iter().any(|c| c.id == id) {
+            panic!("component with id {id:?} is already registered");
         }
         self.components.push(Component {
             id,
@@ -1275,13 +1269,11 @@ mod tests {
     }
 
     #[test]
-    fn component_reregistration_updates_in_place() {
+    #[should_panic(expected = "component with id \"docs\" is already registered")]
+    fn component_reregistration_panics() {
         let mut i = make_bare_installer();
         i.add_component("docs", "v1", "", 1);
-        i.add_component("docs", "v2", "", 1).default_off();
-        assert_eq!(i.components().len(), 1);
-        assert_eq!(i.components()[0].label, "v2");
-        assert!(!i.is_component_selected("docs"));
+        i.add_component("docs", "v2", "", 1);
     }
 
     #[test]

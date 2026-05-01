@@ -342,8 +342,12 @@ impl Installer {
         self.components.last_mut().unwrap()
     }
 
-    /// All registered components, in registration order.
-    pub fn components(&self) -> &[Component] {
+    /// All registered components, in registration order. Internal: the GUI
+    /// backends iterate this to render the components page; user code should
+    /// reach for [`Self::is_component_selected`] / [`Self::set_component_selected`]
+    /// instead, which reference components by id.
+    #[allow(dead_code)] // Used only by the GUI backends, both feature-gated.
+    pub(crate) fn components(&self) -> &[Component] {
         &self.components
     }
 

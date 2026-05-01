@@ -18,16 +18,16 @@
 /// callback to branch on user choice.
 #[derive(Clone, Debug)]
 pub struct Component {
-    pub id: String,
-    pub label: String,
-    pub description: String,
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) description: String,
     /// Step weight this component contributes to the global progress total
     /// when selected. Over/undershoot is possible if the actual op count
     /// diverges from this number.
-    pub progress_weight: u32,
-    pub default: bool,
-    pub required: bool,
-    pub selected: bool,
+    pub(crate) progress_weight: u32,
+    pub(crate) default: bool,
+    pub(crate) required: bool,
+    pub(crate) selected: bool,
 }
 
 impl Component {

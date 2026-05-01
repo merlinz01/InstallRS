@@ -3,24 +3,29 @@ use anyhow::Result;
 use crate::Installer;
 
 /// Callback type for the install page closure.
+#[doc(hidden)]
 pub type InstallCallback = Box<dyn FnOnce(&mut Installer) -> Result<()> + Send + 'static>;
 
 /// Callback that runs after a page becomes visible via forward navigation.
 /// Back navigation does not fire this callback.
+#[doc(hidden)]
 pub type OnEnterCallback = Box<dyn Fn(&mut Installer) -> Result<()> + 'static>;
 
 /// Callback that runs before forward navigation away from a page.
 /// Returning `Ok(false)` cancels the navigation. Back navigation does not
 /// fire this callback.
+#[doc(hidden)]
 pub type OnBeforeLeaveCallback = Box<dyn Fn(&mut Installer) -> Result<bool> + 'static>;
 
 /// Pure predicate: returns `true` to hide the page. Evaluated every time
 /// the wizard navigates past it, so the outcome can change mid-wizard as
 /// installer state (options, component selection, etc.) evolves. Must not
 /// mutate state — run side effects from `on_enter` instead.
+#[doc(hidden)]
 pub type SkipIfCallback = Box<dyn Fn(&Installer) -> bool + 'static>;
 
 /// Configuration for the wizard-style installer GUI.
+#[doc(hidden)]
 pub struct WizardConfig {
     pub title: String,
     pub pages: Vec<ConfiguredPage>,
@@ -28,6 +33,7 @@ pub struct WizardConfig {
 }
 
 /// A wizard page with optional navigation callbacks.
+#[doc(hidden)]
 pub struct ConfiguredPage {
     pub page: WizardPage,
     pub on_enter: Option<OnEnterCallback>,
@@ -72,6 +78,7 @@ impl Default for ButtonLabels {
 }
 
 /// A single page in the wizard flow.
+#[doc(hidden)]
 pub enum WizardPage {
     Welcome {
         title: String,
@@ -140,6 +147,7 @@ pub enum WizardPage {
 /// A single row on a [`WizardPage::Custom`]. Built via
 /// [`CustomPageBuilder`] and rendered as a labeled input control in a
 /// vertical column.
+#[doc(hidden)]
 #[derive(Clone, Debug)]
 pub enum CustomWidget {
     /// Single-line text entry (optionally masked as a password).
@@ -349,6 +357,7 @@ impl CustomPageBuilder {
 }
 
 /// Messages sent from the background install thread to the GUI thread.
+#[doc(hidden)]
 pub enum GuiMessage {
     SetStatus(String),
     SetProgress(f64),

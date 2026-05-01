@@ -34,7 +34,7 @@
 //!
 //! [GUI Wizard guide]: https://github.com/merlinz01/InstallRS/blob/main/docs/gui-wizard.md
 
-pub mod dialog;
+mod dialog;
 mod types;
 
 #[cfg(feature = "gui-win32")]

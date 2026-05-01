@@ -64,12 +64,20 @@ impl<'i> Registry<'i> {
         name: impl AsRef<str>,
         value: V,
     ) -> RegSetOp<'i> {
+        // `to_reg_value()` returns a `RegValue<'_>` whose bytes may
+        // borrow from `value`. Convert to an owned-bytes `RegValue<'static>`
+        // so the op can outlive the original input.
+        let borrowed = value.to_reg_value();
+        let owned = winreg::RegValue {
+            bytes: std::borrow::Cow::Owned(borrowed.bytes.into_owned()),
+            vtype: borrowed.vtype,
+        };
         RegSetOp {
             installer: self.installer,
             hive,
             subkey: subkey.as_ref().to_string(),
             name: name.as_ref().to_string(),
-            value: value.to_reg_value(),
+            value: owned,
             weight: 1,
             status: None,
             log: None,
@@ -145,7 +153,7 @@ pub struct RegSetOp<'i> {
     hive: RegistryHive,
     subkey: String,
     name: String,
-    value: winreg::RegValue,
+    value: winreg::RegValue<'static>,
     weight: u32,
     status: Option<String>,
     log: Option<String>,

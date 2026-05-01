@@ -2,7 +2,7 @@
 name = "installrs"
 version = "0.1.0-rc13"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.95"
 description = "Build self-contained software installers in plain Rust, with an optional native wizard GUI (Win32 / GTK3), component selection, progress, cancellation, and compression."
 license = "MIT"
 repository = "https://github.com/merlinz01/InstallRS"
@@ -36,7 +36,7 @@ lzma-rust2 = { version = "0.16", default-features = false, features = ["std", "x
 flate2 = { version = "1", features = ["rust_backend"], optional = true }
 bzip2 = { version = "0.6", optional = true }
 clap = { version = "4", features = ["derive"] }
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 syn = { version = "2", features = ["full", "visit"] }
 serde = { version = "1", features = ["derive"] }
@@ -48,17 +48,17 @@ semver = "1"
 log = "0.4"
 env_logger = "0.11"
 image = { version = "0.25", default-features = false, features = ["png"] }
-ico = "0.3"
+ico = "0.5"
 ctrlc = "3"
 
 [target.'cfg(windows)'.dependencies]
 winsafe = { version = "0.0.27", features = ["gui", "shell"], optional = true }
 mslnk = "0.1"
-winreg = "0.52"
+winreg = "0.56"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", optional = true }
-glib = { version = "0.18", optional = true }
+glib = { version = "0.22", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

@@ -7,6 +7,8 @@ use anyhow::{anyhow, Context, Result};
 use crate::ops::impl_common_op_setters;
 use crate::Installer;
 
+/// Builder for creating a Windows `.lnk` shortcut. Created by
+/// [`Installer::shortcut`](crate::Installer::shortcut).
 pub struct ShortcutOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) dst: String,
@@ -45,6 +47,8 @@ impl<'i> ShortcutOp<'i> {
         self.icon = Some((path.as_ref().to_string(), index));
         self
     }
+    /// Run the op: write the `.lnk` file and notify Explorer to pick
+    /// it up. Creates parent directories as needed.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);

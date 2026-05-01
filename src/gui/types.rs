@@ -56,11 +56,21 @@ impl ConfiguredPage {
 /// [`InstallerGui::buttons`](crate::gui::InstallerGui::buttons) to translate
 /// or rename them.
 pub struct ButtonLabels {
+    /// Label for the Back button (default: `"< Back"`).
     pub back: String,
+    /// Label for the Next button on non-terminal pages (default: `"Next >"`).
     pub next: String,
+    /// Label shown on the Next button immediately before an install
+    /// page (default: `"Install"`).
     pub install: String,
+    /// Label shown on the Next button immediately before an uninstall
+    /// page — set via [`crate::gui::InstallerGui::uninstall_page`]
+    /// (default: `"Uninstall"`).
     pub uninstall: String,
+    /// Label shown on the Next button on the finish page
+    /// (default: `"Finish"`).
     pub finish: String,
+    /// Label for the Cancel button (default: `"Cancel"`).
     pub cancel: String,
 }
 

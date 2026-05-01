@@ -20,9 +20,14 @@ pub enum OptionKind {
 /// [`crate::Installer::process_commandline`].
 #[derive(Clone, Debug)]
 pub enum OptionValue {
+    /// A presence flag (`--name`). The bool is `true` iff the flag
+    /// was passed on the command line.
     Flag(bool),
+    /// A string-valued option (`--name <text>`).
     String(String),
+    /// An integer-valued option (`--name <i64>`).
     Int(i64),
+    /// An explicit boolean (`--name true|false`).
     Bool(bool),
 }
 
@@ -61,6 +66,9 @@ impl From<i32> for OptionValue {
 /// [`crate::Installer::option`]. Implemented for `bool`, `String`, `i64`,
 /// `i32`, `u64`, `u32`.
 pub trait FromOptionValue: Sized {
+    /// Try to extract a `Self` from an [`OptionValue`]. Returns `None`
+    /// when the variant doesn't match the requested type (e.g.
+    /// asking for `i64` when the option is a `String`).
     fn from_option_value(v: &OptionValue) -> Option<Self>;
 }
 

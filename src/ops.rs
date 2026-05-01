@@ -17,10 +17,14 @@ use crate::{Installer, Source};
 macro_rules! impl_common_op_setters {
     ($ty:ident) => {
         impl<'i> $ty<'i> {
+            /// Status message emitted via the progress sink (or shown in
+            /// the wizard's status label) when this op runs.
             pub fn status(mut self, s: impl AsRef<str>) -> Self {
                 self.status = Some(s.as_ref().to_string());
                 self
             }
+            /// Log line appended to the wizard's log textbox / stderr /
+            /// log file when this op runs.
             pub fn log(mut self, s: impl AsRef<str>) -> Self {
                 self.log = Some(s.as_ref().to_string());
                 self
@@ -38,6 +42,12 @@ pub(crate) use impl_common_op_setters;
 
 // ── Builder ops ─────────────────────────────────────────────────────────────
 
+/// Builder for installing a single embedded file. Created by
+/// [`Installer::file`](crate::Installer::file); finalize with
+/// [`install`](Self::install). Chain
+/// [`status`](Self::status) / [`log`](Self::log) /
+/// [`weight`](Self::weight) / [`overwrite`](Self::overwrite) /
+/// [`mode`](Self::mode) before installing.
 pub struct FileOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) source: Source,
@@ -52,6 +62,8 @@ pub struct FileOp<'i> {
 impl_common_op_setters!(FileOp);
 
 impl<'i> FileOp<'i> {
+    /// How to react when the destination already exists. Defaults to
+    /// [`OverwriteMode::Overwrite`].
     pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
         self.overwrite = mode;
         self
@@ -61,6 +73,9 @@ impl<'i> FileOp<'i> {
         self.mode = Some(mode);
         self
     }
+    /// Run the op: decompress the embedded blob, write it to the
+    /// destination (resolved relative to the installer's out-dir),
+    /// and apply the configured mode / overwrite policy.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -84,6 +99,10 @@ impl<'i> FileOp<'i> {
     }
 }
 
+/// Builder for installing an embedded directory tree. Created by
+/// [`Installer::dir`](crate::Installer::dir). Chain
+/// [`filter`](Self::filter) and [`on_error`](Self::on_error) for
+/// fine-grained control.
 pub struct DirOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) source: Source,
@@ -101,6 +120,8 @@ pub struct DirOp<'i> {
 impl_common_op_setters!(DirOp);
 
 impl<'i> DirOp<'i> {
+    /// How to react when a destination file inside the tree already
+    /// exists. Defaults to [`OverwriteMode::Overwrite`].
     pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
         self.overwrite = mode;
         self
@@ -122,6 +143,9 @@ impl<'i> DirOp<'i> {
         self.on_error = Some(Box::new(f));
         self
     }
+    /// Run the op: walk the embedded tree and install each file under
+    /// the destination directory, honoring the filter / overwrite /
+    /// error policies.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -146,6 +170,8 @@ impl<'i> DirOp<'i> {
     }
 }
 
+/// Builder for writing the embedded uninstaller binary to disk.
+/// Created by [`Installer::uninstaller`](crate::Installer::uninstaller).
 pub struct UninstallerOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) dst: String,
@@ -158,10 +184,14 @@ pub struct UninstallerOp<'i> {
 impl_common_op_setters!(UninstallerOp);
 
 impl<'i> UninstallerOp<'i> {
+    /// How to react when the destination already exists. Defaults to
+    /// [`OverwriteMode::Overwrite`].
     pub fn overwrite(mut self, mode: OverwriteMode) -> Self {
         self.overwrite = mode;
         self
     }
+    /// Run the op: decompress and write the embedded uninstaller
+    /// binary, marking it executable on Unix.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -190,6 +220,8 @@ impl<'i> UninstallerOp<'i> {
     }
 }
 
+/// Builder for creating an empty directory at install time. Created
+/// by [`Installer::mkdir`](crate::Installer::mkdir).
 pub struct MkdirOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) dst: String,
@@ -201,6 +233,7 @@ pub struct MkdirOp<'i> {
 impl_common_op_setters!(MkdirOp);
 
 impl<'i> MkdirOp<'i> {
+    /// Run the op: create the directory (and any missing parents).
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);
@@ -213,6 +246,9 @@ impl<'i> MkdirOp<'i> {
     }
 }
 
+/// Builder for removing a path at install / uninstall time. Created
+/// by [`Installer::remove`](crate::Installer::remove). Files are
+/// deleted; directories are removed recursively.
 pub struct RemoveOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) path: String,
@@ -224,6 +260,8 @@ pub struct RemoveOp<'i> {
 impl_common_op_setters!(RemoveOp);
 
 impl<'i> RemoveOp<'i> {
+    /// Run the op: delete the path if it exists, recursively for
+    /// directories. Missing paths are silently ignored.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;
         self.installer.emit_status(&self.status);

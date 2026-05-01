@@ -1,4 +1,55 @@
+//! # InstallRS
+//!
+//! Build self-contained software installers in plain Rust, with an
+//! optional native wizard GUI (Win32 / GTK3), component selection,
+//! progress, cancellation, and compression.
+//!
+//! Write a library crate exporting `install` and `uninstall`, then
+//! build it with the [`installrs` CLI](https://crates.io/crates/installrs)
+//! to get a single self-extracting executable.
+//!
+//! ```rust,ignore
+//! use anyhow::Result;
+//! use installrs::{source, Installer};
+//!
+//! pub fn install(i: &mut Installer) -> Result<()> {
+//!     i.process_commandline()?;
+//!     i.set_out_dir("/opt/my-app");
+//!     i.file(source!("app"), "app").mode(0o755).install()?;
+//!     i.dir(source!("assets"), "assets").install()?;
+//!     i.uninstaller("uninstall").install()?;
+//!     Ok(())
+//! }
+//!
+//! pub fn uninstall(i: &mut Installer) -> Result<()> {
+//!     i.process_commandline()?;
+//!     i.remove("/opt/my-app").install()?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Build with `installrs --target . --output my-installer`. The CLI
+//! generates a self-contained binary that embeds your assets, an
+//! uninstaller, and a SHA-256 payload integrity check.
+//!
+//! Optional features:
+//!
+//! - **`gui`** + a backend (`gui-win32` or `gui-gtk`) — native wizard
+//!   with welcome / license / components / directory picker / install /
+//!   finish / error pages, plus custom pages for arbitrary inputs. The
+//!   same wizard definition runs `--headless` for unattended installs.
+//!   See [`gui::InstallerGui`].
+//! - **`lzma`** / **`gzip`** / **`bzip2`** — compression methods for
+//!   the embedded payload. Pass `--compression <method>` to the CLI.
+//!
+//! See the project's [getting-started guide] and the [`example/`]
+//! directory in the repo for a complete working installer.
+//!
+//! [getting-started guide]: https://github.com/merlinz01/InstallRS/blob/main/docs/getting-started.md
+//! [`example/`]: https://github.com/merlinz01/InstallRS/tree/main/example
+
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![deny(missing_docs)]
 
 #[cfg(feature = "gui")]
 #[cfg_attr(docsrs, doc(cfg(feature = "gui")))]
@@ -38,7 +89,20 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Context, Result};
 
+/// The central context passed into your `install` and `uninstall`
+/// functions. Holds the embedded payload table, parsed CLI options,
+/// registered components, the out-dir for relative paths, the
+/// progress sink, the cancellation flag, and the optional log file.
+///
+/// You don't construct this — the generated `main` does. User code
+/// receives `&mut Installer` and drives it via the methods on this
+/// type and the builder ops it returns ([`Installer::file`],
+/// [`Installer::dir`], [`Installer::uninstaller`], etc.).
 pub struct Installer {
+    /// `true` after [`Installer::process_commandline`] sees `--headless`,
+    /// or when the wizard's headless runner sets it. Branch on this
+    /// to skip GUI-only code paths (or to prompt for confirmation only
+    /// when running attended).
     pub headless: bool,
     pub(crate) entries: &'static [EmbeddedEntry],
     out_dir: Option<PathBuf>,

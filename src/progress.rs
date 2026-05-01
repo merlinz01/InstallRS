@@ -10,8 +10,16 @@ use crate::Installer;
 /// [`crate::Installer::set_progress_sink`] (the wizard GUI does this
 /// automatically inside the install page).
 pub trait ProgressSink: Send + Sync {
+    /// Update the current high-level status line ("Installing
+    /// assets…", "Writing config…", etc.). Implementations typically
+    /// overwrite a single status label or the most recent stderr line.
     fn set_status(&self, status: &str);
+    /// Update the overall progress fraction in `[0.0, 1.0]`. Values
+    /// outside that range are clamped by the implementation.
     fn set_progress(&self, fraction: f64);
+    /// Append a per-event log line (one op = one line, typically).
+    /// Distinct from `set_status`: status is the *current* state,
+    /// log is the *running history*.
     fn log(&self, message: &str);
 }
 
@@ -35,6 +43,9 @@ struct StderrSinkState {
 }
 
 impl StderrProgressSink {
+    /// Create a stderr sink. Detects TTY-vs-pipe at construction time
+    /// and remembers the result; the in-place progress bar is only
+    /// drawn when stderr is a TTY.
     pub fn new() -> Self {
         use std::io::IsTerminal;
         Self {

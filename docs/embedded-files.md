@@ -139,10 +139,10 @@ i.registry()
          vec!["alpha".to_string(), "beta".to_string()])
     .install()?;
 
-// Set the (unnamed) default value.
+// Set the (unnamed) default value — pass "" as the value name.
 i.registry()
-    .default(ClassesRoot, r"myapp\shell\open\command",
-             "\"C:\\MyApp\\app.exe\" \"%1\"")
+    .set(ClassesRoot, r"myapp\shell\open\command", "",
+         "\"C:\\MyApp\\app.exe\" \"%1\"")
     .install()?;
 
 // Read a value.

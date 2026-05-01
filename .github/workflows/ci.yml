@@ -26,8 +26,8 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --no-self-update
-          rustup default stable
+          rustup toolchain install 1.95 --profile minimal --component rustfmt --no-self-update
+          rustup default 1.95
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -44,9 +44,9 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup toolchain install 1.95 --profile minimal --component rustfmt --component clippy --no-self-update
           rustup target add x86_64-pc-windows-gnu
-          rustup default stable
+          rustup default 1.95
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Install GTK3 + MinGW
@@ -77,8 +77,8 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          rustup toolchain install 1.95 --profile minimal --no-self-update
+          rustup default 1.95
       - name: Install GTK3
         if: runner.os == 'Linux'
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
@@ -109,8 +109,8 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          rustup toolchain install 1.95 --profile minimal --no-self-update
+          rustup default 1.95
       - name: Install GTK3
         if: runner.os == 'Linux'
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0

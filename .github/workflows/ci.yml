@@ -45,8 +45,8 @@ jobs:
       - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.95 --profile minimal --component rustfmt --component clippy --no-self-update
-          rustup target add x86_64-pc-windows-gnu
           rustup default 1.95
+          rustup target add x86_64-pc-windows-gnu
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Install GTK3 + MinGW

@@ -84,17 +84,6 @@ impl<'i> Registry<'i> {
         }
     }
 
-    /// Set the default (unnamed) value of `subkey`. Shorthand for
-    /// `set(hive, subkey, "", value)`.
-    pub fn default<V: winreg::types::ToRegValue>(
-        self,
-        hive: RegistryHive,
-        subkey: impl AsRef<str>,
-        value: V,
-    ) -> RegSetOp<'i> {
-        self.set(hive, subkey, "", value)
-    }
-
     /// Read a registry value. Returns an error if the key or value
     /// doesn't exist or the stored type doesn't match `V`.
     pub fn get<V: winreg::types::FromRegValue>(

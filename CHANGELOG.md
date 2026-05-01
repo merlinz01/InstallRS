@@ -14,6 +14,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** `Registry::default` (which was a misnamed shorthand
+  for `set(..., "", value)`) removed. Pass `""` as the name argument
+  to `set` to write the unnamed default value.
 - **Breaking:** option-API renames. `get_option` → `option`,
   `set_option_default` → `set_option_if_unset`, and the registration
   method previously named `option` is now `add_option`. The raw

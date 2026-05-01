@@ -76,7 +76,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // default install location. `--log <path>` is built-in — no need to
     // register it. All work in GUI and headless modes.
     i.add_option("yes", OptionKind::Flag, "Skip confirmation prompts");
-    i.option(
+    i.add_option(
         "install-dir",
         OptionKind::String,
         "Override the install location",

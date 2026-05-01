@@ -12,6 +12,13 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Fixed
+
+- Files referenced from both `install` and `uninstall` no longer fail
+  the build with "failed to read &lt;hash&gt;-lzma for payload hash".
+  The compressed-blob cache now lives in a single shared
+  `build/files/` directory used by both generated crates.
+
 ## [0.1.0-rc13] — 2026-04-30
 
 ### Changed

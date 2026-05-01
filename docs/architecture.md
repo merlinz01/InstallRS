@@ -199,7 +199,7 @@ and `build/uninstaller/`. Each has a `Cargo.toml` and a `src/main.rs`.
 
 ```rust
 // Embedded file blobs — one static per unique content (SHA-256 dedup).
-static D_<HASH>_LZMA: &[u8] = include_bytes!("../files/<hash>-lzma");
+static D_<HASH>_LZMA: &[u8] = include_bytes!("../../files/<hash>-lzma");
 
 // Metadata table referenced at runtime.
 static ENTRIES: &[installrs::EmbeddedEntry] = &[ ... ];
@@ -278,6 +278,14 @@ Identical files (matched by SHA-256 of their raw bytes) share a single
 `<hash>-<compression>`, so two copies of the same file with different
 compression methods would be separate blobs, but that doesn't happen
 in practice — one build run uses one method.
+
+Compressed blobs live in a single `build/files/` directory shared by
+both generated crates (`installer/` and `uninstaller/` each
+`include_bytes!("../../files/<hash>-<compression>")`). Files
+referenced from both `install` and `uninstall` are written to disk
+once and cache-validated once per build, though each crate still emits
+its own static for them so the bytes still appear twice in the final
+linked installer (no cross-crate dedup).
 
 ### Payload integrity
 

@@ -449,14 +449,15 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 
     let installer_dir = params.build_dir.join("installer");
     let uninstaller_dir = params.build_dir.join("uninstaller");
-    let install_files_dir = installer_dir.join("files");
-    let uninstall_files_dir = uninstaller_dir.join("files");
+    // Single shared blob cache for both generated crates. Each crate's
+    // generated `main.rs` references entries via `include_bytes!` with
+    // a `../../files/<hash>-<compression>` relative path, so identical
+    // file contents referenced from both `install` and `uninstall`
+    // share one on-disk blob (and one cache validation pass per build).
+    let files_dir = params.build_dir.join("files");
     let uninstaller_bin = params.build_dir.join("uninstaller-bin");
 
-    std::fs::create_dir_all(&install_files_dir)
-        .context("failed to create installer files directory")?;
-    std::fs::create_dir_all(&uninstall_files_dir)
-        .context("failed to create uninstaller files directory")?;
+    std::fs::create_dir_all(&files_dir).context("failed to create shared files directory")?;
     std::fs::create_dir_all(uninstaller_dir.join("src"))
         .context("failed to create uninstaller src directory")?;
     std::fs::create_dir_all(installer_dir.join("src"))
@@ -496,14 +497,14 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     let install_gathered = gather_for_phase(
         "install",
         &scan.install_sources,
-        &install_files_dir,
+        &files_dir,
         &params,
         &mut hash_cache,
     )?;
     let uninstall_gathered = gather_for_phase(
         "uninstall",
         &scan.uninstall_sources,
-        &uninstall_files_dir,
+        &files_dir,
         &params,
         &mut hash_cache,
     )?;
@@ -559,7 +560,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &params.target_dir,
         uninstall_compression,
         &uninstall_gathered,
-        &uninstall_files_dir,
+        &files_dir,
         params.uninstaller_win_resource.as_ref(),
         params.gui_enabled,
         target_is_windows,
@@ -609,8 +610,8 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     );
 
     // ── Prune stale cached files ─────────────────────────────────────────────
-    prune_files_dir(&install_files_dir, &install_gathered)?;
-    prune_files_dir(&uninstall_files_dir, &uninstall_gathered)?;
+    // Single shared `files_dir`: keep blobs referenced by either phase.
+    prune_files_dir(&files_dir, &[&install_gathered, &uninstall_gathered])?;
 
     // ── Write installer sources and compile ──────────────────────────────────
 
@@ -620,7 +621,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         &user_package_name,
         &params.target_dir,
         &install_gathered,
-        &install_files_dir,
+        &files_dir,
         &uninstaller_compressed,
         &params.compression,
         params.installer_win_resource.as_ref(),
@@ -1198,9 +1199,10 @@ fn matches_ignore(name: &str, patterns: &[String]) -> bool {
     })
 }
 
-fn prune_files_dir(files_dir: &Path, gathered: &[GatheredFile]) -> Result<()> {
-    let used: std::collections::HashSet<&str> = gathered
+fn prune_files_dir(files_dir: &Path, gathered_groups: &[&[GatheredFile]]) -> Result<()> {
+    let used: std::collections::HashSet<&str> = gathered_groups
         .iter()
+        .flat_map(|g| g.iter())
         .filter(|f| !f.is_dir)
         .map(|f| f.storage_name.as_str())
         .collect();
@@ -1240,7 +1242,7 @@ fn generate_embedded_code(gathered: &[GatheredFile]) -> Result<(String, String, 
             unique_order.push(f.storage_name.clone());
             let ident = format!("D_{}", f.storage_name.replace('-', "_").to_uppercase());
             statics_code.push_str(&format!(
-                "static {ident}: &[u8] = include_bytes!(\"../files/{}\");\n",
+                "static {ident}: &[u8] = include_bytes!(\"../../files/{}\");\n",
                 f.storage_name
             ));
         }

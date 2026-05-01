@@ -34,7 +34,7 @@ gui-gtk = ["gui", "dep:gtk", "dep:glib"]
 anyhow = "1"
 lzma-rust2 = { version = "0.16", default-features = false, features = ["std", "xz", "encoder", "optimization"], optional = true }
 flate2 = { version = "1", features = ["rust_backend"], optional = true }
-bzip2 = { version = "0.4", optional = true }
+bzip2 = { version = "0.6", optional = true }
 clap = { version = "4", features = ["derive"] }
 sha2 = "0.10"
 hex = "0.4"

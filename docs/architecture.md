@@ -235,9 +235,9 @@ Build order:
 
 | Feature     | Effect                                                                      |
 | ----------- | --------------------------------------------------------------------------- |
-| `lzma`      | Pulls in `lzma-rs` for LZMA decompression in the runtime.                   |
-| `gzip`      | Pulls in `flate2` (pure-Rust `rust_backend`).                               |
-| `bzip2`     | Pulls in `bzip2` (requires a C toolchain — `bzip2-sys` builds a C library). |
+| `lzma`      | Pulls in `lzma-rust2` for LZMA / LZMA2 / `.xz` support.                     |
+| `gzip`      | Pulls in `flate2`.                                                          |
+| `bzip2`     | Pulls in the `bzip2` crate.                                                 |
 | `gui`       | Compiles the `gui` module (platform-agnostic types + wizard builder).       |
 | `gui-win32` | Implies `gui`; adds the Win32 backend (`winsafe`). Target must be Windows.  |
 | `gui-gtk`   | Implies `gui`; adds the GTK3 backend (`gtk-rs`). Target must be Linux.      |

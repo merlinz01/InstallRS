@@ -52,7 +52,6 @@ target any Rust-supported platform. Pass `--target-triple` to specify.
 
 ```sh
 rustup target add x86_64-pc-windows-gnu
-sudo apt-get install -y gcc-mingw-w64-x86-64   # MinGW for C deps (bzip2-sys)
 installrs --target . --output installer.exe --target-triple x86_64-pc-windows-gnu
 ```
 
@@ -87,13 +86,9 @@ run in console mode or with your own custom UI. PRs welcome.
 
 ### Picking compression for cross-compiled builds
 
-- **LZMA** (default) — best compression, slower to build, pure Rust
-  runtime. Works on every target.
-- **gzip** — moderate compression, fast build, pure Rust runtime
-  (`flate2` with `rust_backend` feature). Works on every target.
-- **bzip2** — better than gzip, slightly worse than LZMA. **Requires a
-  C toolchain** for cross-compilation because `bzip2-sys` builds a C
-  library. On Linux → Windows that means MinGW installed.
+- **LZMA** (default) — best compression, slower to build.
+- **gzip** — moderate compression, fast build.
+- **bzip2** — better than gzip, slightly worse than LZMA.
 - **none** — no compression. Fastest build, largest binary. Useful for
   iteration; rarely what you want in production.
 
@@ -251,15 +246,6 @@ You're trying to build without the runtime crate published yet, or on
 an offline build host. For local development of InstallRS itself, set
 `INSTALLRS_LOCAL_PATH=1` to emit `installrs = { path = "..." }` in the
 generated `Cargo.toml` instead of a crates.io reference.
-
-### "failed to find tool `x86_64-w64-mingw32-gcc`"
-
-Cross-compiling to Windows from Linux with `bzip2` compression needs
-MinGW. Either:
-
-- `sudo apt-get install -y gcc-mingw-w64-x86-64`, or
-- Switch to `--compression lzma` or `--compression gzip` (pure Rust,
-  no C toolchain needed).
 
 ### "installer payload integrity check failed"
 

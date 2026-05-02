@@ -743,7 +743,7 @@ impl Installer {
     /// [`Installer::process_commandline`] itself (typically right after
     /// registering components).
     #[doc(hidden)]
-    pub fn install_main(&mut self, install_fn: impl Fn(&mut Installer) -> Result<()>) {
+    pub fn install_main(&mut self, install_fn: impl FnOnce(&mut Installer) -> Result<()>) {
         if self.sink.is_none() {
             self.sink = Some(Box::new(progress::StderrProgressSink::new()));
         }
@@ -755,7 +755,7 @@ impl Installer {
 
     /// Entry point for uninstaller binaries. Call this from `main()`.
     #[doc(hidden)]
-    pub fn uninstall_main(&mut self, uninstall_fn: impl Fn(&mut Installer) -> Result<()>) {
+    pub fn uninstall_main(&mut self, uninstall_fn: impl FnOnce(&mut Installer) -> Result<()>) {
         if self.sink.is_none() {
             self.sink = Some(Box::new(progress::StderrProgressSink::new()));
         }

@@ -140,6 +140,24 @@ pub struct Installer {
     log_file: Option<Mutex<std::fs::File>>,
 }
 
+impl std::fmt::Debug for Installer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Installer")
+            .field("headless", &self.headless)
+            .field("out_dir", &self.out_dir)
+            .field("entries_len", &self.entries.len())
+            .field("uninstaller_data_len", &self.uninstaller_data.len())
+            .field("uninstaller_compression", &self.uninstaller_compression)
+            .field("components", &self.components)
+            .field("cancelled", &self.cancelled)
+            .field("options", &self.options)
+            .field("option_values", &self.option_values)
+            .field("has_progress_sink", &self.sink.is_some())
+            .field("has_log_file", &self.log_file.is_some())
+            .finish()
+    }
+}
+
 impl Installer {
     #[doc(hidden)]
     pub fn new(
@@ -1284,6 +1302,18 @@ mod tests {
 
     fn make_bare_installer() -> Installer {
         Installer::new(leak_entries(vec![]), leak_bytes(vec![]), "")
+    }
+
+    #[test]
+    fn installer_debug_impl_includes_key_state() {
+        let mut i = make_bare_installer();
+        i.add_component("core", "Core", "", 1).required();
+        i.add_option("verbose", OptionKind::Flag, "");
+        let s = format!("{i:?}");
+        assert!(s.contains("Installer"));
+        assert!(s.contains("entries_len"));
+        assert!(s.contains("core"));
+        assert!(s.contains("verbose"));
     }
 
     #[test]

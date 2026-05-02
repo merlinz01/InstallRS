@@ -24,6 +24,9 @@ impl Installer {
     /// ```
     ///
     /// Recognized flags:
+    /// - `--help` / `-h` — print a usage summary (built-in flags + every
+    ///   option registered with [`Installer::add_option`]) and exit
+    ///   status 0
     /// - `--headless` — sets `self.headless = true`, disables GUI
     /// - `--list-components` — print the component table and exit status 0
     /// - `--components a,b,c` — install exactly this set (plus required)
@@ -78,6 +81,10 @@ impl Installer {
                 }
             };
             match flag {
+                "--help" | "-h" => {
+                    print!("{}", self.help_text(args));
+                    std::process::exit(0);
+                }
                 "--headless" => self.headless = true,
                 "--list-components" => list = true,
                 "--components" => {
@@ -200,5 +207,81 @@ impl Installer {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn help_text(&self, args: &[String]) -> String {
+        use std::fmt::Write;
+
+        let prog = args
+            .first()
+            .and_then(|p| std::path::Path::new(p).file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("installer");
+
+        let mut s = String::new();
+        let _ = writeln!(s, "USAGE: {prog} [OPTIONS]");
+        let _ = writeln!(s);
+        let _ = writeln!(s, "OPTIONS:");
+        let _ = writeln!(s, "      --help, -h              Show this help and exit");
+        let _ = writeln!(s, "      --headless              Run without a GUI");
+        let _ = writeln!(
+            s,
+            "      --list-components       Print the component list and exit"
+        );
+        let _ = writeln!(
+            s,
+            "      --components <LIST>     Install exactly this comma-separated set"
+        );
+        let _ = writeln!(
+            s,
+            "      --with <LIST>           Enable these components in addition to defaults"
+        );
+        let _ = writeln!(s, "      --without <LIST>        Disable these components");
+        let _ = writeln!(
+            s,
+            "      --log <PATH>            Tee status/log/error output to a file"
+        );
+
+        if !self.options.is_empty() {
+            let _ = writeln!(s);
+            let _ = writeln!(s, "USER OPTIONS:");
+            let max_left = self
+                .options
+                .iter()
+                .map(|o| format_option_left(o.name.as_str(), o.kind).len())
+                .max()
+                .unwrap_or(0);
+            for o in &self.options {
+                let left = format_option_left(o.name.as_str(), o.kind);
+                if o.help.is_empty() {
+                    let _ = writeln!(s, "      {left}");
+                } else {
+                    let _ = writeln!(s, "      {left:<max_left$}  {}", o.help);
+                }
+            }
+        }
+
+        if !self.components.is_empty() {
+            let _ = writeln!(s);
+            let _ = writeln!(
+                s,
+                "COMPONENTS (use with --components / --with / --without):"
+            );
+            for c in &self.components {
+                let marker = if c.required { " (required)" } else { "" };
+                let _ = writeln!(s, "      {:<20}  {}{marker}", c.id, c.label);
+            }
+        }
+
+        s
+    }
+}
+
+fn format_option_left(name: &str, kind: OptionKind) -> String {
+    match kind {
+        OptionKind::Flag => format!("--{name}"),
+        OptionKind::String => format!("--{name} <STRING>"),
+        OptionKind::Int => format!("--{name} <INT>"),
+        OptionKind::Bool => format!("--{name} <true|false>"),
     }
 }

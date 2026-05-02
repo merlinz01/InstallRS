@@ -12,6 +12,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Added
+
+- `--help` / `-h` now prints a usage summary listing built-in flags,
+  every option registered with `add_option` (with their `help` strings),
+  and the registered components, then exits.
+
 ### Changed
 
 - **Breaking:** `Installer::cancellation_flag()` replaced by

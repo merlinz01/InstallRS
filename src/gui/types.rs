@@ -314,8 +314,7 @@ impl CustomPageBuilder {
 }
 
 /// Messages sent from the background install thread to the GUI thread.
-#[doc(hidden)]
-pub enum GuiMessage {
+pub(crate) enum GuiMessage {
     SetStatus(String),
     SetProgress(f64),
     Log(String),

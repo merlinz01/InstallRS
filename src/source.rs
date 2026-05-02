@@ -2,8 +2,8 @@
 
 /// Compile-time FNV-1a 64-bit hash of a path string (backslashes normalized to forward slashes).
 ///
-/// Used by the [`crate::source!`] macro.
-#[doc(hidden)]
+/// Used by the [`crate::source!`] macro; reachable from generated code
+/// via `installrs::__private::source_path_hash_const`.
 pub const fn source_path_hash_const(path: &str) -> u64 {
     let bytes = path.as_bytes();
     let mut h: u64 = 14695981039346656037;
@@ -47,7 +47,7 @@ pub struct Source(#[doc(hidden)] pub u64);
 #[macro_export]
 macro_rules! source {
     ($path:literal $(, $key:ident = $val:expr)* $(,)?) => {{
-        const H: u64 = $crate::source_path_hash_const($path);
+        const H: u64 = $crate::__private::source_path_hash_const($path);
         $crate::Source(H)
     }};
 }

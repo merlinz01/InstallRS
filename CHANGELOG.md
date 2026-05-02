@@ -14,6 +14,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** `InstallerGui::wizard(title)` renamed to `InstallerGui::new(title)`.
 - **Breaking:** `Registry::default` (which was a misnamed shorthand
   for `set(..., "", value)`) removed. Pass `""` as the name argument
   to `set` to write the unnamed default value.

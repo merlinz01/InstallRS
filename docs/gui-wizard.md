@@ -32,13 +32,13 @@ Windows has no extra system dependency at build or runtime.
 
 ## Wizard builder
 
-Build the wizard with `InstallerGui::wizard(title)`, configure it via
+Build the wizard with `InstallerGui::new(title)`, configure it via
 its builder methods, then call `run`:
 
 ```rust
 use installrs::gui::*;
 
-let mut w = InstallerGui::wizard("My App Installer");
+let mut w = InstallerGui::new("My App Installer");
 w.welcome("Welcome!", "Click Next to continue.");
 w.license("License Agreement", include_str!("../LICENSE"), "I accept");
 w.components_page("Select Components", "Choose features to install:");
@@ -74,7 +74,7 @@ positional coupling. One page per statement reads naturally, and
 conditional / looped configuration drops in cleanly:
 
 ```rust
-let mut w = InstallerGui::wizard("My App");
+let mut w = InstallerGui::new("My App");
 w.welcome("Welcome!", "...");
 if include_license {
     w.license("License", LICENSE, "I accept");
@@ -267,7 +267,7 @@ if let Some(code) = installrs::gui::choose_language(
 )? {
     rust_i18n::set_locale(&code);
 }
-let mut w = InstallerGui::wizard(&t!("installer.title")); // uses chosen locale
+let mut w = InstallerGui::new(&t!("installer.title")); // uses chosen locale
 // ...
 w.run(i)?;
 ```
@@ -286,7 +286,7 @@ The same wizard definition serves both modes. For setup and cleanup
 that must happen either way, just run code before and after `w.run(i)`:
 
 ```rust
-let mut w = InstallerGui::wizard("My App Installer");
+let mut w = InstallerGui::new("My App Installer");
 // ... pages ...
 w.install_page(|i| {
     // runs in both modes

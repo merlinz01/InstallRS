@@ -10,7 +10,7 @@
 //! ```rust,ignore
 //! use installrs::gui::*;
 //!
-//! let mut w = InstallerGui::wizard("My App Installer");
+//! let mut w = InstallerGui::new("My App Installer");
 //! w.welcome("Welcome!", "Click Next to continue.");
 //! w.license("License", include_str!("../LICENSE"), "I accept");
 //! w.components_page("Components", "Choose features:");
@@ -87,7 +87,7 @@ use crate::Installer;
 /// ```rust,ignore
 /// use installrs::gui::*;
 ///
-/// let mut w = InstallerGui::wizard("My App Installer");
+/// let mut w = InstallerGui::new("My App Installer");
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license("License", include_str!("../LICENSE"), "I accept")
 ///     .skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false));
@@ -109,7 +109,7 @@ pub struct InstallerGui {
 impl InstallerGui {
     /// Create a new wizard builder. `title` is the window title shown by
     /// the OS — typically your app name plus "Installer".
-    pub fn wizard(title: impl AsRef<str>) -> Self {
+    pub fn new(title: impl AsRef<str>) -> Self {
         Self {
             config: WizardConfig {
                 title: title.as_ref().to_string(),

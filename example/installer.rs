@@ -90,7 +90,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     // picker reads the current option value as its initial display.
     i.set_option_if_unset("install-dir", default_install_dir());
 
-    let mut w = InstallerGui::wizard(&t!("installer.title"));
+    let mut w = InstallerGui::new(&t!("installer.title"));
     w.buttons(installrs::gui::ButtonLabels {
         back: t!("wizard.back").into(),
         next: t!("wizard.next").into(),
@@ -394,7 +394,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
     #[cfg(windows)]
     i.enable_self_delete();
 
-    let mut w = InstallerGui::wizard(&t!("uninstaller.title"));
+    let mut w = InstallerGui::new(&t!("uninstaller.title"));
     w.buttons(installrs::gui::ButtonLabels {
         back: t!("wizard.back").into(),
         next: t!("wizard.next").into(),

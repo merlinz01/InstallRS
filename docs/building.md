@@ -163,6 +163,95 @@ Example:
   run: installrs build example --output installer-ci
 ```
 
+### Installing the CLI in CI
+
+`cargo install installrs` works but takes a couple of minutes. For
+faster CI runs, fetch the prebuilt binary from the matching GitHub
+release. The version your CI uses **must match** the `installrs`
+version pinned in your installer crate's `Cargo.toml` (the generated
+crate emits `installrs = "=X.Y.Z"`, and a CLI / runtime mismatch is
+caught at compile time by `assert_entries_version`).
+
+The cleanest pattern is to extract the version from `Cargo.toml` and
+download exactly that release.
+
+#### Linux / macOS runners (bash)
+
+<!-- markdownlint-disable MD013 -->
+
+```sh
+INSTALLRS_VERSION=$(grep -oP 'installrs\s*=\s*(?:"|\{[^}]*\bversion\s*=\s*")\K[^"]+' my-installer/Cargo.toml)
+curl -fsSL "https://github.com/merlinz01/InstallRS/releases/download/v$INSTALLRS_VERSION/installrs-v$INSTALLRS_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
+  | tar -xz --strip-components=1 -C /usr/local/bin --wildcards '*/installrs'
+```
+
+Wrapped as a GitHub Actions step:
+
+```yaml
+- name: Install installrs CLI
+  run: |
+    INSTALLRS_VERSION=$(grep -oP 'installrs\s*=\s*(?:"|\{[^}]*\bversion\s*=\s*")\K[^"]+' my-installer/Cargo.toml)
+    curl -fsSL "https://github.com/merlinz01/InstallRS/releases/download/v$INSTALLRS_VERSION/installrs-v$INSTALLRS_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
+      | tar -xz --strip-components=1 -C /usr/local/bin --wildcards '*/installrs'
+```
+
+<!-- markdownlint-enable MD013 -->
+
+Why this works:
+
+- The `grep -oP ... \K[^"]+` pulls the version out of either form —
+  the shorthand `installrs = "0.1.0"` or the table form
+  `installrs = { version = "0.1.0", features = [...] }` — without
+  needing a TOML parser in your CI image.
+- `--strip-components=1` drops the `installrs-vX.Y.Z-<triple>/`
+  directory wrapper inside the tarball; `--wildcards '*/installrs'`
+  extracts only the binary, skipping the README / LICENSE bundled
+  alongside.
+- `/usr/local/bin` is in `PATH` on the standard GitHub-hosted runners.
+
+#### Windows runners (PowerShell)
+
+Same idiom, different tools. The release ships a `.zip` for Windows
+targets, so use `Expand-Archive` and add the extraction directory to
+`$env:GITHUB_PATH` so subsequent steps can find `installrs.exe`:
+
+<!-- markdownlint-disable MD013 -->
+
+```powershell
+$Manifest = Get-Content my-installer\Cargo.toml -Raw
+$Version = ([regex]::Match($Manifest, 'installrs\s*=\s*(?:"|\{[^}]*\bversion\s*=\s*")([^"]+)')).Groups[1].Value
+$Url = "https://github.com/merlinz01/InstallRS/releases/download/v$Version/installrs-v$Version-x86_64-pc-windows-msvc.zip"
+Invoke-WebRequest -Uri $Url -OutFile installrs.zip
+Expand-Archive -Path installrs.zip -DestinationPath installrs-tmp
+Move-Item installrs-tmp\*\installrs.exe $env:USERPROFILE\bin\installrs.exe -Force
+Remove-Item installrs.zip, installrs-tmp -Recurse -Force
+```
+
+Wrapped as a GitHub Actions step:
+
+```yaml
+- name: Install installrs CLI
+  shell: pwsh
+  run: |
+    $Manifest = Get-Content my-installer\Cargo.toml -Raw
+    $Version = ([regex]::Match($Manifest, 'installrs\s*=\s*(?:"|\{[^}]*\bversion\s*=\s*")([^"]+)')).Groups[1].Value
+    $Url = "https://github.com/merlinz01/InstallRS/releases/download/v$Version/installrs-v$Version-x86_64-pc-windows-msvc.zip"
+    New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\bin" | Out-Null
+    Invoke-WebRequest -Uri $Url -OutFile installrs.zip
+    Expand-Archive -Path installrs.zip -DestinationPath installrs-tmp
+    Move-Item installrs-tmp\*\installrs.exe "$env:USERPROFILE\bin\installrs.exe" -Force
+    Remove-Item installrs.zip, installrs-tmp -Recurse -Force
+    Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\bin"
+```
+
+<!-- markdownlint-enable MD013 -->
+
+The `installrs-tmp\*\installrs.exe` glob handles the
+`installrs-vX.Y.Z-x86_64-pc-windows-msvc\` directory wrapper inside
+the zip the same way `--strip-components=1` did on Linux.
+`Add-Content -Path $env:GITHUB_PATH` is the official
+GitHub-Actions-supported way to extend `PATH` for subsequent steps.
+
 ## Integrity and reproducibility
 
 ### Payload hash

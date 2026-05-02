@@ -167,6 +167,8 @@ the real release build.
 - [`[package.metadata.installrs]` reference](metadata-reference.md) —
   every key the `--metadata` flag and the metadata table accept.
 - [Building for production](building.md) — cross-compilation,
-  reproducibility, payload integrity, code signing.
+  reproducibility, payload integrity, code signing, and a
+  [snippet for installing the matching CLI in CI](building.md#installing-the-cli-in-ci)
+  from a prebuilt GitHub release tarball.
 - [Getting Started](getting-started.md) — the walkthrough that uses
   these flags in context.

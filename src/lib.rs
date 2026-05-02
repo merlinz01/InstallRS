@@ -254,7 +254,7 @@ impl Installer {
         name: impl AsRef<str>,
         kind: OptionKind,
         help: impl AsRef<str>,
-    ) -> &mut Self {
+    ) {
         let name = name.as_ref().trim_start_matches('-').to_string();
         let help = help.as_ref().to_string();
         if let Some(existing) = self.options.iter_mut().find(|o| o.name == name) {
@@ -265,7 +265,6 @@ impl Installer {
         } else {
             self.options.push(CmdOption { name, kind, help });
         }
-        self
     }
 
     /// Whether an option with this name has been registered.

@@ -20,6 +20,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** `Installer::add_option` now returns `()` instead of `&mut Self`.
 - **Breaking:** `Installer::cancellation_flag()` replaced by
   `Installer::cancellation_token()` returning a new `CancellationToken` newtype with
   `.cancel()` / `.is_cancelled()` methods.

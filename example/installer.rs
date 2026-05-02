@@ -257,7 +257,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         // Opens a single weighted step (contributes 2 units to the core component's
         // budget) and interpolates progress across 5 × 200 ms sub-ticks.
         const TICKS: u32 = 5;
-        i.begin_step(&t!("installer.install.status_longrunning"), 2);
+        i.begin_step(t!("installer.install.status_longrunning"), 2);
         for step in 1..=TICKS {
             i.set_status(&t!("installer.install.status_step", step = step));
             std::thread::sleep(std::time::Duration::from_millis(500));

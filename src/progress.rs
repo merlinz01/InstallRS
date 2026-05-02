@@ -173,8 +173,8 @@ impl Installer {
     /// }
     /// i.end_step();
     /// ```
-    pub fn begin_step(&self, status: &str, weight: u32) {
-        self.emit_status(&Some(status.to_string()));
+    pub fn begin_step(&self, status: impl AsRef<str>, weight: u32) {
+        self.emit_status(&Some(status.as_ref().to_string()));
         let mut state = self.progress.lock().unwrap();
         state.step_range_start = state.steps_done;
         state.step_range_end = state.steps_done + weight as f64;
@@ -208,7 +208,7 @@ impl Installer {
     /// One-shot equivalent of `begin_step` + `end_step` for user code whose
     /// progress can't be subdivided: advances the cursor by `weight` units
     /// and emits the status message.
-    pub fn step(&self, status: &str, weight: u32) {
+    pub fn step(&self, status: impl AsRef<str>, weight: u32) {
         self.begin_step(status, weight);
         self.end_step();
     }

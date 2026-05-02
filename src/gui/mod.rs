@@ -24,7 +24,7 @@
 //! ```
 //!
 //! The same wizard definition runs headless (no window) when the user
-//! passes `--headless` — [`InstallerGui::run`] checks `installer.headless`
+//! passes `--headless` — [`InstallerGui::run`] checks [`Installer::is_headless`]
 //! and dispatches accordingly.
 //!
 //! See the repository's [GUI Wizard guide] for the full walkthrough —

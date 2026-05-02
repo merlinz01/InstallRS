@@ -110,11 +110,7 @@ use anyhow::{anyhow, Context, Result};
 /// type and the builder ops it returns ([`Installer::file`],
 /// [`Installer::dir`], [`Installer::uninstaller`], etc.).
 pub struct Installer {
-    /// `true` after [`Installer::process_commandline`] sees `--headless`,
-    /// or when the wizard's headless runner sets it. Branch on this
-    /// to skip GUI-only code paths (or to prompt for confirmation only
-    /// when running attended).
-    pub headless: bool,
+    pub(crate) headless: bool,
     pub(crate) entries: &'static [EmbeddedEntry],
     out_dir: Option<PathBuf>,
     pub(crate) uninstaller_data: &'static [u8],
@@ -157,6 +153,14 @@ impl Installer {
             option_values: std::collections::HashMap::new(),
             log_file: None,
         }
+    }
+
+    /// `true` after [`Installer::process_commandline`] sees `--headless`,
+    /// or when the wizard's headless runner sets it. Branch on this
+    /// to skip GUI-only code paths (or to prompt for confirmation only
+    /// when running attended).
+    pub fn is_headless(&self) -> bool {
+        self.headless
     }
 
     /// Open a log file. Every subsequent `status` / `log` / error surfaced
@@ -257,6 +261,7 @@ impl Installer {
 
     /// Look up the registered kind of an option by name. Returns `None`
     /// when the option has not been registered via `add_option`.
+    #[allow(dead_code)] // Used only by the GUI backends, feature-gated.
     pub(crate) fn option_kind(&self, name: &str) -> Option<OptionKind> {
         let name = name.trim_start_matches('-');
         self.options.iter().find(|o| o.name == name).map(|o| o.kind)

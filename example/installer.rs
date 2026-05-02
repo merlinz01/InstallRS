@@ -345,7 +345,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     w.error_page(&t!("installer.error.title"), &t!("installer.error.message"));
 
     let auto_yes = i.option::<bool>("yes").unwrap_or(false);
-    if i.headless && !auto_yes {
+    if i.is_headless() && !auto_yes {
         eprintln!("Running headless install of {}", t!("installer.title"));
         eprint!("Proceed? [y/N] ");
         std::io::Write::flush(&mut std::io::stderr()).ok();
@@ -356,7 +356,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
             return Err(anyhow::anyhow!("install cancelled by user"));
         }
-    } else if i.headless && auto_yes {
+    } else if i.is_headless() && auto_yes {
         eprintln!(
             "Running headless install of {} (auto-confirmed)",
             t!("installer.title")
@@ -365,7 +365,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
 
     let result = w.run(i);
 
-    if i.headless {
+    if i.is_headless() {
         eprintln!("Headless install complete.");
     }
     if i.option::<bool>("launch_app").unwrap_or(false) {
@@ -408,7 +408,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
         cancel: t!("wizard.cancel").into(),
     });
     let auto_yes = i.option::<bool>("yes").unwrap_or(false);
-    if i.headless && !auto_yes {
+    if i.is_headless() && !auto_yes {
         eprint!("Really uninstall? [y/N] ");
         std::io::Write::flush(&mut std::io::stderr()).ok();
         let mut answer = String::new();

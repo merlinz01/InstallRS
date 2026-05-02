@@ -14,6 +14,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** `Installer::headless` is no longer a public field.
+  Use `Installer::is_headless()` instead.
 - **Breaking:** Custom-page widgets (`text`, `number`, `checkbox`,
   `dropdown`, `radio`, `file_picker`, `dir_picker`, `multiline`) no
   longer take a `default` argument. Seed defaults via

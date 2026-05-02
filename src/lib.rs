@@ -460,8 +460,8 @@ impl Installer {
     }
 
     /// Set the base output directory for relative destination paths.
-    pub fn set_out_dir(&mut self, dir: impl AsRef<str>) {
-        self.out_dir = Some(PathBuf::from(dir.as_ref()));
+    pub fn set_out_dir(&mut self, dir: impl AsRef<Path>) {
+        self.out_dir = Some(dir.as_ref().to_path_buf());
     }
 
     /// Get the configured output directory as a `PathBuf` if set.
@@ -503,16 +503,15 @@ impl Installer {
         self.sink = None;
     }
 
-    pub(crate) fn resolve_out_path(&self, dest_path: &str) -> Result<PathBuf> {
-        let p = Path::new(dest_path);
-        if p.is_absolute() {
-            return Ok(p.to_path_buf());
+    pub(crate) fn resolve_out_path(&self, dest_path: &Path) -> Result<PathBuf> {
+        if dest_path.is_absolute() {
+            return Ok(dest_path.to_path_buf());
         }
         let out = self
             .out_dir
             .as_ref()
             .ok_or_else(|| anyhow!("output directory not set; call set_out_dir() first"))?;
-        Ok(out.join(p))
+        Ok(out.join(dest_path))
     }
 
     pub(crate) fn decompress(data: &[u8], compression: &str) -> Result<Vec<u8>> {
@@ -577,11 +576,11 @@ impl Installer {
     ///     .status("Installing app.exe")
     ///     .install()?;
     /// ```
-    pub fn file<'i>(&'i mut self, source: Source, dst: impl AsRef<str>) -> FileOp<'i> {
+    pub fn file<'i>(&'i mut self, source: Source, dst: impl AsRef<Path>) -> FileOp<'i> {
         FileOp {
             installer: self,
             source,
-            dst: dst.as_ref().to_string(),
+            dst: dst.as_ref().to_path_buf(),
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
@@ -591,11 +590,11 @@ impl Installer {
     }
 
     /// Install an embedded directory tree.
-    pub fn dir<'i>(&'i mut self, source: Source, dst: impl AsRef<str>) -> DirOp<'i> {
+    pub fn dir<'i>(&'i mut self, source: Source, dst: impl AsRef<Path>) -> DirOp<'i> {
         DirOp {
             installer: self,
             source,
-            dst: dst.as_ref().to_string(),
+            dst: dst.as_ref().to_path_buf(),
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
@@ -607,10 +606,10 @@ impl Installer {
     }
 
     /// Write the embedded uninstaller executable.
-    pub fn uninstaller<'i>(&'i mut self, dst: impl AsRef<str>) -> UninstallerOp<'i> {
+    pub fn uninstaller<'i>(&'i mut self, dst: impl AsRef<Path>) -> UninstallerOp<'i> {
         UninstallerOp {
             installer: self,
-            dst: dst.as_ref().to_string(),
+            dst: dst.as_ref().to_path_buf(),
             status: None,
             log: None,
             overwrite: OverwriteMode::default(),
@@ -619,10 +618,10 @@ impl Installer {
     }
 
     /// Create a directory (and its parents) on the target system.
-    pub fn mkdir<'i>(&'i mut self, dst: impl AsRef<str>) -> MkdirOp<'i> {
+    pub fn mkdir<'i>(&'i mut self, dst: impl AsRef<Path>) -> MkdirOp<'i> {
         MkdirOp {
             installer: self,
-            dst: dst.as_ref().to_string(),
+            dst: dst.as_ref().to_path_buf(),
             weight: 1,
             status: None,
             log: None,
@@ -630,10 +629,10 @@ impl Installer {
     }
 
     /// Remove a file or directory from the target system.
-    pub fn remove<'i>(&'i mut self, path: impl AsRef<str>) -> RemoveOp<'i> {
+    pub fn remove<'i>(&'i mut self, path: impl AsRef<Path>) -> RemoveOp<'i> {
         RemoveOp {
             installer: self,
-            path: path.as_ref().to_string(),
+            path: path.as_ref().to_path_buf(),
             weight: 1,
             status: None,
             log: None,
@@ -651,13 +650,13 @@ impl Installer {
     #[cfg(target_os = "windows")]
     pub fn shortcut<'i>(
         &'i mut self,
-        dst: impl AsRef<str>,
-        target: impl AsRef<str>,
+        dst: impl AsRef<Path>,
+        target: impl AsRef<Path>,
     ) -> ShortcutOp<'i> {
         ShortcutOp {
             installer: self,
-            dst: dst.as_ref().to_string(),
-            target: target.as_ref().to_string(),
+            dst: dst.as_ref().to_path_buf(),
+            target: target.as_ref().to_path_buf(),
             arguments: None,
             working_dir: None,
             description: None,
@@ -677,7 +676,7 @@ impl Installer {
     }
 
     /// Check whether a path exists on the target system.
-    pub fn exists(&self, path: impl AsRef<str>) -> Result<bool> {
+    pub fn exists(&self, path: impl AsRef<Path>) -> Result<bool> {
         let p = self.resolve_out_path(path.as_ref())?;
         Ok(p.exists())
     }
@@ -823,7 +822,7 @@ mod tests {
 
     fn make_installer(entries: Vec<EmbeddedEntry>, out_dir: &std::path::Path) -> Installer {
         let mut i = Installer::new(leak_entries(entries), leak_bytes(vec![]), "");
-        i.set_out_dir(out_dir.to_string_lossy());
+        i.set_out_dir(out_dir);
         i
     }
 

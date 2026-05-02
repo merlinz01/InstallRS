@@ -2,6 +2,8 @@
 //! makes freshly-written shortcuts appear in Explorer / Start Menu without
 //! a manual refresh.
 
+use std::path::{Path, PathBuf};
+
 use anyhow::{anyhow, Context, Result};
 
 use crate::ops::impl_common_op_setters;
@@ -11,12 +13,12 @@ use crate::Installer;
 /// [`Installer::shortcut`](crate::Installer::shortcut).
 pub struct ShortcutOp<'i> {
     pub(crate) installer: &'i mut Installer,
-    pub(crate) dst: String,
-    pub(crate) target: String,
+    pub(crate) dst: PathBuf,
+    pub(crate) target: PathBuf,
     pub(crate) arguments: Option<String>,
-    pub(crate) working_dir: Option<String>,
+    pub(crate) working_dir: Option<PathBuf>,
     pub(crate) description: Option<String>,
-    pub(crate) icon: Option<(String, i32)>,
+    pub(crate) icon: Option<(PathBuf, i32)>,
     pub(crate) status: Option<String>,
     pub(crate) log: Option<String>,
     pub(crate) weight: u32,
@@ -32,8 +34,8 @@ impl<'i> ShortcutOp<'i> {
     }
     /// Working directory the target launches in. Resolved against
     /// `out_dir` when relative.
-    pub fn working_dir(mut self, s: impl AsRef<str>) -> Self {
-        self.working_dir = Some(s.as_ref().to_string());
+    pub fn working_dir(mut self, p: impl AsRef<Path>) -> Self {
+        self.working_dir = Some(p.as_ref().to_path_buf());
         self
     }
     /// Tooltip / comment shown by Explorer.
@@ -43,8 +45,8 @@ impl<'i> ShortcutOp<'i> {
     }
     /// Icon path (resolved against `out_dir` when relative) and resource
     /// index within it. Use index `0` for single-icon files.
-    pub fn icon(mut self, path: impl AsRef<str>, index: i32) -> Self {
-        self.icon = Some((path.as_ref().to_string(), index));
+    pub fn icon(mut self, path: impl AsRef<Path>, index: i32) -> Self {
+        self.icon = Some((path.as_ref().to_path_buf(), index));
         self
     }
     /// Run the op: write the `.lnk` file and notify Explorer to pick

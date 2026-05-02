@@ -524,8 +524,7 @@ fn pack_widget_column(
                         _ => String::new(),
                     };
                     let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
-                    let selected_idx =
-                        values.iter().position(|v| v == &current).unwrap_or(0);
+                    let selected_idx = values.iter().position(|v| v == &current).unwrap_or(0);
                     let mut buttons: Vec<gtk::RadioButton> = Vec::new();
                     let rb_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
                     rb_box.set_margin_start(8);

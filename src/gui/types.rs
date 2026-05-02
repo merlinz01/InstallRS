@@ -290,12 +290,7 @@ impl CustomPageBuilder {
     /// Add a file-picker (text entry + Browse button → native file-open
     /// dialog). `filters` is `(display, glob)` — e.g.
     /// `&[("Config", "*.toml;*.yaml"), ("All files", "*.*")]`.
-    pub fn file_picker(
-        &mut self,
-        key: &str,
-        label: &str,
-        filters: &[(&str, &str)],
-    ) -> &mut Self {
+    pub fn file_picker(&mut self, key: &str, label: &str, filters: &[(&str, &str)]) -> &mut Self {
         self.widgets.push(CustomWidget::FilePicker {
             key: key.into(),
             label: label.into(),

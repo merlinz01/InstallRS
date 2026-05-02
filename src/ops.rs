@@ -1,7 +1,7 @@
 //! Cross-platform builder operations (file / dir / uninstaller / mkdir /
 //! remove) plus the shared helpers that implement their file-system work.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -51,7 +51,7 @@ pub(crate) use impl_common_op_setters;
 pub struct FileOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) source: Source,
-    pub(crate) dst: String,
+    pub(crate) dst: PathBuf,
     pub(crate) status: Option<String>,
     pub(crate) log: Option<String>,
     pub(crate) overwrite: OverwriteMode,
@@ -106,7 +106,7 @@ impl<'i> FileOp<'i> {
 pub struct DirOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) source: Source,
-    pub(crate) dst: String,
+    pub(crate) dst: PathBuf,
     pub(crate) status: Option<String>,
     pub(crate) log: Option<String>,
     pub(crate) overwrite: OverwriteMode,
@@ -174,7 +174,7 @@ impl<'i> DirOp<'i> {
 /// Created by [`Installer::uninstaller`](crate::Installer::uninstaller).
 pub struct UninstallerOp<'i> {
     pub(crate) installer: &'i mut Installer,
-    pub(crate) dst: String,
+    pub(crate) dst: PathBuf,
     pub(crate) status: Option<String>,
     pub(crate) log: Option<String>,
     pub(crate) overwrite: OverwriteMode,
@@ -224,7 +224,7 @@ impl<'i> UninstallerOp<'i> {
 /// by [`Installer::mkdir`](crate::Installer::mkdir).
 pub struct MkdirOp<'i> {
     pub(crate) installer: &'i mut Installer,
-    pub(crate) dst: String,
+    pub(crate) dst: PathBuf,
     pub(crate) status: Option<String>,
     pub(crate) log: Option<String>,
     pub(crate) weight: u32,
@@ -251,7 +251,7 @@ impl<'i> MkdirOp<'i> {
 /// deleted; directories are removed recursively.
 pub struct RemoveOp<'i> {
     pub(crate) installer: &'i mut Installer,
-    pub(crate) path: String,
+    pub(crate) path: PathBuf,
     pub(crate) status: Option<String>,
     pub(crate) log: Option<String>,
     pub(crate) weight: u32,

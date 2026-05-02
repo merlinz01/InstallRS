@@ -945,8 +945,7 @@ fn build_widget_column(
                         _ => String::new(),
                     };
                     let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
-                    let selected_idx =
-                        choices.iter().position(|(v, _)| *v == current).unwrap_or(0);
+                    let selected_idx = choices.iter().position(|(v, _)| *v == current).unwrap_or(0);
                     let opts: Vec<gui::RadioButtonOpts> = choices
                         .iter()
                         .enumerate()

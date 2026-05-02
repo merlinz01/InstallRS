@@ -14,6 +14,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** Path-taking methods now accept `impl AsRef<Path>`
+  instead of `impl AsRef<str>`: `Installer::set_out_dir`, `file`,
+  `dir`, `uninstaller`, `mkdir`, `remove`, `exists`, plus `shortcut`
+  (and its `working_dir` / `icon` setters). Pass `&Path` / `PathBuf`
+  directly without `to_string_lossy()`. `&str` and `String` callers
+  are unaffected.
 - **Breaking:** `Installer::headless` is no longer a public field.
   Use `Installer::is_headless()` instead.
 - **Breaking:** Custom-page widgets (`text`, `number`, `checkbox`,

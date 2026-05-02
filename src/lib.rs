@@ -34,7 +34,7 @@
 //!
 //! Optional features:
 //!
-//! - **`gui`** + a backend (`gui-win32` or `gui-gtk`) — native wizard
+//! - **`gui`** + a backend (`gui-win32` or `gui-gtk3`) — native wizard
 //!   with welcome / license / components / directory picker / install /
 //!   finish / error pages, plus custom pages for arbitrary inputs. The
 //!   same wizard definition runs `--headless` for unattended installs.

@@ -1,7 +1,7 @@
 //! Optional native wizard GUI and dialog helpers.
 //!
 //! Gated behind the `gui` feature. The backend is picked at compile time
-//! via `gui-win32` (Win32 on Windows, using `winsafe`) or `gui-gtk`
+//! via `gui-win32` (Win32 on Windows, using `winsafe`) or `gui-gtk3`
 //! (GTK3 on Linux, using `gtk-rs`). Both backends present the same
 //! high-level API via [`InstallerGui`] and its page builders.
 //!
@@ -39,7 +39,7 @@ mod types;
 #[cfg(feature = "gui-win32")]
 mod win32;
 
-#[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+#[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
 mod gtk;
 
 pub use dialog::{choose_language, confirm, error, info, warn};
@@ -61,11 +61,11 @@ pub mod __private {
     /// the top of the generated Linux `main.rs` when
     /// `[package.metadata.installrs].icon` points at a PNG.
     pub fn set_window_icon_png(bytes: &'static [u8]) {
-        #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+        #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
         {
             super::gtk::set_icon_bytes(bytes);
         }
-        #[cfg(not(all(feature = "gui-gtk", not(feature = "gui-win32"))))]
+        #[cfg(not(all(feature = "gui-gtk3", not(feature = "gui-win32"))))]
         {
             let _ = bytes;
         }
@@ -354,15 +354,15 @@ impl InstallerGui {
         win32::run_wizard(self.config, installer)
     }
 
-    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
     fn run_platform(self, installer: &mut Installer) -> Result<()> {
         gtk::run_wizard(self.config, installer)
     }
 
-    #[cfg(all(feature = "gui", not(any(feature = "gui-win32", feature = "gui-gtk"))))]
+    #[cfg(all(feature = "gui", not(any(feature = "gui-win32", feature = "gui-gtk3"))))]
     fn run_platform(self, _installer: &mut Installer) -> Result<()> {
         Err(anyhow::anyhow!(
-            "No GUI backend available for this platform. Enable `gui-win32` on Windows or `gui-gtk` on Linux."
+            "No GUI backend available for this platform. Enable `gui-win32` on Windows or `gui-gtk3` on Linux."
         ))
     }
 }

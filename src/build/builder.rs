@@ -1558,7 +1558,7 @@ fn write_uninstaller_sources(
         if target_is_windows {
             features.push("gui-win32");
         } else if target_is_linux {
-            features.push("gui-gtk");
+            features.push("gui-gtk3");
         }
     }
     let features_str = if features.is_empty() {
@@ -1703,7 +1703,7 @@ fn write_installer_sources(
         if target_is_windows {
             features.push("gui-win32");
         } else if target_is_linux {
-            features.push("gui-gtk");
+            features.push("gui-gtk3");
         }
     }
     let features_str = if features.is_empty() {

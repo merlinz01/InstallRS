@@ -17,7 +17,7 @@ fn show_win32(title: &str, message: &str, flags: co::MB) -> Result<co::DLGID> {
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-#[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+#[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
 fn show_gtk(
     title: &str,
     message: &str,
@@ -54,11 +54,11 @@ pub fn info(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
     {
         show_win32(title, message, co::MB::OK | co::MB::ICONINFORMATION).map(|_| ())
     }
-    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
     {
         show_gtk(title, message, gtk::MessageType::Info, gtk::ButtonsType::Ok).map(|_| ())
     }
-    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
+    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk3")))]
     {
         let _ = (title, message);
         Err(anyhow::anyhow!("No dialog backend available"))
@@ -72,7 +72,7 @@ pub fn warn(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
     {
         show_win32(title, message, co::MB::OK | co::MB::ICONWARNING).map(|_| ())
     }
-    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
     {
         show_gtk(
             title,
@@ -82,7 +82,7 @@ pub fn warn(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
         )
         .map(|_| ())
     }
-    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
+    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk3")))]
     {
         let _ = (title, message);
         Err(anyhow::anyhow!("No dialog backend available"))
@@ -96,7 +96,7 @@ pub fn error(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
     {
         show_win32(title, message, co::MB::OK | co::MB::ICONERROR).map(|_| ())
     }
-    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
     {
         show_gtk(
             title,
@@ -106,7 +106,7 @@ pub fn error(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
         )
         .map(|_| ())
     }
-    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
+    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk3")))]
     {
         let _ = (title, message);
         Err(anyhow::anyhow!("No dialog backend available"))
@@ -139,18 +139,18 @@ pub fn choose_language(
     {
         choose_language_win32(title, prompt, choices, default_code)
     }
-    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
     {
         choose_language_gtk(title, prompt, choices, default_code)
     }
-    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
+    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk3")))]
     {
         let _ = (title, prompt, choices, default_code);
         Err(anyhow::anyhow!("No dialog backend available"))
     }
 }
 
-#[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+#[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
 fn choose_language_gtk(
     title: &str,
     prompt: &str,
@@ -351,7 +351,7 @@ pub fn confirm(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<bool>
         let r = show_win32(title, message, co::MB::YESNO | co::MB::ICONQUESTION)?;
         Ok(r == co::DLGID::YES)
     }
-    #[cfg(all(feature = "gui-gtk", not(feature = "gui-win32")))]
+    #[cfg(all(feature = "gui-gtk3", not(feature = "gui-win32")))]
     {
         let r = show_gtk(
             title,
@@ -361,7 +361,7 @@ pub fn confirm(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<bool>
         )?;
         Ok(r == gtk::ResponseType::Yes)
     }
-    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk")))]
+    #[cfg(not(any(feature = "gui-win32", feature = "gui-gtk3")))]
     {
         let _ = (title, message);
         Err(anyhow::anyhow!("No dialog backend available"))

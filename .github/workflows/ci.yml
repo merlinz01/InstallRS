@@ -58,8 +58,8 @@ jobs:
         with:
           packages: libgtk-3-dev
           version: 1.0-lint
-      - name: Lint (gui-gtk)
-        run: cargo clippy --all-targets --features gui-gtk
+      - name: Lint (gui-gtk3)
+        run: cargo clippy --all-targets --features gui-gtk3
       - name: Lint (gui-win32)
         run: cargo clippy --all-targets --features gui-win32 --target x86_64-pc-windows-gnu
 

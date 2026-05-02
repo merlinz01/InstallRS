@@ -34,6 +34,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** Cargo feature `gui-gtk` renamed to `gui-gtk3`.
 - **Breaking:** CLI now uses subcommands. The build command moved from
   `installrs --target <dir> ...` to `installrs build <dir> ...`. The
   source-crate directory is a positional argument (defaulting to `.`)

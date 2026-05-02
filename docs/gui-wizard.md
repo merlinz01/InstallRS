@@ -18,7 +18,7 @@ gui = true
 ```
 
 That injects the `gui` feature plus the platform backend (`gui-win32` on
-Windows targets, `gui-gtk` on Linux).
+Windows targets, `gui-gtk3` on Linux).
 
 On Linux, the **build host** needs GTK3 dev headers:
 

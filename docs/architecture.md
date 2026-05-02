@@ -51,7 +51,7 @@ src/
       mod.rs
       window.rs         # WizardWindow: message loop, channel pump, nav buttons
       pages.rs          # Welcome / License / Components / ... / Error panels
-    gtk/                # GTK3 backend (behind `gui-gtk`; Linux only)
+    gtk/                # GTK3 backend (behind `gui-gtk3`; Linux only)
       mod.rs
       window.rs         # wizard window: gtk::Stack pages, glib timeout channel pump
       pages.rs          # same page set using Box / Label / TextView / ProgressBar
@@ -109,7 +109,7 @@ Everything users touch at runtime:
 ## GUI module (`src/gui/`, feature-gated)
 
 Behind `gui` (implies exactly one platform backend — `gui-win32` or
-`gui-gtk`). The backend is picked at compile time by cfg:
+`gui-gtk3`). The backend is picked at compile time by cfg:
 
 - **`mod.rs`** — `InstallerGui` wizard builder, page methods,
   `error_page(title, message)`,
@@ -188,7 +188,7 @@ and `build/uninstaller/`. Each has a `Cargo.toml` and a `src/main.rs`.
 - Depends on the user's installer library by path.
 - Feature flags injected from config: compression method (`lzma`,
   `gzip`, `bzip2`) plus, when `gui = true`, both `gui` and the platform
-  backend (`gui-win32` on Windows targets, `gui-gtk` on Linux).
+  backend (`gui-win32` on Windows targets, `gui-gtk3` on Linux).
 - `winresource` is a build-dep **only when the target is Windows**.
   Stale `build.rs` files from prior Windows builds are cleaned up when
   retargeting to Linux.
@@ -240,7 +240,7 @@ Build order:
 | `bzip2`     | Pulls in the `bzip2` crate.                                                 |
 | `gui`       | Compiles the `gui` module (platform-agnostic types + wizard builder).       |
 | `gui-win32` | Implies `gui`; adds the Win32 backend (`winsafe`). Target must be Windows.  |
-| `gui-gtk`   | Implies `gui`; adds the GTK3 backend (`gtk-rs`). Target must be Linux.      |
+| `gui-gtk3`   | Implies `gui`; adds the GTK3 backend (`gtk-rs`). Target must be Linux.      |
 
 ## Key design details
 

@@ -14,6 +14,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Added
 
+- `docs/metadata-reference.md` — a single-page reference for every
+  `[package.metadata.installrs]` key, with types, defaults, subtable
+  scoping rules, feature-overlay merge semantics, and the `--metadata`
+  CLI override.
 - `--help` / `-h` now prints a usage summary listing built-in flags,
   every option registered with `add_option` (with their `help` strings),
   and the registered components, then exits.

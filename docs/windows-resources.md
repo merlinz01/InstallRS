@@ -90,6 +90,9 @@ Options for Windows version compatibility declarations (`supported-os`):
 
 ## See also
 
+- [`[package.metadata.installrs]` reference](metadata-reference.md) —
+  the full schema in one place, including non-Windows keys, subtables,
+  feature overlays, and CLI overrides.
 - [Building for production](building.md) — cross-compiling to Windows
   from Linux, and Authenticode code signing with signtool.
 - [GUI Wizard](gui-wizard.md) — the icon configured here also appears

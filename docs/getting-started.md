@@ -201,7 +201,9 @@ file-version = "1.0.0.0"
 legal-copyright = "Copyright (c) 2026 Me"
 ```
 
-See [Windows Resources](windows-resources.md) for every option.
+See [Windows Resources](windows-resources.md) for the user-facing
+walkthrough, or [`[package.metadata.installrs]` reference](metadata-reference.md)
+for the full schema.
 
 ## What next?
 
@@ -254,5 +256,7 @@ installrs build .
   custom pages, error page, dialogs, and headless mode.
 - [Installer API](installer-api.md) — selectable
   components plus registering your own `--flags`.
+- [`[package.metadata.installrs]` reference](metadata-reference.md) —
+  every metadata key, type, and default in one place.
 - [Building for production](building.md) — cross-compilation, size and
   speed tuning, code signing, release CI.

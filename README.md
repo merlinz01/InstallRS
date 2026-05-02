@@ -139,6 +139,8 @@ and headless mode — the best way to see the whole system in action.
 - [Internationalization](docs/internationalization.md) — translating wizard strings,
   locale detection, and the pre-wizard language picker.
 - [Windows Resources](docs/windows-resources.md) — icons, version info, UAC manifests.
+- [`[package.metadata.installrs]` reference](docs/metadata-reference.md) — every metadata
+  key, its type, default, and how subtables / feature overlays / `--metadata` overrides compose.
 - [Architecture](docs/architecture.md) — how the codebase is organized
   and what the generated installer crates look like.
 - [API reference on docs.rs](https://docs.rs/installrs) — every public type and method.

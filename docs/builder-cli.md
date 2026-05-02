@@ -164,6 +164,8 @@ the real release build.
 
 ## See also
 
+- [`[package.metadata.installrs]` reference](metadata-reference.md) —
+  every key the `--metadata` flag and the metadata table accept.
 - [Building for production](building.md) — cross-compilation,
   reproducibility, payload integrity, code signing.
 - [Getting Started](getting-started.md) — the walkthrough that uses

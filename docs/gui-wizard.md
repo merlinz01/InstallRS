@@ -305,6 +305,7 @@ result?;
 
 ## See also
 
+- [How-to](how-to.md) — recipes for common wizard patterns.
 - [Installer API](installer-api.md) — the
   `components_page` renders registered components; custom-page widgets
   bind to registered CLI options by key.

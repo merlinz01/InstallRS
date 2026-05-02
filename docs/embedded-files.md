@@ -228,6 +228,7 @@ constructing a builder op first.
 
 ## See also
 
+- [How-to](how-to.md) — recipes for progress, registry, shortcuts, and more.
 - [Installer API](installer-api.md) — the
   `progress_weight` declared on each component, and how it interacts
   with per-op weights.

@@ -246,6 +246,7 @@ installrs --target .
 
 ## See also
 
+- [How-to](how-to.md) — short recipes for the most common patterns.
 - [Embedded files, builder ops, and progress](embedded-files.md) — the
   full API reference for everything you call inside `install` /
   `uninstall`.

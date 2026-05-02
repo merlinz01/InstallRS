@@ -38,6 +38,8 @@ InstallRS is here to revolutionize the way you create software installers.
 > of the AI tools used. Contributions to refine and
 > improve the codebase are welcome.
 
+
+
 ## Highlights
 
 - **Write installer logic in plain Rust**, with the full standard

@@ -141,6 +141,7 @@ widget API.
 
 ## See also
 
+- [How-to](how-to.md) — recipes for components, options, and CLI flags.
 - [GUI Wizard](gui-wizard.md) — the components page and custom pages
   that render the components and custom options registered here.
 - [Embedded files, builder ops, and progress](embedded-files.md) —

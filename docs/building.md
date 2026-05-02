@@ -140,9 +140,8 @@ Both the CLI and the generated installer crate's builds benefit from
 caching. In GitHub Actions:
 
 - `Swatinem/rust-cache@v2` caches `target/` for your installer crate.
-- Extend `workspaces:` to cover the generated crates too — they have
-  their own `target/` dirs under `build/installer/` and
-  `build/uninstaller/`.
+- Extend `workspaces:` to cover the generated crates' shared target
+  dir, which lives at `<installer-crate>/build/target/`.
 - Use the fast-iteration env vars above on CI validation jobs that
   don't need to ship the binary.
 
@@ -153,8 +152,8 @@ Example:
   with:
     workspaces: |
       . -> target
-      example/build/installer -> target
-      example/build/uninstaller -> target
+      example/build/installer -> ../target
+      example/build/uninstaller -> ../target
 
 - name: Build example installer (fast)
   env:

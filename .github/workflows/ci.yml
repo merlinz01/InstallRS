@@ -123,8 +123,8 @@ jobs:
         with:
           workspaces: |
             . -> target
-            example/build/installer -> target
-            example/build/uninstaller -> target
+            example/build/installer -> ../target
+            example/build/uninstaller -> ../target
       - name: Build CLI
         run: cargo build --release
       - name: Build example installer

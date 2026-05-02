@@ -459,6 +459,10 @@ pub fn build(mut params: BuildParams) -> Result<()> {
 
     let installer_dir = params.build_dir.join("installer");
     let uninstaller_dir = params.build_dir.join("uninstaller");
+    // One target dir shared by both generated crates: the runtime,
+    // user's installer lib, and all transitive deps compile once
+    // instead of once per crate.
+    let cargo_target_dir = params.build_dir.join("target");
     // Single shared blob cache for both generated crates. Each crate's
     // generated `main.rs` references entries via `include_bytes!` with
     // a `../../files/<hash>-<compression>` relative path, so identical
@@ -580,13 +584,13 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     )?;
     compile_cargo_project(
         &uninstaller_dir,
+        &cargo_target_dir,
         params.target_triple.as_deref(),
         params.verbosity,
     )?;
 
     // Copy compiled uninstaller to known path
-    let compiled = uninstaller_dir
-        .join("target")
+    let compiled = cargo_target_dir
         .join(if let Some(t) = &params.target_triple {
             format!("{}/release", t)
         } else {
@@ -644,13 +648,13 @@ pub fn build(mut params: BuildParams) -> Result<()> {
     )?;
     compile_cargo_project(
         &installer_dir,
+        &cargo_target_dir,
         params.target_triple.as_deref(),
         params.verbosity,
     )?;
 
     // Copy final binary to output path
-    let compiled_installer = installer_dir
-        .join("target")
+    let compiled_installer = cargo_target_dir
         .join(if let Some(t) = &params.target_triple {
             format!("{}/release", t)
         } else {
@@ -1910,6 +1914,7 @@ fn emit_dir_children(gathered: &[GatheredFile], parent_path: &str, indent: usize
 
 fn compile_cargo_project(
     project_dir: &Path,
+    target_dir: &Path,
     target_triple: Option<&str>,
     verbosity: u8,
 ) -> Result<()> {
@@ -1930,12 +1935,18 @@ fn compile_cargo_project(
         _ => {}
     }
     cmd.current_dir(project_dir);
+    // Point the installer and uninstaller crates at one shared target
+    // dir so cargo deduplicates the `installrs` runtime, the user's
+    // installer library, and every transitive dep across the two
+    // build phases — compiles each exactly once instead of twice.
+    cmd.env("CARGO_TARGET_DIR", target_dir);
 
     log::trace!(
-        "Running: cargo build --release{}",
+        "Running: cargo build --release{} (CARGO_TARGET_DIR={})",
         target_triple
             .map(|t| format!(" --target {t}"))
-            .unwrap_or_default()
+            .unwrap_or_default(),
+        target_dir.display(),
     );
 
     let status = cmd

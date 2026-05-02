@@ -228,8 +228,12 @@ Build order:
    `build/uninstaller-bin`.
 2. Generate the installer crate, `include_bytes!`-linking the
    uninstaller binary above.
-3. Compile the installer crate → `build/installer/target/.../installer`.
+3. Compile the installer crate → `build/target/.../installer-generated`.
 4. Copy to `--output`.
+
+Both generated crates share `build/target/` via `CARGO_TARGET_DIR`,
+so the runtime, the user's installer library, and every transitive
+dep compile once across the two phases instead of once per crate.
 
 ## Feature flags
 

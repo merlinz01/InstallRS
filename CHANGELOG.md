@@ -14,6 +14,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Added
 
+- Generated installer and uninstaller crates share a single cargo
+  target dir at `<crate>/build/target/`, deduping runtime + dep
+  compilations across the two phases (~40% faster clean builds).
 - Schema-version assertion between the CLI and runtime. Generated
   crates now include `const _: () = installrs::__private::assert_entries_version(N);`
   near the top of `main.rs`; if the linked runtime's `ENTRIES_VERSION`

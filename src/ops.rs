@@ -48,6 +48,7 @@ pub(crate) use impl_common_op_setters;
 /// [`status`](Self::status) / [`log`](Self::log) /
 /// [`weight`](Self::weight) / [`overwrite`](Self::overwrite) /
 /// [`mode`](Self::mode) before installing.
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct FileOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) source: Source,
@@ -103,6 +104,7 @@ impl<'i> FileOp<'i> {
 /// [`Installer::dir`](crate::Installer::dir). Chain
 /// [`filter`](Self::filter) and [`on_error`](Self::on_error) for
 /// fine-grained control.
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct DirOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) source: Source,
@@ -172,6 +174,7 @@ impl<'i> DirOp<'i> {
 
 /// Builder for writing the embedded uninstaller binary to disk.
 /// Created by [`Installer::uninstaller`](crate::Installer::uninstaller).
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct UninstallerOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) dst: PathBuf,
@@ -222,6 +225,7 @@ impl<'i> UninstallerOp<'i> {
 
 /// Builder for creating an empty directory at install time. Created
 /// by [`Installer::mkdir`](crate::Installer::mkdir).
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct MkdirOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) dst: PathBuf,
@@ -249,6 +253,7 @@ impl<'i> MkdirOp<'i> {
 /// Builder for removing a path at install / uninstall time. Created
 /// by [`Installer::remove`](crate::Installer::remove). Files are
 /// deleted; directories are removed recursively.
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct RemoveOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) path: PathBuf,

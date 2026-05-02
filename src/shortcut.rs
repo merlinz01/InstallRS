@@ -11,6 +11,7 @@ use crate::Installer;
 
 /// Builder for creating a Windows `.lnk` shortcut. Created by
 /// [`Installer::shortcut`](crate::Installer::shortcut).
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct ShortcutOp<'i> {
     pub(crate) installer: &'i mut Installer,
     pub(crate) dst: PathBuf,

@@ -140,6 +140,7 @@ impl<'i> Registry<'i> {
 
 /// Builder for setting a registry value. Created by
 /// [`Registry::set_value`].
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct RegSetValue<'i> {
     installer: &'i mut Installer,
     hive: RegistryHive,
@@ -218,6 +219,7 @@ impl<'i> RegSetValue<'i> {
 /// Builder for deleting a registry key. Created by
 /// [`Registry::delete_key`]. Use [`recursive`](Self::recursive) to
 /// delete a key that still has children.
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct RegDeleteKey<'i> {
     installer: &'i mut Installer,
     hive: RegistryHive,
@@ -266,6 +268,7 @@ impl<'i> RegDeleteKey<'i> {
 
 /// Builder for deleting a single named value under a registry key.
 /// Created by [`Registry::delete_value`].
+#[must_use = "builder ops do nothing until `.install()` is called"]
 pub struct RegDeleteValue<'i> {
     installer: &'i mut Installer,
     hive: RegistryHive,

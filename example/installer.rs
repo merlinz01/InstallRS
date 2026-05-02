@@ -85,7 +85,11 @@ pub fn install(i: &mut Installer) -> Result<()> {
     i.add_option("password", OptionKind::String, "Account password");
     i.add_option("port", OptionKind::Int, "Listen port");
     i.add_option("install_type", OptionKind::String, "typical|minimal|custom");
-    i.add_option("desktop_shortcut", OptionKind::Bool, "Create desktop shortcut");
+    i.add_option(
+        "desktop_shortcut",
+        OptionKind::Bool,
+        "Create desktop shortcut",
+    );
     i.add_option("db_backend", OptionKind::String, "sqlite|postgres");
     i.add_option("launch_app", OptionKind::Bool, "Launch app after install");
 
@@ -175,7 +179,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
                     ("custom", custom.as_str()),
                 ],
             );
-            p.checkbox("desktop_shortcut", &t!("installer.options.desktop_shortcut"));
+            p.checkbox(
+                "desktop_shortcut",
+                &t!("installer.options.desktop_shortcut"),
+            );
             p.dropdown(
                 "db_backend",
                 &t!("installer.options.db_backend"),

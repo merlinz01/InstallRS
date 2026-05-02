@@ -2,7 +2,7 @@
 //! trait, and the internal `CmdOption` registry entry used by the Installer.
 
 /// Declared shape of a user-defined command-line option. Register via
-/// [`crate::Installer::option`]; read parsed results via
+/// [`crate::Installer::add_option`]; read parsed results via
 /// [`crate::Installer::option`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptionKind {

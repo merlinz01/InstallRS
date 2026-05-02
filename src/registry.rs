@@ -46,8 +46,10 @@ impl RegistryHive {
 }
 
 /// Short-lived handle returned by [`Installer::registry`] that
-/// constructs registry builder ops ([`set`](Registry::set),
-/// [`delete`](Registry::delete), [`remove`](Registry::remove)).
+/// constructs registry builder ops ([`set_value`](Registry::set_value),
+/// [`get_value`](Registry::get_value),
+/// [`delete_value`](Registry::delete_value),
+/// [`delete_key`](Registry::delete_key)).
 pub struct Registry<'i> {
     pub(crate) installer: &'i mut Installer,
 }
@@ -57,13 +59,13 @@ impl<'i> Registry<'i> {
     /// automatically. Value type is determined by `V` — any type
     /// implementing `winreg::types::ToRegValue` works (`String`, `&str`,
     /// `u32`, `u64`, `Vec<String>`, etc.).
-    pub fn set<V: winreg::types::ToRegValue>(
+    pub fn set_value<V: winreg::types::ToRegValue>(
         self,
         hive: RegistryHive,
         subkey: impl AsRef<str>,
         name: impl AsRef<str>,
         value: V,
-    ) -> RegSetOp<'i> {
+    ) -> RegSetValue<'i> {
         // `to_reg_value()` returns a `RegValue<'_>` whose bytes may
         // borrow from `value`. Convert to an owned-bytes `RegValue<'static>`
         // so the op can outlive the original input.
@@ -72,7 +74,7 @@ impl<'i> Registry<'i> {
             bytes: std::borrow::Cow::Owned(borrowed.bytes.into_owned()),
             vtype: borrowed.vtype,
         };
-        RegSetOp {
+        RegSetValue {
             installer: self.installer,
             hive,
             subkey: subkey.as_ref().to_string(),
@@ -87,7 +89,7 @@ impl<'i> Registry<'i> {
 
     /// Read a registry value. Returns an error if the key or value
     /// doesn't exist or the stored type doesn't match `V`.
-    pub fn get<V: winreg::types::FromRegValue>(
+    pub fn get_value<V: winreg::types::FromRegValue>(
         &self,
         hive: RegistryHive,
         subkey: &str,
@@ -104,8 +106,8 @@ impl<'i> Registry<'i> {
     /// Delete a subkey. Non-recursive by default (fails if the key has
     /// children); call `.recursive()` to delete children too. Missing
     /// keys are treated as success.
-    pub fn remove(self, hive: RegistryHive, subkey: impl AsRef<str>) -> RegRemoveKeyOp<'i> {
-        RegRemoveKeyOp {
+    pub fn delete_key(self, hive: RegistryHive, subkey: impl AsRef<str>) -> RegDeleteKey<'i> {
+        RegDeleteKey {
             installer: self.installer,
             hive,
             subkey: subkey.as_ref().to_string(),
@@ -118,13 +120,13 @@ impl<'i> Registry<'i> {
 
     /// Delete a named value under `subkey`. Missing values are treated
     /// as success.
-    pub fn delete(
+    pub fn delete_value(
         self,
         hive: RegistryHive,
         subkey: impl AsRef<str>,
         name: impl AsRef<str>,
-    ) -> RegDeleteValueOp<'i> {
-        RegDeleteValueOp {
+    ) -> RegDeleteValue<'i> {
+        RegDeleteValue {
             installer: self.installer,
             hive,
             subkey: subkey.as_ref().to_string(),
@@ -137,8 +139,8 @@ impl<'i> Registry<'i> {
 }
 
 /// Builder for setting a registry value. Created by
-/// [`Registry::set`].
-pub struct RegSetOp<'i> {
+/// [`Registry::set_value`].
+pub struct RegSetValue<'i> {
     installer: &'i mut Installer,
     hive: RegistryHive,
     subkey: String,
@@ -150,9 +152,9 @@ pub struct RegSetOp<'i> {
     log: Option<String>,
 }
 
-impl_common_op_setters!(RegSetOp);
+impl_common_op_setters!(RegSetValue);
 
-impl<'i> RegSetOp<'i> {
+impl<'i> RegSetValue<'i> {
     /// How to react when the named value already exists. Defaults to
     /// [`OverwriteMode::Overwrite`]. [`OverwriteMode::Skip`] leaves the
     /// existing value untouched; [`OverwriteMode::Error`] aborts the
@@ -214,9 +216,9 @@ impl<'i> RegSetOp<'i> {
 }
 
 /// Builder for deleting a registry key. Created by
-/// [`Registry::remove`]. Use [`recursive`](Self::recursive) to
+/// [`Registry::delete_key`]. Use [`recursive`](Self::recursive) to
 /// delete a key that still has children.
-pub struct RegRemoveKeyOp<'i> {
+pub struct RegDeleteKey<'i> {
     installer: &'i mut Installer,
     hive: RegistryHive,
     subkey: String,
@@ -226,9 +228,9 @@ pub struct RegRemoveKeyOp<'i> {
     log: Option<String>,
 }
 
-impl_common_op_setters!(RegRemoveKeyOp);
+impl_common_op_setters!(RegDeleteKey);
 
-impl<'i> RegRemoveKeyOp<'i> {
+impl<'i> RegDeleteKey<'i> {
     /// Recursively delete all child subkeys. Without this, removing a
     /// key that has children fails with an error.
     pub fn recursive(mut self) -> Self {
@@ -263,8 +265,8 @@ impl<'i> RegRemoveKeyOp<'i> {
 }
 
 /// Builder for deleting a single named value under a registry key.
-/// Created by [`Registry::delete`].
-pub struct RegDeleteValueOp<'i> {
+/// Created by [`Registry::delete_value`].
+pub struct RegDeleteValue<'i> {
     installer: &'i mut Installer,
     hive: RegistryHive,
     subkey: String,
@@ -274,9 +276,9 @@ pub struct RegDeleteValueOp<'i> {
     log: Option<String>,
 }
 
-impl_common_op_setters!(RegDeleteValueOp);
+impl_common_op_setters!(RegDeleteValue);
 
-impl<'i> RegDeleteValueOp<'i> {
+impl<'i> RegDeleteValue<'i> {
     /// Run the op: delete the named value. Missing values are not an error.
     pub fn install(self) -> Result<()> {
         self.installer.check_cancelled()?;

@@ -294,7 +294,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
             let quoted_uninstaller = format!("\"{uninstaller_path}\"");
 
             i.registry()
-                .set(
+                .set_value(
                     LocalMachine,
                     UNINSTALL_KEY,
                     "DisplayName",
@@ -303,13 +303,13 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 .log(t!("installer.install.log_registry"))
                 .install()?;
             i.registry()
-                .set(LocalMachine, UNINSTALL_KEY, "DisplayVersion", "0.1.0")
+                .set_value(LocalMachine, UNINSTALL_KEY, "DisplayVersion", "0.1.0")
                 .install()?;
             i.registry()
-                .set(LocalMachine, UNINSTALL_KEY, "Publisher", "InstallRS")
+                .set_value(LocalMachine, UNINSTALL_KEY, "Publisher", "InstallRS")
                 .install()?;
             i.registry()
-                .set(
+                .set_value(
                     LocalMachine,
                     UNINSTALL_KEY,
                     "InstallLocation",
@@ -317,7 +317,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 )
                 .install()?;
             i.registry()
-                .set(
+                .set_value(
                     LocalMachine,
                     UNINSTALL_KEY,
                     "UninstallString",
@@ -325,10 +325,10 @@ pub fn install(i: &mut Installer) -> Result<()> {
                 )
                 .install()?;
             i.registry()
-                .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoModify", 1)
+                .set_value::<u32>(LocalMachine, UNINSTALL_KEY, "NoModify", 1)
                 .install()?;
             i.registry()
-                .set::<u32>(LocalMachine, UNINSTALL_KEY, "NoRepair", 1)
+                .set_value::<u32>(LocalMachine, UNINSTALL_KEY, "NoRepair", 1)
                 .install()?;
         }
 
@@ -435,7 +435,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
             const UNINSTALL_KEY: &str =
                 r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample";
             i.registry()
-                .get::<String>(LocalMachine, UNINSTALL_KEY, "InstallLocation")
+                .get_value::<String>(LocalMachine, UNINSTALL_KEY, "InstallLocation")
                 .unwrap_or_else(|_| {
                     std::env::current_exe()
                         .ok()
@@ -456,7 +456,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
             i.remove(shortcut_dir).install()?;
 
             i.registry()
-                .remove(
+                .delete_key(
                     LocalMachine,
                     r"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallRSExample",
                 )

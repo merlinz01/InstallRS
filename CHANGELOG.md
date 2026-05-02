@@ -14,6 +14,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** Registry methods renamed for symmetry: `Registry::set` → `set_value`,
+  `get` → `get_value`, `remove` → `delete_key`, `delete` → `delete_value`.
 - **Breaking:** Path-taking methods now accept `impl AsRef<Path>`
   instead of `impl AsRef<str>`: `Installer::set_out_dir`, `file`,
   `dir`, `uninstaller`, `mkdir`, `remove`, `exists`, plus `shortcut`

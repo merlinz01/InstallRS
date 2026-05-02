@@ -85,7 +85,7 @@ pub use ops::{DirOp, FileOp, MkdirOp, RemoveOp, UninstallerOp};
 pub use options::{FromOptionValue, OptionKind, OptionValue};
 pub use progress::{ProgressSink, StderrProgressSink};
 #[cfg(target_os = "windows")]
-pub use registry::{RegDeleteValueOp, RegRemoveKeyOp, RegSetOp, Registry, RegistryHive};
+pub use registry::{RegDeleteKey, RegDeleteValue, RegSetValue, Registry, RegistryHive};
 #[cfg(target_os = "windows")]
 pub use shortcut::ShortcutOp;
 pub use source::{source_path_hash_const, Source};
@@ -668,8 +668,8 @@ impl Installer {
     }
 
     /// Windows registry operations. Returns a short-lived handle whose
-    /// methods create registry builder ops (`set`, `get`,
-    /// `remove`, `delete`). Windows-only.
+    /// methods create registry builder ops (`set_value`, `get_value`,
+    /// `delete_value`, `delete_key`). Windows-only.
     #[cfg(target_os = "windows")]
     pub fn registry(&mut self) -> Registry<'_> {
         Registry { installer: self }

@@ -58,6 +58,7 @@ fn build_install_uninstall(compression: &str) {
     let installrs_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new(installrs_bin())
         .args([
+            "build",
             "--target",
             &target_dir.to_string_lossy(),
             "--output",

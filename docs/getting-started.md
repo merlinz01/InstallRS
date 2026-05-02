@@ -99,7 +99,7 @@ my-installer/
 ## 4. Build the installer
 
 ```sh
-installrs --target . --output my-installer
+installrs build --target . --output my-installer
 ```
 
 That's it. You now have a single executable `my-installer` (or
@@ -241,7 +241,7 @@ iteration during development, override via env vars:
 CARGO_PROFILE_RELEASE_LTO=false \
 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
 CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
-installrs --target .
+installrs build --target .
 ```
 
 ## See also

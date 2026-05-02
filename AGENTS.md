@@ -29,15 +29,15 @@ cargo clippy --features gui-win32 --target x86_64-pc-windows-gnu
 cargo fmt
 
 # Build an installer using the CLI (from an installer source directory)
-installrs --target ./my-installer --output installer
+installrs build --target ./my-installer --output installer
 
 # Build against the working-tree runtime (not the published crate) —
 # pass --installrs-path for InstallRS-on-InstallRS development.
-installrs --target ./my-installer --output installer --installrs-path /path/to/InstallRS
+installrs build --target ./my-installer --output installer --installrs-path /path/to/InstallRS
 
 # Verbose / trace output
-installrs --target ./my-installer -v    # debug
-installrs --target ./my-installer -vv   # trace
+installrs build --target ./my-installer -v    # debug
+installrs build --target ./my-installer -vv   # trace
 ```
 
 ## Keeping docs in sync

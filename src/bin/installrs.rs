@@ -4,14 +4,40 @@ mod build;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(
     name = "installrs",
-    about = "Build self-contained installer executables"
+    about = "Build self-contained installer executables",
+    subcommand_required = true,
+    arg_required_else_help = true
 )]
 struct Cli {
+    /// Enable debug output (-v) or trace output (-vv)
+    #[arg(long, short, action = clap::ArgAction::Count, global = true)]
+    verbose: u8,
+
+    /// Suppress non-error output
+    #[arg(long, short, global = true)]
+    quiet: bool,
+
+    /// Suppress all output
+    #[arg(long, short, global = true)]
+    silent: bool,
+
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Build a self-contained installer executable from an installer crate.
+    Build(BuildArgs),
+}
+
+#[derive(Parser, Debug)]
+struct BuildArgs {
     /// Directory containing the installer source crate
     #[arg(long, default_value = ".")]
     target: PathBuf,
@@ -62,18 +88,6 @@ struct Cli {
     /// script) — end users should leave this unset.
     #[arg(long = "installrs-path", value_name = "PATH")]
     installrs_path: Option<PathBuf>,
-
-    /// Enable debug output (-v) or trace output (-vv)
-    #[arg(long, short, action = clap::ArgAction::Count)]
-    verbose: u8,
-
-    /// Suppress non-error output
-    #[arg(long, short)]
-    quiet: bool,
-
-    /// Suppress all output
-    #[arg(long, short)]
-    silent: bool,
 }
 
 fn main() {
@@ -97,29 +111,32 @@ fn main() {
         .format_target(false)
         .init();
 
-    if let Err(e) = run(cli) {
+    let result = match cli.command {
+        Command::Build(args) => run_build(args, cli.verbose),
+    };
+    if let Err(e) = result {
         log::error!("{e:#}");
         std::process::exit(1);
     }
 }
 
-fn run(cli: Cli) -> Result<()> {
-    let target = cli
+fn run_build(args: BuildArgs, verbose: u8) -> Result<()> {
+    let target = args
         .target
         .canonicalize()
-        .unwrap_or_else(|_| cli.target.clone());
+        .unwrap_or_else(|_| args.target.clone());
 
     let build_dir = target.join("build");
 
-    let ignore_patterns: Vec<String> = cli
+    let ignore_patterns: Vec<String> = args
         .ignore
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
 
-    let mut output_file = cli.output;
-    if let Some(ref triple) = cli.target_triple {
+    let mut output_file = args.output;
+    if let Some(ref triple) = args.target_triple {
         if triple.contains("windows") && output_file.extension().map(|e| e != "exe").unwrap_or(true)
         {
             output_file.set_extension("exe");
@@ -129,30 +146,31 @@ fn run(cli: Cli) -> Result<()> {
     // Always read the [package.metadata.installrs] config — the builder
     // decides per-target whether to emit Windows resources vs. embed the
     // icon as PNG for the GTK backend.
-    let metadata_overrides = parse_metadata_overrides(&cli.metadata)?;
+    let metadata_overrides = parse_metadata_overrides(&args.metadata)?;
 
     let (installer_win_resource, uninstaller_win_resource) =
-        build::builder::read_win_resource_config(&target, &cli.features, &metadata_overrides)?;
+        build::builder::read_win_resource_config(&target, &args.features, &metadata_overrides)?;
 
-    let gui_enabled = build::builder::read_gui_config(&target, &cli.features, &metadata_overrides)?;
+    let gui_enabled =
+        build::builder::read_gui_config(&target, &args.features, &metadata_overrides)?;
     if gui_enabled {
         log::info!("GUI support enabled");
     }
 
-    let installrs_local_path = cli.installrs_path.map(|p| p.canonicalize().unwrap_or(p));
+    let installrs_local_path = args.installrs_path.map(|p| p.canonicalize().unwrap_or(p));
 
     let params = build::builder::BuildParams {
         target_dir: target,
         build_dir,
         output_file,
-        compression: cli.compression,
+        compression: args.compression,
         ignore_patterns,
-        target_triple: cli.target_triple,
-        verbosity: cli.verbose,
+        target_triple: args.target_triple,
+        verbosity: verbose,
         installer_win_resource,
         uninstaller_win_resource,
         gui_enabled,
-        features: cli.features,
+        features: args.features,
         installrs_local_path,
     };
 

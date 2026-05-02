@@ -8,7 +8,7 @@ executable from an installer crate.
 ## Synopsis
 
 ```sh
-installrs --target <dir> --output <file> [options]
+installrs build --target <dir> --output <file> [options]
 ```
 
 ## Flags
@@ -37,26 +37,26 @@ runtime from crates.io that matches the CLI version.
 Build an installer with defaults:
 
 ```sh
-installrs --target my-installer --output installer
+installrs build --target my-installer --output installer
 ```
 
 Cross-compile for Windows from Linux (requires mingw):
 
 ```sh
-installrs --target my-installer --output installer.exe \
+installrs build --target my-installer --output installer.exe \
   --target-triple x86_64-pc-windows-gnu
 ```
 
 Use gzip compression for faster builds at the cost of larger binaries:
 
 ```sh
-installrs --target my-installer --output installer --compression gzip
+installrs build --target my-installer --output installer --compression gzip
 ```
 
 Verbose build to see what files got embedded:
 
 ```sh
-installrs --target my-installer --output installer -v
+installrs build --target my-installer --output installer -v
 ```
 
 Enable user-library cargo features — gates `source!(..., features =
@@ -64,7 +64,7 @@ Enable user-library cargo features — gates `source!(..., features =
 in your installer library:
 
 ```sh
-installrs --target my-installer --feature pro --feature docs
+installrs build --target my-installer --feature pro --feature docs
 ```
 
 Override individual `[package.metadata.installrs]` keys at build time
@@ -72,7 +72,7 @@ without touching `Cargo.toml` — handy for stamping CI-supplied version
 strings or per-build values:
 
 ```sh
-installrs --target . -m file-version="$(cat version.txt)" \
+installrs build --target . -m file-version="$(cat version.txt)" \
                      -m product-version="$(cat version.txt)" \
                      -m installer.file-description="My App Installer (CI)" \
                      -m gui=true \
@@ -115,9 +115,9 @@ product-name = "My App Lite"
 ```
 
 ```sh
-installrs --target . --feature pro  --output installer-pro
-installrs --target . --feature lite --output installer-lite
-installrs --target . --output installer-base   # no overlay
+installrs build --target . --feature pro  --output installer-pro
+installrs build --target . --feature lite --output installer-lite
+installrs build --target . --output installer-base   # no overlay
 ```
 
 Per-feature overlays can also override individual keys inside the
@@ -156,7 +156,7 @@ the inner `cargo build --release` that `installrs` spawns:
 CARGO_PROFILE_RELEASE_LTO=false \
 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
 CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
-installrs --target my-installer
+installrs build --target my-installer
 ```
 
 Expect a 3–5× speedup at the cost of a larger binary. Drop these for

@@ -55,6 +55,7 @@ fn build_install_uninstall(compression: &str) {
     let out_dir = tmp.path().join("installed");
 
     // ── Step 1: build the installer ──────────────────────────────────────────
+    let installrs_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new(installrs_bin())
         .args([
             "--target",
@@ -63,12 +64,13 @@ fn build_install_uninstall(compression: &str) {
             &installer_bin.to_string_lossy(),
             "--compression",
             compression,
+            // Integration tests exercise the current working-tree runtime, not
+            // a published crate. `--installrs-path` makes the builder emit
+            // `path = ".../InstallRS"` in the generated Cargo.toml.
+            "--installrs-path",
+            &installrs_root.to_string_lossy(),
             "--silent",
         ])
-        // Integration tests exercise the current working-tree runtime, not a
-        // published crate. `INSTALLRS_LOCAL_PATH=1` makes the builder emit
-        // `path = ".../InstallRS"` in the generated Cargo.toml.
-        .env("INSTALLRS_LOCAL_PATH", "1")
         .output()
         .expect("failed to spawn installrs");
 

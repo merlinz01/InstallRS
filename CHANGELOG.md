@@ -17,6 +17,10 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - `--help` / `-h` now prints a usage summary listing built-in flags,
   every option registered with `add_option` (with their `help` strings),
   and the registered components, then exits.
+- `--installrs-path <PATH>` CLI flag — when set, the generated
+  `Cargo.toml`s depend on `installrs` via `path = "<PATH>"` instead of
+  the crates.io version pin. Replaces the `INSTALLRS_LOCAL_PATH=1`
+  env var, which has been removed.
 
 ### Changed
 

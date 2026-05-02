@@ -243,9 +243,9 @@ run.
 ### "package `installrs` not found in registry"
 
 You're trying to build without the runtime crate published yet, or on
-an offline build host. For local development of InstallRS itself, set
-`INSTALLRS_LOCAL_PATH=1` to emit `installrs = { path = "..." }` in the
-generated `Cargo.toml` instead of a crates.io reference.
+an offline build host. For local development of InstallRS itself, pass
+`--installrs-path <PATH>` to emit `installrs = { path = "<PATH>" }` in
+the generated `Cargo.toml` instead of a crates.io reference.
 
 ### "installer payload integrity check failed"
 

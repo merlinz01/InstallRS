@@ -22,15 +22,15 @@ installrs --target <dir> --output <file> [options]
 | `--target-triple <triple>` | Rust target triple for cross-compilation                           |
 | `--feature <name>`         | Enable a user-library cargo feature (repeatable)                   |
 | `-m` / `--metadata <K=V>`  | Override a `[package.metadata.installrs]` key (repeatable)         |
+| `--installrs-path <path>`  | Depend on `installrs` via `path = "<path>"` instead of crates.io   |
 | `-v` / `-vv`               | Debug output / trace output                                        |
 | `-q` / `--quiet`           | Suppress non-error output                                          |
 | `-s` / `--silent`          | Suppress all output                                                |
 
-## Environment variables
-
-- `INSTALLRS_LOCAL_PATH=1`: For local development of InstallRS itself
-  emits `installrs = { path = "..." }` in the generated `Cargo.toml`
-  instead of depending on the published crate.
+The `--installrs-path` flag is for InstallRS-on-InstallRS development
+(CI, integration tests, the release script). End users should leave it
+unset; the generated crate then pulls a version-pinned `installrs`
+runtime from crates.io that matches the CLI version.
 
 ## Examples
 

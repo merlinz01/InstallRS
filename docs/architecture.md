@@ -183,8 +183,8 @@ and `build/uninstaller/`. Each has a `Cargo.toml` and a `src/main.rs`.
 ### Generated `Cargo.toml`
 
 - Pins `installrs` to `=X.Y.Z` (exact version of the CLI that
-  generated it) — or `path = "..."` when `INSTALLRS_LOCAL_PATH=1` is
-  set, for InstallRS-on-InstallRS development.
+  generated it) — or `path = "..."` when `--installrs-path <PATH>` is
+  passed, for InstallRS-on-InstallRS development.
 - Depends on the user's installer library by path.
 - Feature flags injected from config: compression method (`lzma`,
   `gzip`, `bzip2`) plus, when `gui = true`, both `gui` and the platform
@@ -357,13 +357,13 @@ the user's dep is path-only / git-only (no `version` key).
 - `installrs = { version = "=X.Y.Z", ... }` (default) — exact pin to
   the CLI's version. Generated crates compile against precisely the
   runtime the CLI was built from, no patch-level drift.
-- `installrs = { path = "/abs/repo", ... }` when the env var
-  `INSTALLRS_LOCAL_PATH=1` is set. For local development of InstallRS
-  itself and for integration tests (which set the var explicitly).
+- `installrs = { path = "<PATH>", ... }` when `--installrs-path <PATH>`
+  is passed on the command line. For local development of InstallRS
+  itself and for integration tests (which pass it explicitly).
 
-End users running a `cargo install`-ed CLI always get the version-pinned
-spec, so generated crates pull the matching `installrs` runtime from
-crates.io.
+End users running a `cargo install`-ed CLI omit `--installrs-path` and
+always get the version-pinned spec, so generated crates pull the
+matching `installrs` runtime from crates.io.
 
 ### Build caching
 

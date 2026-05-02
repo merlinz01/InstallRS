@@ -55,6 +55,14 @@ struct Cli {
     )]
     metadata: Vec<String>,
 
+    /// Path to a local InstallRS checkout. When set, generated
+    /// `Cargo.toml`s depend on `installrs` via `path = "<this>"`
+    /// instead of the crates.io version pin. Used by InstallRS-on-
+    /// InstallRS development (CI, integration tests, the release
+    /// script) — end users should leave this unset.
+    #[arg(long = "installrs-path", value_name = "PATH")]
+    installrs_path: Option<PathBuf>,
+
     /// Enable debug output (-v) or trace output (-vv)
     #[arg(long, short, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -131,6 +139,8 @@ fn run(cli: Cli) -> Result<()> {
         log::info!("GUI support enabled");
     }
 
+    let installrs_local_path = cli.installrs_path.map(|p| p.canonicalize().unwrap_or(p));
+
     let params = build::builder::BuildParams {
         target_dir: target,
         build_dir,
@@ -143,6 +153,7 @@ fn run(cli: Cli) -> Result<()> {
         uninstaller_win_resource,
         gui_enabled,
         features: cli.features,
+        installrs_local_path,
     };
 
     build::builder::build(params)

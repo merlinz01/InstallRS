@@ -8,9 +8,6 @@ use super::compress;
 use super::ico_convert;
 use super::scanner;
 
-// Embedded at compile time so the build tool is self-contained.
-const INSTALLRS_CRATE_PATH: &str = env!("CARGO_MANIFEST_DIR");
-
 /// The crates.io version this CLI was built from. Generated installer /
 /// uninstaller crates pin to this exact version so binaries built by a
 /// given `installrs` release always compile against a matching runtime.
@@ -18,13 +15,14 @@ const INSTALLRS_CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Render the `installrs` dependency spec for the generated `Cargo.toml`.
 ///
-/// For local development of InstallRS itself (running `cargo run` or
-/// `./target/release/installrs` from the repo), setting
-/// `INSTALLRS_LOCAL_PATH=1` at invocation time makes the generated crates
-/// pick up the current working tree via `path =` instead of the published
-/// crate — useful for end-to-end testing changes to the runtime before a
-/// release. Unset (the default), generated crates depend on
-/// `installrs = "<version>"` from crates.io.
+/// `local_path = Some(p)` emits `installrs = { path = "<p>" }` so the
+/// generated crate picks up a local checkout instead of crates.io —
+/// used by InstallRS-on-InstallRS development (the in-repo CI,
+/// integration tests, and the release script). The path is supplied
+/// via the `--installrs-path` CLI flag. `None` (the default) emits
+/// `installrs = "=<CLI version>"` from crates.io, the exact-version
+/// pin guaranteeing the runtime matches the CLI that built the
+/// installer.
 /// Compare the `installrs` version req declared in the user's installer
 /// crate's `Cargo.toml` against this CLI's version. Errors if they're
 /// semver-incompatible — catches the "user's crate says `0.3`, CLI is
@@ -254,11 +252,11 @@ impl CargoManifest {
     }
 }
 
-fn installrs_dep_spec(features_suffix: &str) -> String {
-    if std::env::var_os("INSTALLRS_LOCAL_PATH").is_some() {
+fn installrs_dep_spec(features_suffix: &str, local_path: Option<&Path>) -> String {
+    if let Some(p) = local_path {
         format!(
             "installrs = {{ path = {path:?}{features_suffix} }}",
-            path = INSTALLRS_CRATE_PATH,
+            path = p.display().to_string(),
         )
     } else {
         // Exact-version pin (`=X.Y.Z`) — the generated crate compiles against
@@ -400,6 +398,11 @@ pub struct BuildParams {
     /// = [...])` entries and is passed through as the user-crate
     /// dependency's `features = [...]` list in the generated crates.
     pub features: Vec<String>,
+    /// If `Some`, generated `Cargo.toml`s depend on `installrs` via a
+    /// `path = "<this>"` entry instead of the crates.io version pin.
+    /// Used by InstallRS-on-InstallRS development (CI, integration
+    /// tests, the release script). Set via `--installrs-path`.
+    pub installrs_local_path: Option<PathBuf>,
 }
 
 /// A source is active if it has no feature gates, or if any of its listed
@@ -566,6 +569,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         target_is_windows,
         target_is_linux,
         &params.features,
+        params.installrs_local_path.as_deref(),
     )?;
     compile_cargo_project(
         &uninstaller_dir,
@@ -629,6 +633,7 @@ pub fn build(mut params: BuildParams) -> Result<()> {
         target_is_windows,
         target_is_linux,
         &params.features,
+        params.installrs_local_path.as_deref(),
     )?;
     compile_cargo_project(
         &installer_dir,
@@ -1533,6 +1538,7 @@ fn write_uninstaller_sources(
     target_is_windows: bool,
     target_is_linux: bool,
     user_features: &[String],
+    installrs_local_path: Option<&Path>,
 ) -> Result<()> {
     log::debug!("Writing uninstaller sources");
 
@@ -1585,7 +1591,7 @@ strip = true
 lto = true
 codegen-units = 1
 "#,
-        installrs_dep = installrs_dep_spec(&features_str),
+        installrs_dep = installrs_dep_spec(&features_str, installrs_local_path),
         user_path = user_crate_path,
     );
 
@@ -1675,6 +1681,7 @@ fn write_installer_sources(
     target_is_windows: bool,
     target_is_linux: bool,
     user_features: &[String],
+    installrs_local_path: Option<&Path>,
 ) -> Result<()> {
     log::debug!("Writing installer sources");
 
@@ -1727,7 +1734,7 @@ strip = true
 lto = true
 codegen-units = 1
 "#,
-        installrs_dep = installrs_dep_spec(&features_str),
+        installrs_dep = installrs_dep_spec(&features_str, installrs_local_path),
         user_path = user_crate_path,
     );
 

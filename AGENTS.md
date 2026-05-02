@@ -32,8 +32,8 @@ cargo fmt
 installrs --target ./my-installer --output installer
 
 # Build against the working-tree runtime (not the published crate) —
-# set this for InstallRS-on-InstallRS development.
-INSTALLRS_LOCAL_PATH=1 installrs --target ./my-installer --output installer
+# pass --installrs-path for InstallRS-on-InstallRS development.
+installrs --target ./my-installer --output installer --installrs-path /path/to/InstallRS
 
 # Verbose / trace output
 installrs --target ./my-installer -v    # debug

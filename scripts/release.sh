@@ -133,7 +133,7 @@ bold "Running cargo build --release (lockfile sync)"
 cargo build --release >/dev/null
 
 bold "Syncing example/Cargo.lock"
-(cd example && INSTALLRS_LOCAL_PATH=1 cargo update -p installrs >/dev/null)
+(cd example && cargo update -p installrs >/dev/null)
 
 # ── Review ──────────────────────────────────────────────────────────────────
 

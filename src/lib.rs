@@ -267,12 +267,7 @@ impl Installer {
     /// [`process_commandline`](Self::process_commandline). Unregistered
     /// flags cause a parse error, so every `--<name>` your installer
     /// accepts must be registered first.
-    pub fn add_option(
-        &mut self,
-        name: impl AsRef<str>,
-        kind: OptionKind,
-        help: impl AsRef<str>,
-    ) {
+    pub fn add_option(&mut self, name: impl AsRef<str>, kind: OptionKind, help: impl AsRef<str>) {
         let name = name.as_ref().trim_start_matches('-').to_string();
         let help = help.as_ref().to_string();
         if let Some(existing) = self.options.iter_mut().find(|o| o.name == name) {

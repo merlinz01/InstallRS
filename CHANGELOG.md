@@ -12,11 +12,18 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Custom-page widgets (`text`, `number`, `checkbox`,
+  `dropdown`, `radio`, `file_picker`, `dir_picker`, `multiline`) no
+  longer take a `default` argument. Seed defaults via
+  `i.set_option_if_unset(key, value)` before `w.run(i)`.
+
 ### Removed
 
 - **Breaking:** `InstallerGui::directory_picker(heading, label, key)`
   removed. Use a `custom_page` with a `dir_picker` widget instead:
-  `w.custom_page(heading, "", |p| p.dir_picker(key, label, default));`.
+  `w.custom_page(heading, "", |p| p.dir_picker(key, label));`.
 
 ## [0.1.0-rc14] — 2026-05-01
 

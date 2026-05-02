@@ -455,7 +455,6 @@ fn pack_widget_column(
                 CustomWidget::Text {
                     key,
                     label: lbl,
-                    default,
                     password,
                 } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
@@ -466,7 +465,7 @@ fn pack_widget_column(
                     let entry = gtk::Entry::new();
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     entry.set_text(&initial_text);
                     if *password {
@@ -476,15 +475,11 @@ fn pack_widget_column(
                     inner.pack_start(&entry, false, false, 0);
                     controls.push((key.clone(), CustomControl::Text(entry)));
                 }
-                CustomWidget::Checkbox {
-                    key,
-                    label: lbl,
-                    default,
-                } => {
+                CustomWidget::Checkbox { key, label: lbl } => {
                     let check = gtk::CheckButton::with_label(lbl);
                     let initial_val = match initial.get(key) {
                         Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => *b,
-                        _ => *default,
+                        _ => false,
                     };
                     check.set_active(initial_val);
                     inner.pack_start(&check, false, false, 0);
@@ -494,7 +489,6 @@ fn pack_widget_column(
                     key,
                     label: lbl,
                     choices,
-                    default,
                 } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
                     lbl_ctl.set_xalign(0.0);
@@ -508,7 +502,7 @@ fn pack_widget_column(
                     }
                     let current = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let idx = values.iter().position(|v| v == &current).unwrap_or(0);
                     combo.set_active(Some(idx as u32));
@@ -519,7 +513,6 @@ fn pack_widget_column(
                     key,
                     label: lbl,
                     choices,
-                    default,
                 } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
                     lbl_ctl.set_xalign(0.0);
@@ -528,19 +521,21 @@ fn pack_widget_column(
 
                     let current = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
+                    let selected_idx =
+                        values.iter().position(|v| v == &current).unwrap_or(0);
                     let mut buttons: Vec<gtk::RadioButton> = Vec::new();
                     let rb_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
                     rb_box.set_margin_start(8);
-                    for (idx, (val, disp)) in choices.iter().enumerate() {
+                    for (idx, (_val, disp)) in choices.iter().enumerate() {
                         let rb = if idx == 0 {
                             gtk::RadioButton::with_label(disp)
                         } else {
                             gtk::RadioButton::with_label_from_widget(&buttons[0], disp)
                         };
-                        if *val == current {
+                        if idx == selected_idx {
                             rb.set_active(true);
                         }
                         rb_box.pack_start(&rb, false, false, 0);
@@ -549,11 +544,7 @@ fn pack_widget_column(
                     inner.pack_start(&rb_box, false, false, 0);
                     controls.push((key.clone(), CustomControl::Radio { buttons, values }));
                 }
-                CustomWidget::Number {
-                    key,
-                    label: lbl,
-                    default,
-                } => {
+                CustomWidget::Number { key, label: lbl } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
                     lbl_ctl.set_xalign(0.0);
                     lbl_ctl.set_halign(gtk::Align::Start);
@@ -570,7 +561,7 @@ fn pack_widget_column(
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::Int(n)) => n.to_string(),
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.to_string(),
+                        _ => String::new(),
                     };
                     entry.set_text(&initial_text);
                     inner.pack_start(&entry, false, false, 0);
@@ -579,7 +570,6 @@ fn pack_widget_column(
                 CustomWidget::Multiline {
                     key,
                     label: lbl,
-                    default,
                     rows,
                 } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
@@ -601,7 +591,7 @@ fn pack_widget_column(
                     let buffer = tv.buffer().expect("TextView has no buffer");
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     buffer.set_text(&initial_text);
                     sw.add(&tv);
@@ -611,7 +601,6 @@ fn pack_widget_column(
                 CustomWidget::FilePicker {
                     key,
                     label: lbl,
-                    default,
                     filters,
                 } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
@@ -624,7 +613,7 @@ fn pack_widget_column(
                     entry.set_hexpand(true);
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     entry.set_text(&initial_text);
                     hbox.pack_start(&entry, true, true, 0);
@@ -669,11 +658,7 @@ fn pack_widget_column(
                     });
                     controls.push((key.clone(), CustomControl::PathPicker(entry)));
                 }
-                CustomWidget::DirPicker {
-                    key,
-                    label: lbl,
-                    default,
-                } => {
+                CustomWidget::DirPicker { key, label: lbl } => {
                     let lbl_ctl = gtk::Label::new(Some(lbl));
                     lbl_ctl.set_xalign(0.0);
                     lbl_ctl.set_halign(gtk::Align::Start);
@@ -684,7 +669,7 @@ fn pack_widget_column(
                     entry.set_hexpand(true);
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     entry.set_text(&initial_text);
                     hbox.pack_start(&entry, true, true, 0);

@@ -827,7 +827,6 @@ fn build_widget_column(
                 CustomWidget::Text {
                     key,
                     label: lbl,
-                    default,
                     password,
                 } => {
                     let lbl_ctl = gui::Label::new(
@@ -844,7 +843,7 @@ fn build_widget_column(
                     let (ew, eh) = gui::dpi(row_w, 24);
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let style = if *password {
                         co::ES::AUTOHSCROLL | co::ES::PASSWORD
@@ -867,14 +866,10 @@ fn build_widget_column(
                     extras.push(lbl_ctl);
                     y += 52;
                 }
-                CustomWidget::Checkbox {
-                    key,
-                    label: lbl,
-                    default,
-                } => {
+                CustomWidget::Checkbox { key, label: lbl } => {
                     let initial_val = match initial.get(key) {
                         Some(crate::OptionValue::Flag(b)) | Some(crate::OptionValue::Bool(b)) => *b,
-                        _ => *default,
+                        _ => false,
                     };
                     let check = gui::CheckBox::new(
                         parent,
@@ -894,7 +889,6 @@ fn build_widget_column(
                     key,
                     label: lbl,
                     choices,
-                    default,
                 } => {
                     let lbl_ctl = gui::Label::new(
                         parent,
@@ -909,7 +903,7 @@ fn build_widget_column(
                     );
                     let current = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let idx = choices.iter().position(|(v, _)| *v == current).unwrap_or(0);
                     let items: Vec<&str> = choices.iter().map(|(_, d)| d.as_str()).collect();
@@ -934,7 +928,6 @@ fn build_widget_column(
                     key,
                     label: lbl,
                     choices,
-                    default,
                 } => {
                     let lbl_ctl = gui::Label::new(
                         parent,
@@ -949,17 +942,19 @@ fn build_widget_column(
                     );
                     let current = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let values: Vec<String> = choices.iter().map(|(v, _)| v.clone()).collect();
+                    let selected_idx =
+                        choices.iter().position(|(v, _)| *v == current).unwrap_or(0);
                     let opts: Vec<gui::RadioButtonOpts> = choices
                         .iter()
                         .enumerate()
-                        .map(|(idx, (val, disp))| gui::RadioButtonOpts {
+                        .map(|(idx, (_val, disp))| gui::RadioButtonOpts {
                             text: disp.as_str(),
                             position: gui::dpi(PAD + 8, y + 20 + (idx as i32) * 22),
                             size: gui::dpi(row_w - 8, 20),
-                            selected: *val == current,
+                            selected: idx == selected_idx,
                             resize_behavior: (gui::Horz::Resize, gui::Vert::None),
                             ..Default::default()
                         })
@@ -970,11 +965,7 @@ fn build_widget_column(
                     extras.push(lbl_ctl);
                     y += row_h;
                 }
-                CustomWidget::Number {
-                    key,
-                    label: lbl,
-                    default,
-                } => {
+                CustomWidget::Number { key, label: lbl } => {
                     let lbl_ctl = gui::Label::new(
                         parent,
                         gui::LabelOpts {
@@ -989,7 +980,7 @@ fn build_widget_column(
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::Int(n)) => n.to_string(),
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.to_string(),
+                        _ => String::new(),
                     };
                     let (ew, eh) = gui::dpi(row_w, 24);
                     let edit = gui::Edit::new(
@@ -1011,7 +1002,6 @@ fn build_widget_column(
                 CustomWidget::Multiline {
                     key,
                     label: lbl,
-                    default,
                     rows,
                 } => {
                     let lbl_ctl = gui::Label::new(
@@ -1027,7 +1017,7 @@ fn build_widget_column(
                     );
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     }
                     .replace("\r\n", "\n")
                     .replace('\n', "\r\n");
@@ -1060,12 +1050,11 @@ fn build_widget_column(
                 CustomWidget::FilePicker {
                     key,
                     label: lbl,
-                    default,
                     filters,
                 } => {
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let (lbl_ctl, edit, browse) =
                         build_path_picker_row(parent, lbl, &initial_text, y, row_w);
@@ -1098,14 +1087,10 @@ fn build_widget_column(
                     browse_btns.push(browse);
                     y += 52;
                 }
-                CustomWidget::DirPicker {
-                    key,
-                    label: lbl,
-                    default,
-                } => {
+                CustomWidget::DirPicker { key, label: lbl } => {
                     let initial_text = match initial.get(key) {
                         Some(crate::OptionValue::String(s)) => s.clone(),
-                        _ => default.clone(),
+                        _ => String::new(),
                     };
                     let (lbl_ctl, edit, browse) =
                         build_path_picker_row(parent, lbl, &initial_text, y, row_w);

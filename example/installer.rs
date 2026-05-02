@@ -81,14 +81,27 @@ pub fn install(i: &mut Installer) -> Result<()> {
         OptionKind::String,
         "Override the install location",
     );
+    i.add_option("username", OptionKind::String, "Account username");
+    i.add_option("password", OptionKind::String, "Account password");
+    i.add_option("port", OptionKind::Int, "Listen port");
+    i.add_option("install_type", OptionKind::String, "typical|minimal|custom");
+    i.add_option("desktop_shortcut", OptionKind::Bool, "Create desktop shortcut");
+    i.add_option("db_backend", OptionKind::String, "sqlite|postgres");
+    i.add_option("launch_app", OptionKind::Bool, "Launch app after install");
 
     // Parse CLI (--headless, --list-components, --components, --log, etc.).
     i.process_commandline()?;
 
-    // Seed the install-dir option to the platform default if neither
-    // `--install-dir` nor user code has already set it. The directory
-    // picker reads the current option value as its initial display.
+    // Seed defaults for any options the user didn't override on the CLI.
+    // Custom-page widgets read these as their initial display values, and
+    // headless mode reads them straight out of the option store.
     i.set_option_if_unset("install-dir", default_install_dir());
+    i.set_option_if_unset("username", "admin");
+    i.set_option_if_unset("port", 8080_i64);
+    i.set_option_if_unset("install_type", "typical");
+    i.set_option_if_unset("desktop_shortcut", true);
+    i.set_option_if_unset("db_backend", "sqlite");
+    i.set_option_if_unset("launch_app", true);
 
     let mut w = InstallerGui::new(&t!("installer.title"));
     w.buttons(installrs::gui::ButtonLabels {
@@ -113,7 +126,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.components.label"),
     );
     w.custom_page(&t!("installer.directory.heading"), "", |p| {
-        p.dir_picker("install-dir", &t!("installer.directory.label"), "");
+        p.dir_picker("install-dir", &t!("installer.directory.label"));
     })
     .on_before_leave(|i| {
         // --yes skips the confirmation dialog.
@@ -130,9 +143,9 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.account.heading"),
         &t!("installer.account.label"),
         |p| {
-            p.text("username", &t!("installer.account.username"), "admin");
+            p.text("username", &t!("installer.account.username"));
             p.password("password", &t!("installer.account.password"));
-            p.number("port", &t!("installer.account.port"), 8080);
+            p.number("port", &t!("installer.account.port"));
         },
     )
     .on_before_leave(|i| {
@@ -161,18 +174,12 @@ pub fn install(i: &mut Installer) -> Result<()> {
                     ("minimal", minimal.as_str()),
                     ("custom", custom.as_str()),
                 ],
-                "typical",
             );
-            p.checkbox(
-                "desktop_shortcut",
-                &t!("installer.options.desktop_shortcut"),
-                true,
-            );
+            p.checkbox("desktop_shortcut", &t!("installer.options.desktop_shortcut"));
             p.dropdown(
                 "db_backend",
                 &t!("installer.options.db_backend"),
                 &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
-                "sqlite",
             );
         },
     );
@@ -194,14 +201,13 @@ pub fn install(i: &mut Installer) -> Result<()> {
             p.file_picker(
                 "license_file",
                 &t!("installer.paths.license_file"),
-                "",
                 &[
                     (license_filter.as_str(), "*.lic;*.key"),
                     (all_files_filter.as_str(), "*.*"),
                 ],
             );
-            p.dir_picker("data_dir", &t!("installer.paths.data_dir"), "");
-            p.multiline("notes", &t!("installer.paths.notes"), "", 3);
+            p.dir_picker("data_dir", &t!("installer.paths.data_dir"));
+            p.multiline("notes", &t!("installer.paths.notes"), 3);
         },
     );
     w.install_page(|i| {
@@ -334,7 +340,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.finish.message"),
     )
     .with_widgets(|p| {
-        p.checkbox("launch_app", &t!("installer.finish.launch_app"), true);
+        p.checkbox("launch_app", &t!("installer.finish.launch_app"));
     });
     w.error_page(&t!("installer.error.title"), &t!("installer.error.message"));
 

@@ -45,7 +45,7 @@ w.components_page("Select Components", "Choose features to install:");
 i.add_option("install-dir", OptionKind::String, "Install location");
 i.set_option_if_unset("install-dir", "C:/MyApp");
 w.custom_page("Choose Install Location", "", |p| {
-    p.dir_picker("install-dir", "Install to:", "");
+    p.dir_picker("install-dir", "Install to:");
 })
 .on_before_leave(|i| {
     let dir: String = i.option("install-dir").unwrap_or_default();
@@ -173,30 +173,27 @@ installer option by key:
 
 ```rust
 .custom_page("Settings", "Configure your install:", |p| {
-    p.text("username", "Username:", "admin");
+    p.text("username", "Username:");
     p.password("password", "Password:");
-    p.number("port", "Port:", 8080);
-    p.checkbox("desktop_shortcut", "Create a desktop shortcut", true);
+    p.number("port", "Port:");
+    p.checkbox("desktop_shortcut", "Create a desktop shortcut");
     p.radio(
         "install_type",
         "Install type:",
         &[("typical", "Typical"), ("minimal", "Minimal"), ("custom", "Custom")],
-        "typical",
     );
     p.dropdown(
         "db_backend",
         "Database:",
         &[("sqlite", "SQLite"), ("postgres", "PostgreSQL")],
-        "sqlite",
     );
     p.file_picker(
         "license_file",
         "License file:",
-        "",
         &[("License", "*.lic;*.key"), ("All files", "*.*")],
     );
-    p.dir_picker("data_dir", "Data directory:", "");
-    p.multiline("notes", "Notes:", "", 3);
+    p.dir_picker("data_dir", "Data directory:");
+    p.multiline("notes", "Notes:", 3);
 })
 .on_before_leave(|i| {
     let user: String = i.option("username").unwrap_or_default();
@@ -215,6 +212,18 @@ the field (as long as you registered the option via
 Validation lives in `on_before_leave`: return `Ok(false)` to keep the
 user on the page.
 
+For non-empty defaults, seed the option store before `w.run(i)`:
+
+```rust
+i.set_option_if_unset("username", "admin");
+i.set_option_if_unset("port", 8080_i64);
+i.set_option_if_unset("desktop_shortcut", true);
+```
+
+`set_option_if_unset` only writes when the option isn't already set, so
+CLI flags and prior callbacks always win. Headless mode reads the same
+option store, so seeded defaults work without a wizard window.
+
 Splitting widgets across multiple custom pages is fine — each
 `.custom_page(...)` call adds a new page.
 
@@ -229,8 +238,8 @@ title/message:
 ```rust
 w.finish_page("Done!", "Click Finish to exit.")
     .with_widgets(|p| {
-        p.checkbox("launch", "Launch My App now", true);
-        p.checkbox("open_readme", "Show the README", false);
+        p.checkbox("launch", "Launch My App now");
+        p.checkbox("open_readme", "Show the README");
     });
 ```
 

@@ -16,7 +16,7 @@ i.process_commandline()?;
 
 let mut w = InstallerGui::new("My App Installer");
 w.custom_page("Install Location", "", |p| {
-    p.dir_picker("install-dir", "Install to:", "");
+    p.dir_picker("install-dir", "Install to:");
 });
 w.install_page(|i| {
     i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());
@@ -98,7 +98,7 @@ mid-wizard.
 
 ```rust
 w.custom_page("Install Location", "", |p| {
-    p.dir_picker("install-dir", "Install to:", "");
+    p.dir_picker("install-dir", "Install to:");
 })
 .on_before_leave(|i| {
     let dir: String = i.option("install-dir").unwrap_or_default();

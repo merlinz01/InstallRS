@@ -436,8 +436,8 @@ impl<'a> PageHandle<'a> {
     /// ```rust,ignore
     /// w.finish_page("All done!", "Click Finish to exit.")
     ///     .with_widgets(|p| {
-    ///         p.checkbox("launch_app", "Launch My App now", true);
-    ///         p.checkbox("show_readme", "Show the README", false);
+    ///         p.checkbox("launch_app", "Launch My App now");
+    ///         p.checkbox("show_readme", "Show the README");
     ///     });
     /// ```
     pub fn with_widgets(self, build: impl FnOnce(&mut CustomPageBuilder)) -> Self {

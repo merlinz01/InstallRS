@@ -163,7 +163,7 @@ pub fn install(i: &mut Installer) -> Result<()> {
     i.add_option("install-dir", OptionKind::String, "Install location");
     i.set_option_if_unset("install-dir", "/opt/my-app");
     w.custom_page("Install Location", "", |p| {
-        p.dir_picker("install-dir", "Install to:", "");
+        p.dir_picker("install-dir", "Install to:");
     });
     w.install_page(|i| {
         i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());

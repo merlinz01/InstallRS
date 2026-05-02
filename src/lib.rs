@@ -668,7 +668,7 @@ impl Installer {
     }
 
     /// Windows registry operations. Returns a short-lived handle whose
-    /// methods create registry builder ops (`set`, `default`, `get`,
+    /// methods create registry builder ops (`set`, `get`,
     /// `remove`, `delete`). Windows-only.
     #[cfg(target_os = "windows")]
     pub fn registry(&mut self) -> Registry<'_> {

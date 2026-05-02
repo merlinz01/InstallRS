@@ -6,7 +6,12 @@
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
-        "linkedProjects": ["./Cargo.toml", "./example/Cargo.toml"],
+        "linkedProjects": [
+          "./Cargo.toml",
+          "./example/Cargo.toml",
+          "./example/build/installer/Cargo.toml",
+          "./example/build/uninstaller/Cargo.toml",
+        ],
       },
     },
   },

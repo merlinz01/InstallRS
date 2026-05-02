@@ -3,6 +3,37 @@
 
 use anyhow::{anyhow, Result};
 
+/// Schema version for the contract between the `installrs` CLI's
+/// generated code and this runtime crate. The CLI emits a
+/// const-time assertion (`assert_entries_version`) at the top of
+/// the generated `main.rs`; if the runtime ever drifts from the
+/// CLI version that wrote the code, compilation fails with a clear
+/// message rather than a confusing "variant not found" error deep
+/// inside the generated crate.
+///
+/// Bump this whenever the shape of [`EmbeddedEntry`], [`DirChild`],
+/// [`DirChildKind`], or the static-table layout changes in a way
+/// that breaks generated code from earlier CLIs.
+#[doc(hidden)]
+pub const ENTRIES_VERSION: u32 = 1;
+
+/// Compile-time check that the runtime's `ENTRIES_VERSION` matches
+/// what the generating CLI expected. Called from generated `main.rs`
+/// in a `const _: () = ...` slot, so a mismatch fails at compile
+/// time with a panic message instead of cascading rustc errors.
+#[doc(hidden)]
+pub const fn assert_entries_version(generated_for: u32) {
+    if generated_for != ENTRIES_VERSION {
+        panic!(
+            "installrs ENTRIES schema mismatch: the installrs CLI that \
+             generated this crate emits version A, but the runtime \
+             linked here is version B. Reinstall the matching CLI \
+             (`cargo install installrs --version =<runtime-version>`) \
+             or rebuild the installer crate with the matching CLI."
+        );
+    }
+}
+
 /// Verify the compressed-payload SHA-256 emitted by the build tool. `blobs`
 /// is a flat list of the unique embedded byte slices (one per deduplicated
 /// storage file, in `D_*` declaration order); `uninstaller_data` is the

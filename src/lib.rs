@@ -100,7 +100,10 @@ pub use types::{CancellationToken, DirErrorHandler, DirFilter, ErrorAction, Over
 /// User code should never reference anything in this module.
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::embedded::{verify_payload, DirChild, DirChildKind, EmbeddedEntry};
+    pub use crate::embedded::{
+        assert_entries_version, verify_payload, DirChild, DirChildKind, EmbeddedEntry,
+        ENTRIES_VERSION,
+    };
     pub use crate::source::source_path_hash_const;
 }
 

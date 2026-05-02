@@ -14,6 +14,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Added
 
+- Schema-version assertion between the CLI and runtime. Generated
+  crates now include `const _: () = installrs::__private::assert_entries_version(N);`
+  near the top of `main.rs`; if the linked runtime's `ENTRIES_VERSION`
+  ever drifts from the CLI version that emitted the code, compilation
+  fails with a clear panic message instead of cascading "variant not
+  found" errors deep in the generated crate.
 - `docs/metadata-reference.md` — a single-page reference for every
   `[package.metadata.installrs]` key, with types, defaults, subtable
   scoping rules, feature-overlay merge semantics, and the `--metadata`

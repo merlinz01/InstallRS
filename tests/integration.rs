@@ -59,7 +59,6 @@ fn build_install_uninstall(compression: &str) {
     let output = Command::new(installrs_bin())
         .args([
             "build",
-            "--target",
             &target_dir.to_string_lossy(),
             "--output",
             &installer_bin.to_string_lossy(),

@@ -2,14 +2,14 @@
 
 # Building installers for production
 
-This guide covers everything that happens between `installrs build --target .
+This guide covers everything that happens between `installrs build .
 --output my-installer` and a binary you can hand to users: cross-compilation
 to other platforms, tuning the compile/size tradeoffs, reproducibility
 and integrity, code signing, and CI release patterns.
 
 ## How the build works
 
-When you run `installrs build --target <dir> --output <file>`, the CLI:
+When you run `installrs build <dir> --output <file>`, the CLI:
 
 1. Reads your installer crate's `Cargo.toml` and verifies the `installrs`
    version requirement is compatible with the CLI's own version. A mismatch
@@ -46,13 +46,14 @@ development loop. See [Fast iteration](#fast-iteration) below.
 ## Cross-compilation
 
 The CLI itself runs on your host, but the installer it produces can
-target any Rust-supported platform. Pass `--target-triple` to specify.
+target any Rust-supported platform. Pass `--target` to specify the
+Rust target triple.
 
 ### Windows installer from Linux
 
 ```sh
 rustup target add x86_64-pc-windows-gnu
-installrs build --target . --output installer.exe --target-triple x86_64-pc-windows-gnu
+installrs build . --output installer.exe --target x86_64-pc-windows-gnu
 ```
 
 The `.exe` extension is added automatically when the target triple
@@ -67,7 +68,7 @@ needed.
 
 ```sh
 rustup target add x86_64-unknown-linux-gnu
-installrs build --target . --output installer --target-triple x86_64-unknown-linux-gnu
+installrs build . --output installer --target x86_64-unknown-linux-gnu
 ```
 
 **Gotcha:** cross-compiling a GTK installer from non-Linux is not well
@@ -78,7 +79,7 @@ supported by `gtk-rs`. Build Linux installers on Linux.
 ```sh
 rustup target add aarch64-apple-darwin    # Apple Silicon
 rustup target add x86_64-apple-darwin     # Intel Macs
-installrs build --target . --output installer --target-triple aarch64-apple-darwin
+installrs build . --output installer --target aarch64-apple-darwin
 ```
 
 macOS builds don't currently have a supported wizard GUI — installers
@@ -93,7 +94,7 @@ run in console mode or with your own custom UI. PRs welcome.
   iteration; rarely what you want in production.
 
 ```sh
-installrs build --target . --output installer --compression gzip
+installrs build . --output installer --compression gzip
 ```
 
 ## Compile / size tradeoffs
@@ -107,7 +108,7 @@ they're inherited by the inner `cargo build --release`:
 CARGO_PROFILE_RELEASE_LTO=false \
 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
 CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
-installrs build --target .
+installrs build .
 ```
 
 Expect a 3–5× speedup at the cost of a larger binary. Drop these for
@@ -160,7 +161,7 @@ Example:
     CARGO_PROFILE_RELEASE_LTO: "false"
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     CARGO_PROFILE_RELEASE_OPT_LEVEL: "1"
-  run: installrs build --target example --output installer-ci
+  run: installrs build example --output installer-ci
 ```
 
 ## Integrity and reproducibility

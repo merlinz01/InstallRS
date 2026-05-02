@@ -25,10 +25,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 ### Changed
 
 - **Breaking:** CLI now uses subcommands. The build command moved from
-  `installrs --target ...` to `installrs build --target ...`; all build
-  flags (`--target`, `--output`, `--compression`, `--target-triple`,
-  `--feature`, `--metadata`, `--installrs-path`) live under `build`.
-  Global flags (`-v`, `-q`, `-s`) work at either position.
+  `installrs --target <dir> ...` to `installrs build <dir> ...`. The
+  source-crate directory is a positional argument (defaulting to `.`)
+  rather than a `--target` flag. The Rust cross-compilation triple
+  flag was renamed from `--target-triple` to `--target` to free up
+  the natural name. Global flags (`-v`, `-q`, `-s`) work at either
+  position.
 - **Breaking:** `Installer::add_option` now returns `()` instead of `&mut Self`.
 - **Breaking:** `Installer::cancellation_flag()` replaced by
   `Installer::cancellation_token()` returning a new `CancellationToken` newtype with

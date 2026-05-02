@@ -99,11 +99,11 @@ my-installer/
 ## 4. Build the installer
 
 ```sh
-installrs build --target . --output my-installer
+installrs build . --output my-installer
 ```
 
 That's it. You now have a single executable `my-installer` (or
-`my-installer.exe` if you pass `--target-triple x86_64-pc-windows-gnu`)
+`my-installer.exe` if you pass `--target x86_64-pc-windows-gnu`)
 containing all the embedded files, the install logic, and a matching
 uninstaller binary.
 
@@ -241,7 +241,7 @@ iteration during development, override via env vars:
 CARGO_PROFILE_RELEASE_LTO=false \
 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
 CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
-installrs build --target .
+installrs build .
 ```
 
 ## See also

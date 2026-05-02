@@ -128,4 +128,4 @@ jobs:
       - name: Build CLI
         run: cargo build --release
       - name: Build example installer
-        run: ./target/release/installrs build --target example --output installer-ci --installrs-path .
+        run: ./target/release/installrs build example --output installer-ci --installrs-path .

@@ -8,24 +8,24 @@ executable from an installer crate.
 ## Synopsis
 
 ```sh
-installrs build --target <dir> --output <file> [options]
+installrs build <dir> --output <file> [options]
 ```
 
-## Flags
+## Arguments and flags
 
-| Flag                       | Description                                                        |
-| -------------------------- | ------------------------------------------------------------------ |
-| `--target <dir>`           | Directory containing the installer source crate. Default: `.`      |
-| `--output <file>`          | Output installer file path. Default: `./installer`                 |
-| `--compression <method>`   | Compression method for embedded files (default `lzma`)             |
-| `--ignore <patterns>`      | Comma-separated glob patterns to ignore when gathering directories |
-| `--target-triple <triple>` | Rust target triple for cross-compilation                           |
-| `--feature <name>`         | Enable a user-library cargo feature (repeatable)                   |
-| `-m` / `--metadata <K=V>`  | Override a `[package.metadata.installrs]` key (repeatable)         |
-| `--installrs-path <path>`  | Depend on `installrs` via `path = "<path>"` instead of crates.io   |
-| `-v` / `-vv`               | Debug output / trace output                                        |
-| `-q` / `--quiet`           | Suppress non-error output                                          |
-| `-s` / `--silent`          | Suppress all output                                                |
+| Arg / flag                | Description                                                        |
+| ------------------------- | ------------------------------------------------------------------ |
+| `<PATH>` (positional)     | Directory containing the installer source crate. Default: `.`      |
+| `--output <file>`         | Output installer file path. Default: `./installer`                 |
+| `--compression <method>`  | Compression method for embedded files (default `lzma`)             |
+| `--ignore <patterns>`     | Comma-separated glob patterns to ignore when gathering directories |
+| `--target <triple>`       | Rust target triple for cross-compilation                           |
+| `--feature <name>`        | Enable a user-library cargo feature (repeatable)                   |
+| `-m` / `--metadata <K=V>` | Override a `[package.metadata.installrs]` key (repeatable)         |
+| `--installrs-path <path>` | Depend on `installrs` via `path = "<path>"` instead of crates.io   |
+| `-v` / `-vv`              | Debug output / trace output                                        |
+| `-q` / `--quiet`          | Suppress non-error output                                          |
+| `-s` / `--silent`         | Suppress all output                                                |
 
 The `--installrs-path` flag is for InstallRS-on-InstallRS development
 (CI, integration tests, the release script). End users should leave it
@@ -37,26 +37,26 @@ runtime from crates.io that matches the CLI version.
 Build an installer with defaults:
 
 ```sh
-installrs build --target my-installer --output installer
+installrs build my-installer --output installer
 ```
 
 Cross-compile for Windows from Linux (requires mingw):
 
 ```sh
-installrs build --target my-installer --output installer.exe \
-  --target-triple x86_64-pc-windows-gnu
+installrs build my-installer --output installer.exe \
+  --target x86_64-pc-windows-gnu
 ```
 
 Use gzip compression for faster builds at the cost of larger binaries:
 
 ```sh
-installrs build --target my-installer --output installer --compression gzip
+installrs build my-installer --output installer --compression gzip
 ```
 
 Verbose build to see what files got embedded:
 
 ```sh
-installrs build --target my-installer --output installer -v
+installrs build my-installer --output installer -v
 ```
 
 Enable user-library cargo features — gates `source!(..., features =
@@ -64,7 +64,7 @@ Enable user-library cargo features — gates `source!(..., features =
 in your installer library:
 
 ```sh
-installrs build --target my-installer --feature pro --feature docs
+installrs build my-installer --feature pro --feature docs
 ```
 
 Override individual `[package.metadata.installrs]` keys at build time
@@ -72,7 +72,7 @@ without touching `Cargo.toml` — handy for stamping CI-supplied version
 strings or per-build values:
 
 ```sh
-installrs build --target . -m file-version="$(cat version.txt)" \
+installrs build . -m file-version="$(cat version.txt)" \
                      -m product-version="$(cat version.txt)" \
                      -m installer.file-description="My App Installer (CI)" \
                      -m gui=true \
@@ -82,7 +82,7 @@ installrs build --target . -m file-version="$(cat version.txt)" \
 `KEY` is a dotted path into the metadata table (`file-version`,
 `installer.file-description`, etc.). `VALUE` parses as TOML — `true` /
 `false` become booleans, integers (decimal or `0x`-hex) become
-integers, everything else stays a string. Overrides apply *after*
+integers, everything else stays a string. Overrides apply _after_
 feature overlays and after the package-version fallback for
 `file-version` / `product-version`, so they always win.
 
@@ -115,9 +115,9 @@ product-name = "My App Lite"
 ```
 
 ```sh
-installrs build --target . --feature pro  --output installer-pro
-installrs build --target . --feature lite --output installer-lite
-installrs build --target . --output installer-base   # no overlay
+installrs build . --feature pro  --output installer-pro
+installrs build . --feature lite --output installer-lite
+installrs build . --output installer-base   # no overlay
 ```
 
 Per-feature overlays can also override individual keys inside the
@@ -156,7 +156,7 @@ the inner `cargo build --release` that `installrs` spawns:
 CARGO_PROFILE_RELEASE_LTO=false \
 CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
 CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
-installrs build --target my-installer
+installrs build my-installer
 ```
 
 Expect a 3–5× speedup at the cost of a larger binary. Drop these for

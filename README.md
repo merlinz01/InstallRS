@@ -119,7 +119,7 @@ pub fn uninstall(i: &mut Installer) -> Result<()> {
 Then build with the `installrs` CLI:
 
 ```sh
-installrs build --target ./my-installer --output installer.exe
+installrs build ./my-installer --output installer.exe
 ```
 
 The repo's [`example/`](example) directory is a complete working

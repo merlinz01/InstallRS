@@ -54,7 +54,7 @@ i.dir(source!("assets", ignore = ["*.bak", "scratch"]), "assets").install()?;
 i.file(source!("pro-assets.dat", features = ["pro"]), "assets.dat").install()?;
 ```
 
-Then build with `installrs build --target . --feature pro`.
+Then build with `installrs build . --feature pro`.
 
 ## Builder ops
 

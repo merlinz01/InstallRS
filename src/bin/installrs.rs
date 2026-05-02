@@ -38,9 +38,10 @@ enum Command {
 
 #[derive(Parser, Debug)]
 struct BuildArgs {
-    /// Directory containing the installer source crate
-    #[arg(long, default_value = ".")]
-    target: PathBuf,
+    /// Directory containing the installer source crate. Defaults to the
+    /// current directory.
+    #[arg(default_value = ".", value_name = "PATH")]
+    path: PathBuf,
 
     /// Output installer file path
     #[arg(long, short, default_value = "./installer")]
@@ -55,8 +56,8 @@ struct BuildArgs {
     ignore: String,
 
     /// Rust target triple for cross-compilation (e.g. x86_64-pc-windows-gnu)
-    #[arg(long)]
-    target_triple: Option<String>,
+    #[arg(long, value_name = "TRIPLE")]
+    target: Option<String>,
 
     /// Enable a user-library cargo feature in the generated installer.
     /// Activates `source!(..., features = [...])` entries gated on the
@@ -121,12 +122,12 @@ fn main() {
 }
 
 fn run_build(args: BuildArgs, verbose: u8) -> Result<()> {
-    let target = args
-        .target
+    let target_dir = args
+        .path
         .canonicalize()
-        .unwrap_or_else(|_| args.target.clone());
+        .unwrap_or_else(|_| args.path.clone());
 
-    let build_dir = target.join("build");
+    let build_dir = target_dir.join("build");
 
     let ignore_patterns: Vec<String> = args
         .ignore
@@ -136,7 +137,7 @@ fn run_build(args: BuildArgs, verbose: u8) -> Result<()> {
         .collect();
 
     let mut output_file = args.output;
-    if let Some(ref triple) = args.target_triple {
+    if let Some(ref triple) = args.target {
         if triple.contains("windows") && output_file.extension().map(|e| e != "exe").unwrap_or(true)
         {
             output_file.set_extension("exe");
@@ -149,10 +150,10 @@ fn run_build(args: BuildArgs, verbose: u8) -> Result<()> {
     let metadata_overrides = parse_metadata_overrides(&args.metadata)?;
 
     let (installer_win_resource, uninstaller_win_resource) =
-        build::builder::read_win_resource_config(&target, &args.features, &metadata_overrides)?;
+        build::builder::read_win_resource_config(&target_dir, &args.features, &metadata_overrides)?;
 
     let gui_enabled =
-        build::builder::read_gui_config(&target, &args.features, &metadata_overrides)?;
+        build::builder::read_gui_config(&target_dir, &args.features, &metadata_overrides)?;
     if gui_enabled {
         log::info!("GUI support enabled");
     }
@@ -160,12 +161,12 @@ fn run_build(args: BuildArgs, verbose: u8) -> Result<()> {
     let installrs_local_path = args.installrs_path.map(|p| p.canonicalize().unwrap_or(p));
 
     let params = build::builder::BuildParams {
-        target_dir: target,
+        target_dir,
         build_dir,
         output_file,
         compression: args.compression,
         ignore_patterns,
-        target_triple: args.target_triple,
+        target_triple: args.target,
         verbosity: verbose,
         installer_win_resource,
         uninstaller_win_resource,

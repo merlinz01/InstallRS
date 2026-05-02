@@ -154,14 +154,14 @@ i.file(source!("pro-features.dat", features = ["pro"]), "pro-features.dat").inst
 Build:
 
 ```sh
-installrs build --target . --output my-app
-installrs build --target . --feature pro --output my-app-pro
+installrs build . --output my-app
+installrs build . --feature pro --output my-app-pro
 ```
 
 ## Stamp a CI version without touching `Cargo.toml`
 
 ```sh
-installrs build --target . -m installer.file-version=1.2.3 -m installer.product-version=1.2.3
+installrs build . -m installer.file-version=1.2.3 -m installer.product-version=1.2.3
 ```
 
 `-m` (alias `--metadata`) takes any

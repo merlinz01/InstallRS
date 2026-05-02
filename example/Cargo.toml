@@ -14,7 +14,7 @@ path = "installer.rs"
 pro = []
 
 [dependencies]
-installrs = { path = ".." }
+installrs = { path = "..", features = ["gui"] }
 anyhow = "1"
 rust-i18n = "4"
 sys-locale = "0.3"

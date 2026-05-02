@@ -73,8 +73,10 @@ mod ops;
 mod options;
 mod progress;
 #[cfg(target_os = "windows")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
 mod registry;
 #[cfg(target_os = "windows")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
 mod shortcut;
 mod source;
 mod types;
@@ -84,8 +86,10 @@ pub use ops::{DirOp, FileOp, MkdirOp, RemoveOp, UninstallerOp};
 pub use options::{FromOptionValue, OptionKind, OptionValue};
 pub use progress::{ProgressSink, StderrProgressSink};
 #[cfg(target_os = "windows")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
 pub use registry::{RegDeleteKey, RegDeleteValue, RegSetValue, Registry, RegistryHive};
 #[cfg(target_os = "windows")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
 pub use shortcut::ShortcutOp;
 pub use source::Source;
 pub use types::{CancellationToken, DirErrorHandler, DirFilter, ErrorAction, OverwriteMode};
@@ -676,6 +680,7 @@ impl Installer {
     /// calls with `#[cfg(target_os = "windows")]` if your installer is
     /// cross-platform.
     #[cfg(target_os = "windows")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
     pub fn shortcut<'i>(
         &'i mut self,
         dst: impl AsRef<Path>,
@@ -699,6 +704,7 @@ impl Installer {
     /// methods create registry builder ops (`set_value`, `get_value`,
     /// `delete_value`, `delete_key`). Windows-only.
     #[cfg(target_os = "windows")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
     pub fn registry(&mut self) -> Registry<'_> {
         Registry { installer: self }
     }
@@ -716,6 +722,7 @@ impl Installer {
     /// be removed during uninstallation. After `uninstall_main` returns, a
     /// PowerShell process cleans up the temp copy.
     #[cfg(target_os = "windows")]
+    #[cfg_attr(docsrs, doc(cfg(target_os = "windows")))]
     pub fn enable_self_delete(&mut self) {
         if std::env::args().nth(1).as_deref() == Some("--self-delete") {
             self.self_delete = true;

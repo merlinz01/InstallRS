@@ -1,4 +1,4 @@
-<!-- markdownlint-configure-file { "MD013": { "line_length": 100 } } -->
+<!-- markdownlint-configure-file { "MD013": { "line_length": 120 } } -->
 <!-- markdownlint-disable-next-line MD033 MD041 -->
 <div align="center">
 
@@ -38,8 +38,6 @@ InstallRS is here to revolutionize the way you create software installers.
 > of the AI tools used. Contributions to refine and
 > improve the codebase are welcome.
 
-
-
 ## Highlights
 
 - **Write installer logic in plain Rust**, with the full standard
@@ -64,6 +62,35 @@ InstallRS is here to revolutionize the way you create software installers.
   exits).
 - **Windows polish** — automatic PNG-to-ICO conversion, VERSIONINFO,
   UAC manifests, DPI awareness.
+
+## Screenshots
+
+<!-- markdownlint-disable MD033 MD045 -->
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/windows-welcome-page.png" alt="Win32 wizard"></td>
+<td width="50%"><img src="docs/screenshots/linux-welcome-page.png" alt="GTK3 wizard"></td>
+</tr>
+<tr>
+<td align="center"><sub>Win32 on Windows</sub></td>
+<td align="center"><sub>GTK3 on Linux</sub></td>
+</tr>
+</table>
+
+<details>
+<summary>More wizard pages</summary>
+
+| Page        | Windows                                           | Linux                                           |
+| ----------- | ------------------------------------------------- | ----------------------------------------------- |
+| License     | ![](docs/screenshots/windows-license-page.png)    | ![](docs/screenshots/linux-license-page.png)    |
+| Components  | ![](docs/screenshots/windows-components-page.png) | ![](docs/screenshots/linux-components-page.png) |
+| Install dir | ![](docs/screenshots/windows-installdir-page.png) | ![](docs/screenshots/linux-installdir-page.png) |
+| Custom page | ![](docs/screenshots/windows-custom-page.png)     | ![](docs/screenshots/linux-custom-page.png)     |
+| Install     | ![](docs/screenshots/windows-install-page.png)    | ![](docs/screenshots/linux-install-page.png)    |
+| Finish      | ![](docs/screenshots/windows-finish-page.png)     | ![](docs/screenshots/linux-finish-page.png)     |
+
+</details>
+<!-- markdownlint-enable MD033 MD045 -->
 
 ## Usage overview
 

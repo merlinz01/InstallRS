@@ -48,7 +48,8 @@ fn show_gtk(
 }
 
 /// Show an informational dialog with an OK button.
-pub fn info(title: &str, message: &str) -> Result<()> {
+pub fn info(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
+    let (title, message) = (title.as_ref(), message.as_ref());
     #[cfg(feature = "gui-win32")]
     {
         show_win32(title, message, co::MB::OK | co::MB::ICONINFORMATION).map(|_| ())
@@ -65,7 +66,8 @@ pub fn info(title: &str, message: &str) -> Result<()> {
 }
 
 /// Show a warning dialog with an OK button.
-pub fn warn(title: &str, message: &str) -> Result<()> {
+pub fn warn(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
+    let (title, message) = (title.as_ref(), message.as_ref());
     #[cfg(feature = "gui-win32")]
     {
         show_win32(title, message, co::MB::OK | co::MB::ICONWARNING).map(|_| ())
@@ -88,7 +90,8 @@ pub fn warn(title: &str, message: &str) -> Result<()> {
 }
 
 /// Show an error dialog with an OK button.
-pub fn error(title: &str, message: &str) -> Result<()> {
+pub fn error(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<()> {
+    let (title, message) = (title.as_ref(), message.as_ref());
     #[cfg(feature = "gui-win32")]
     {
         show_win32(title, message, co::MB::OK | co::MB::ICONERROR).map(|_| ())
@@ -126,11 +129,12 @@ pub fn error(title: &str, message: &str) -> Result<()> {
 /// }
 /// ```
 pub fn choose_language(
-    title: &str,
-    prompt: &str,
+    title: impl AsRef<str>,
+    prompt: impl AsRef<str>,
     choices: &[(&str, &str)],
     default_code: Option<&str>,
 ) -> Result<Option<String>> {
+    let (title, prompt) = (title.as_ref(), prompt.as_ref());
     #[cfg(feature = "gui-win32")]
     {
         choose_language_win32(title, prompt, choices, default_code)
@@ -340,7 +344,8 @@ fn choose_language_win32(
 }
 
 /// Show a Yes/No confirmation dialog. Returns `true` if the user clicked Yes.
-pub fn confirm(title: &str, message: &str) -> Result<bool> {
+pub fn confirm(title: impl AsRef<str>, message: impl AsRef<str>) -> Result<bool> {
+    let (title, message) = (title.as_ref(), message.as_ref());
     #[cfg(feature = "gui-win32")]
     {
         let r = show_win32(title, message, co::MB::YESNO | co::MB::ICONQUESTION)?;

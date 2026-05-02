@@ -213,40 +213,45 @@ impl CustomPageBuilder {
 
     /// Add a single-line text entry. Pre-fills from the option store; seed
     /// a default with [`crate::Installer::set_option_if_unset`].
-    pub fn text(&mut self, key: &str, label: &str) -> &mut Self {
+    pub fn text(&mut self, key: impl AsRef<str>, label: impl AsRef<str>) -> &mut Self {
         self.widgets.push(CustomWidget::Text {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
             password: false,
         });
         self
     }
 
     /// Add a masked single-line password entry.
-    pub fn password(&mut self, key: &str, label: &str) -> &mut Self {
+    pub fn password(&mut self, key: impl AsRef<str>, label: impl AsRef<str>) -> &mut Self {
         self.widgets.push(CustomWidget::Text {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
             password: true,
         });
         self
     }
 
     /// Add a checkbox with the given label.
-    pub fn checkbox(&mut self, key: &str, label: &str) -> &mut Self {
+    pub fn checkbox(&mut self, key: impl AsRef<str>, label: impl AsRef<str>) -> &mut Self {
         self.widgets.push(CustomWidget::Checkbox {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
         });
         self
     }
 
     /// Add a dropdown. `choices` is `(value, display_label)`; the stored
     /// option value is the `value` field of the selected pair.
-    pub fn dropdown(&mut self, key: &str, label: &str, choices: &[(&str, &str)]) -> &mut Self {
+    pub fn dropdown(
+        &mut self,
+        key: impl AsRef<str>,
+        label: impl AsRef<str>,
+        choices: &[(&str, &str)],
+    ) -> &mut Self {
         self.widgets.push(CustomWidget::Dropdown {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
             choices: choices
                 .iter()
                 .map(|(v, d)| ((*v).into(), (*d).into()))
@@ -256,10 +261,15 @@ impl CustomPageBuilder {
     }
 
     /// Add a radio-button group. Same shape as [`Self::dropdown`].
-    pub fn radio(&mut self, key: &str, label: &str, choices: &[(&str, &str)]) -> &mut Self {
+    pub fn radio(
+        &mut self,
+        key: impl AsRef<str>,
+        label: impl AsRef<str>,
+        choices: &[(&str, &str)],
+    ) -> &mut Self {
         self.widgets.push(CustomWidget::Radio {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
             choices: choices
                 .iter()
                 .map(|(v, d)| ((*v).into(), (*d).into()))
@@ -269,19 +279,24 @@ impl CustomPageBuilder {
     }
 
     /// Add an integer entry. Stored as `OptionValue::Int`.
-    pub fn number(&mut self, key: &str, label: &str) -> &mut Self {
+    pub fn number(&mut self, key: impl AsRef<str>, label: impl AsRef<str>) -> &mut Self {
         self.widgets.push(CustomWidget::Number {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
         });
         self
     }
 
     /// Add a multi-line text area `rows` lines tall.
-    pub fn multiline(&mut self, key: &str, label: &str, rows: u32) -> &mut Self {
+    pub fn multiline(
+        &mut self,
+        key: impl AsRef<str>,
+        label: impl AsRef<str>,
+        rows: u32,
+    ) -> &mut Self {
         self.widgets.push(CustomWidget::Multiline {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
             rows,
         });
         self
@@ -290,10 +305,15 @@ impl CustomPageBuilder {
     /// Add a file-picker (text entry + Browse button → native file-open
     /// dialog). `filters` is `(display, glob)` — e.g.
     /// `&[("Config", "*.toml;*.yaml"), ("All files", "*.*")]`.
-    pub fn file_picker(&mut self, key: &str, label: &str, filters: &[(&str, &str)]) -> &mut Self {
+    pub fn file_picker(
+        &mut self,
+        key: impl AsRef<str>,
+        label: impl AsRef<str>,
+        filters: &[(&str, &str)],
+    ) -> &mut Self {
         self.widgets.push(CustomWidget::FilePicker {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
             filters: filters
                 .iter()
                 .map(|(d, p)| ((*d).into(), (*p).into()))
@@ -304,10 +324,10 @@ impl CustomPageBuilder {
 
     /// Add a directory-picker (text entry + Browse button → native
     /// folder-picker dialog).
-    pub fn dir_picker(&mut self, key: &str, label: &str) -> &mut Self {
+    pub fn dir_picker(&mut self, key: impl AsRef<str>, label: impl AsRef<str>) -> &mut Self {
         self.widgets.push(CustomWidget::DirPicker {
-            key: key.into(),
-            label: label.into(),
+            key: key.as_ref().into(),
+            label: label.as_ref().into(),
         });
         self
     }

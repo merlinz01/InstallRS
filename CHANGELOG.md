@@ -40,6 +40,7 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - `w.run(i)` now panics if a widget's expected option kind doesn't
   match the kind the option was registered with (e.g. `p.number(...)`
   bound to a `String` option).
+- Most GUI string-taking methods now accept `impl AsRef<str>`.
 
 ### Removed
 

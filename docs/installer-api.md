@@ -119,8 +119,7 @@ defaults that the user can override via CLI flags or wizard widgets:
 - `i.set_option(name, value)` — always overwrite. Use this when user
   code needs to force a value regardless of what's there.
 - `i.is_option_registered(name)` — check whether an option was
-  registered via `i.option(...)`. The wizard auto-registers
-  `directory_picker` keys so this rarely matters in user code.
+  registered via `i.add_option(...)`.
 
 `value` is anything that converts to `OptionValue` (`bool`, `String`,
 `&str`, `i64`, etc.).

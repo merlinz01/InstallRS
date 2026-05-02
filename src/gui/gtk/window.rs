@@ -8,8 +8,8 @@ use std::time::Duration;
 use gtk::prelude::*;
 
 use super::pages::{
-    ComponentsPage, CustomPage, DirectoryPickerPage, ErrorPage, FinishPage, InstallPage,
-    LicensePage, PageKind, WelcomePage,
+    ComponentsPage, CustomPage, ErrorPage, FinishPage, InstallPage, LicensePage, PageKind,
+    WelcomePage,
 };
 use crate::gui::types::{
     ChannelSink, ConfiguredPage, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
@@ -152,20 +152,6 @@ pub(crate) fn run(
                 let p = ComponentsPage::new(&heading, &label, &comps);
                 let w = p.widget().clone();
                 (w, PageKind::Components(p))
-            }
-            WizardPage::DirectoryPicker {
-                heading,
-                label,
-                key,
-            } => {
-                let initial_dir = installer
-                    .lock()
-                    .unwrap()
-                    .option::<String>(&key)
-                    .unwrap_or_default();
-                let p = DirectoryPickerPage::new(&heading, &label, &key, &initial_dir);
-                let w = p.widget().clone();
-                (w, PageKind::DirectoryPicker(p))
             }
             WizardPage::Install { show_log, .. } => {
                 let p = InstallPage::new(show_log);
@@ -394,14 +380,10 @@ pub(crate) fn run(
         btn_next.connect_clicked(move |_| {
             let idx = *current_c.borrow();
 
-            // Sync directory picker / components / custom widgets into the
-            // installer state before callbacks.
+            // Sync components / custom widgets into the installer state
+            // before callbacks.
             {
                 let pages_b = pages_c.borrow();
-                if let PageKind::DirectoryPicker(ref dp) = pages_b[idx].kind {
-                    let dir = dp.get_directory();
-                    installer_c.lock().unwrap().set_option(dp.key(), dir);
-                }
                 if let PageKind::Components(ref cp) = pages_b[idx].kind {
                     let sels = cp.selections();
                     let mut inst = installer_c.lock().unwrap();

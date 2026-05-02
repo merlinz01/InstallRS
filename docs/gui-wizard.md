@@ -42,12 +42,15 @@ let mut w = InstallerGui::new("My App Installer");
 w.welcome("Welcome!", "Click Next to continue.");
 w.license("License Agreement", include_str!("../LICENSE"), "I accept");
 w.components_page("Select Components", "Choose features to install:");
+i.add_option("install-dir", OptionKind::String, "Install location");
 i.set_option_if_unset("install-dir", "C:/MyApp");
-w.directory_picker("Choose Install Location", "Install to:", "install-dir")
-    .on_before_leave(|i| {
-        let dir: String = i.option("install-dir").unwrap_or_default();
-        confirm("Confirm", &format!("Install to {dir}?"))
-    });
+w.custom_page("Choose Install Location", "", |p| {
+    p.dir_picker("install-dir", "Install to:", "");
+})
+.on_before_leave(|i| {
+    let dir: String = i.option("install-dir").unwrap_or_default();
+    confirm("Confirm", &format!("Install to {dir}?"))
+});
 w.install_page(|i| {
     i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());
     i.file(source!("app.exe"), "app.exe").install()?;
@@ -135,9 +138,6 @@ CLI flags:
 ```rust
 .license("License", include_str!("../LICENSE"), "I accept")
 .skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false))
-
-.directory_picker("Install Location", "Install to:", "install-dir")
-.skip_if(|i| i.option::<String>("install-dir").map(|s| !s.is_empty()).unwrap_or(false))
 ```
 
 The predicate must be **pure** — no side effects, no I/O. Side effects

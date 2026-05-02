@@ -26,7 +26,6 @@ pub enum PageKind {
     Welcome(WelcomePage),
     License(LicensePage),
     Components(ComponentsPage),
-    DirectoryPicker(DirectoryPickerPage),
     Install(InstallPage),
     Finish(FinishPage),
     Error(ErrorPage),
@@ -145,88 +144,6 @@ impl LicensePage {
     /// default focus instead of the wizard's Next button.
     pub fn focus_accept(&self) {
         self.accept_check.grab_focus();
-    }
-}
-
-// ── Directory Picker Page ───────────────────────────────────────────────────
-
-pub struct DirectoryPickerPage {
-    widget: gtk::Box,
-    entry: gtk::Entry,
-    key: String,
-}
-
-impl DirectoryPickerPage {
-    pub fn new(heading: &str, label_text: &str, key: &str, initial: &str) -> Self {
-        let default = initial;
-        let vbox = gtk::Box::new(gtk::Orientation::Vertical, SPACING);
-        set_page_margins(&vbox);
-
-        vbox.pack_start(&bold_heading(heading, "large"), false, false, 0);
-
-        let label = gtk::Label::new(Some(label_text));
-        label.set_xalign(0.0);
-        label.set_halign(gtk::Align::Start);
-        vbox.pack_start(&label, false, false, 0);
-
-        let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        let entry = gtk::Entry::new();
-        entry.set_text(default);
-        entry.set_hexpand(true);
-        hbox.pack_start(&entry, true, true, 0);
-
-        let browse_btn = gtk::Button::with_label("Browse...");
-        hbox.pack_start(&browse_btn, false, false, 0);
-        vbox.pack_start(&hbox, false, false, 0);
-
-        {
-            let entry_c = entry.clone();
-            browse_btn.connect_clicked(move |btn| {
-                let parent = btn
-                    .toplevel()
-                    .and_then(|w| w.downcast::<gtk::Window>().ok());
-                let dialog = gtk::FileChooserDialog::with_buttons(
-                    Some("Select Folder"),
-                    parent.as_ref(),
-                    gtk::FileChooserAction::SelectFolder,
-                    &[
-                        ("Cancel", gtk::ResponseType::Cancel),
-                        ("Select", gtk::ResponseType::Accept),
-                    ],
-                );
-                let current = entry_c.text().to_string();
-                if !current.is_empty() {
-                    let _ = dialog.set_current_folder(&current);
-                }
-                let response = dialog.run();
-                if response == gtk::ResponseType::Accept {
-                    if let Some(path) = dialog.filename() {
-                        entry_c.set_text(&path.to_string_lossy());
-                    }
-                }
-                unsafe {
-                    dialog.destroy();
-                }
-            });
-        }
-
-        Self {
-            widget: vbox,
-            entry,
-            key: key.to_string(),
-        }
-    }
-
-    pub fn widget(&self) -> &gtk::Box {
-        &self.widget
-    }
-
-    pub fn get_directory(&self) -> String {
-        self.entry.text().to_string()
-    }
-
-    pub fn key(&self) -> &str {
-        &self.key
     }
 }
 

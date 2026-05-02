@@ -8,8 +8,8 @@ use winsafe::gui;
 use winsafe::prelude::*;
 
 use super::pages::{
-    ComponentsPage, CustomPage, DirectoryPickerPage, ErrorPage, FinishPage, InstallPage,
-    LicensePage, PageKind, WelcomePage,
+    ComponentsPage, CustomPage, ErrorPage, FinishPage, InstallPage, LicensePage, PageKind,
+    WelcomePage,
 };
 use crate::gui::types::{
     ChannelSink, ConfiguredPage, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
@@ -189,26 +189,6 @@ pub(crate) fn run(
                     &heading,
                     &label,
                     &comps,
-                    content_width,
-                    content_height,
-                ))
-            }
-            WizardPage::DirectoryPicker {
-                heading,
-                label,
-                key,
-            } => {
-                let initial_dir = installer
-                    .lock()
-                    .unwrap()
-                    .option::<String>(&key)
-                    .unwrap_or_default();
-                PageKind::DirectoryPicker(DirectoryPickerPage::new(
-                    &panel,
-                    &heading,
-                    &label,
-                    &key,
-                    &initial_dir,
                     content_width,
                     content_height,
                 ))
@@ -475,14 +455,10 @@ pub(crate) fn run(
             btn_next.on().bn_clicked(move || {
                 let idx = *current_c.lock().unwrap();
 
-                // Sync directory picker / components / custom widgets into
-                // the installer state before on_before_leave runs.
+                // Sync components / custom widgets into the installer state
+                // before on_before_leave runs.
                 {
                     let pages_guard = pages_c.lock().unwrap();
-                    if let PageKind::DirectoryPicker(ref dp) = pages_guard[idx].kind {
-                        let dir = dp.get_directory();
-                        installer_c.lock().unwrap().set_option(dp.key(), dir);
-                    }
                     if let PageKind::Components(ref cp) = pages_guard[idx].kind {
                         let sels = cp.selections();
                         let mut inst = installer_c.lock().unwrap();

@@ -112,11 +112,9 @@ pub fn install(i: &mut Installer) -> Result<()> {
         &t!("installer.components.heading"),
         &t!("installer.components.label"),
     );
-    w.directory_picker(
-        &t!("installer.directory.heading"),
-        &t!("installer.directory.label"),
-        "install-dir",
-    )
+    w.custom_page(&t!("installer.directory.heading"), "", |p| {
+        p.dir_picker("install-dir", &t!("installer.directory.label"), "");
+    })
     .on_before_leave(|i| {
         // --yes skips the confirmation dialog.
         if i.option::<bool>("yes").unwrap_or(false) {

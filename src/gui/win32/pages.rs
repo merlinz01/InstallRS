@@ -149,7 +149,6 @@ pub enum PageKind {
     Welcome(WelcomePage),
     License(LicensePage),
     Components(ComponentsPage),
-    DirectoryPicker(DirectoryPickerPage),
     Install(InstallPage),
     Finish(FinishPage),
     Error(ErrorPage),
@@ -324,92 +323,6 @@ impl LicensePage {
             f();
             Ok(())
         });
-    }
-}
-
-// ── Directory Picker Page ───────────────────────────────────────────────────
-
-pub struct DirectoryPickerPage {
-    _heading_label: gui::Label,
-    _label: gui::Label,
-    dir_edit: gui::Edit,
-    _browse_btn: gui::Button,
-    key: String,
-}
-
-impl DirectoryPickerPage {
-    pub fn new(
-        parent: &gui::WindowControl,
-        heading: &str,
-        label_text: &str,
-        key: &str,
-        initial: &str,
-        width: i32,
-        _height: i32,
-    ) -> Self {
-        let default = initial;
-        let heading_label = gui::Label::new(
-            parent,
-            gui::LabelOpts {
-                control_style: label_style(),
-                text: heading,
-                position: gui::dpi(PAD, 14),
-                size: gui::dpi(width - 2 * PAD, 30),
-                resize_behavior: (gui::Horz::Resize, gui::Vert::None),
-                ..Default::default()
-            },
-        );
-
-        register_bold_heading(parent, &heading_label);
-
-        let label_y = PAD + 24 + 20;
-        let (label, dir_edit, browse_btn) =
-            build_path_picker_row(parent, label_text, default, label_y, width - 2 * PAD);
-
-        // Wire up browse button to open a folder dialog.
-        {
-            let dir_edit_c = dir_edit.clone();
-            let parent_c = parent.clone();
-            browse_btn.on().bn_clicked(move || {
-                let _guard = winsafe::CoInitializeEx(co::COINIT::APARTMENTTHREADED)?;
-
-                let dlg = winsafe::CoCreateInstance::<winsafe::IFileOpenDialog>(
-                    &co::CLSID::FileOpenDialog,
-                    None::<&winsafe::IUnknown>,
-                    co::CLSCTX::INPROC_SERVER,
-                )?;
-
-                let opts = dlg.GetOptions()?;
-                dlg.SetOptions(opts | co::FOS::PICKFOLDERS)?;
-
-                let user_clicked_ok = dlg.Show(parent_c.hwnd())?;
-                if user_clicked_ok {
-                    let item = dlg.GetResult()?;
-                    let path = item.GetDisplayName(co::SIGDN::FILESYSPATH)?;
-                    dir_edit_c.set_text(&path)?;
-                }
-
-                Ok(())
-            });
-        }
-
-        setup_transparent_labels(parent);
-
-        Self {
-            _heading_label: heading_label,
-            _label: label,
-            dir_edit,
-            _browse_btn: browse_btn,
-            key: key.to_string(),
-        }
-    }
-
-    pub fn get_directory(&self) -> String {
-        self.dir_edit.text().unwrap_or_default()
-    }
-
-    pub fn key(&self) -> &str {
-        &self.key
     }
 }
 

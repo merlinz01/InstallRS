@@ -14,7 +14,6 @@
 //! w.welcome("Welcome!", "Click Next to continue.");
 //! w.license("License", include_str!("../LICENSE"), "I accept");
 //! w.components_page("Components", "Choose features:");
-//! w.directory_picker("Install Location", "Install to:", "install-dir");
 //! w.install_page(|i| {
 //!     i.file(installrs::source!("app.exe"), "app.exe").install()?;
 //!     i.uninstaller("uninstall.exe").install()?;
@@ -91,7 +90,6 @@ use crate::Installer;
 /// w.welcome("Welcome!", "Click Next to continue.");
 /// w.license("License", include_str!("../LICENSE"), "I accept")
 ///     .skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false));
-/// w.directory_picker("Install Location", "Install to:", "install-dir");
 /// w.install_page(|i| {
 ///     i.set_status("Installing...");
 ///     // ... install files ...
@@ -177,42 +175,6 @@ impl InstallerGui {
         self.push_page(WizardPage::Components {
             heading: heading.as_ref().to_string(),
             label: label.as_ref().to_string(),
-        })
-    }
-
-    /// Add a directory picker page bound to a named installer option.
-    ///
-    /// `heading` is the bold title at the top of the page, `label` is the
-    /// prompt next to the path input (e.g. "Install to:"), and `key` is the
-    /// name of the [`crate::OptionValue::String`] option the picker reads
-    /// and writes. Initial display value is the option's current value (or
-    /// empty if unset) — seed it via `installer.set_option(key, ...)` (or
-    /// the helper `set_option_if_unset`) before [`run`](Self::run) for a
-    /// sensible first-run default. The option is auto-registered as
-    /// [`crate::OptionKind::String`] at `run()` if the user hasn't already
-    /// registered it; register it explicitly before
-    /// [`Installer::process_commandline`] if you want a `--<key>` CLI flag.
-    ///
-    /// User code is responsible for lifting the picked value into
-    /// `installer.set_out_dir(...)` if relative-path resolution should
-    /// honour it — typically inside the install callback:
-    ///
-    /// ```rust,ignore
-    /// w.install_page(|i| {
-    ///     i.set_out_dir(i.option::<String>("install-dir").unwrap_or_default());
-    ///     // ...
-    /// });
-    /// ```
-    pub fn directory_picker(
-        &mut self,
-        heading: impl AsRef<str>,
-        label: impl AsRef<str>,
-        key: impl AsRef<str>,
-    ) -> PageHandle<'_> {
-        self.push_page(WizardPage::DirectoryPicker {
-            heading: heading.as_ref().to_string(),
-            label: label.as_ref().to_string(),
-            key: key.as_ref().to_string(),
         })
     }
 
@@ -334,19 +296,6 @@ impl InstallerGui {
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.
     /// Falls back to an error on unsupported platforms.
     pub fn run(self, installer: &mut Installer) -> Result<()> {
-        // Auto-register any directory_picker option keys not already
-        // registered, so the picker's read/write via set_option works
-        // without forcing the user to call `i.option(key, ...)`. Users
-        // who want a `--<key>` CLI flag should still register the option
-        // explicitly before `process_commandline()`.
-        for configured in &self.config.pages {
-            if let WizardPage::DirectoryPicker { key, .. } = &configured.page {
-                if !installer.is_option_registered(key) {
-                    installer.add_option(key.clone(), crate::OptionKind::String, "");
-                }
-            }
-        }
-
         if installer.headless {
             self.run_headless(installer)
         } else {
@@ -359,7 +308,7 @@ impl InstallerGui {
     /// is attached if the caller didn't already set one, so status / log /
     /// progress events surface readably on stderr.
     fn run_headless(self, installer: &mut Installer) -> Result<()> {
-        // Extract install callback. Directory_picker pages are no-ops in
+        // Extract install callback. Non-install pages are no-ops in
         // headless mode — user code reads / seeds the relevant option
         // directly and lifts it into out_dir as needed.
         let mut install_callback: Option<InstallCallback> = None;
@@ -453,9 +402,6 @@ impl<'a> PageHandle<'a> {
     /// ```rust,ignore
     /// w.license("License", include_str!("../LICENSE"), "I accept")
     ///     .skip_if(|i| i.option::<bool>("accept-license").unwrap_or(false));
-    ///
-    /// w.directory_picker("Install Location", "Install to:", default_dir)
-    ///     .skip_if(|i| i.option::<String>("install-dir").is_some());
     /// ```
     pub fn skip_if<F>(self, f: F) -> Self
     where

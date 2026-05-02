@@ -12,6 +12,12 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `InstallerGui::directory_picker(heading, label, key)`
+  removed. Use a `custom_page` with a `dir_picker` widget instead:
+  `w.custom_page(heading, "", |p| p.dir_picker(key, label, default));`.
+
 ## [0.1.0-rc14] — 2026-05-01
 
 ### Changed

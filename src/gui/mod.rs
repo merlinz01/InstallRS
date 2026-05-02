@@ -296,6 +296,7 @@ impl InstallerGui {
     /// On Windows with the `gui-win32` feature, this creates a native Win32 wizard.
     /// Falls back to an error on unsupported platforms.
     pub fn run(self, installer: &mut Installer) -> Result<()> {
+        validate_widget_option_kinds(&self.config, installer);
         if installer.headless {
             self.run_headless(installer)
         } else {
@@ -453,5 +454,60 @@ impl<'a> PageHandle<'a> {
             ),
         }
         self
+    }
+}
+
+/// Walk every widget on every page and verify that, when the bound
+/// option is registered via [`Installer::add_option`], its kind matches
+/// the widget's expected type. Panics on mismatch — these are wiring
+/// bugs that would otherwise produce silently wrong values.
+fn validate_widget_option_kinds(config: &WizardConfig, installer: &Installer) {
+    use crate::OptionKind;
+    let widget_kinds = |widgets: &[CustomWidget]| -> Vec<(String, &'static str, OptionKind)> {
+        widgets
+            .iter()
+            .map(|w| match w {
+                CustomWidget::Text { key, .. } => (key.clone(), "text", OptionKind::String),
+                CustomWidget::Multiline { key, .. } => {
+                    (key.clone(), "multiline", OptionKind::String)
+                }
+                CustomWidget::Number { key, .. } => (key.clone(), "number", OptionKind::Int),
+                CustomWidget::Checkbox { key, .. } => (key.clone(), "checkbox", OptionKind::Bool),
+                CustomWidget::Dropdown { key, .. } => (key.clone(), "dropdown", OptionKind::String),
+                CustomWidget::Radio { key, .. } => (key.clone(), "radio", OptionKind::String),
+                CustomWidget::FilePicker { key, .. } => {
+                    (key.clone(), "file_picker", OptionKind::String)
+                }
+                CustomWidget::DirPicker { key, .. } => {
+                    (key.clone(), "dir_picker", OptionKind::String)
+                }
+            })
+            .collect()
+    };
+    let kind_compatible = |widget: OptionKind, registered: OptionKind| match (widget, registered) {
+        // Checkbox accepts either Bool or Flag — both store a bool.
+        (OptionKind::Bool, OptionKind::Bool | OptionKind::Flag) => true,
+        (a, b) => a == b,
+    };
+
+    for configured in &config.pages {
+        let widgets: &[CustomWidget] = match &configured.page {
+            WizardPage::Welcome { widgets, .. }
+            | WizardPage::Finish { widgets, .. }
+            | WizardPage::Custom { widgets, .. } => widgets,
+            _ => continue,
+        };
+        for (key, widget_name, expected) in widget_kinds(widgets) {
+            if let Some(registered) = installer.option_kind(&key) {
+                if !kind_compatible(expected, registered) {
+                    panic!(
+                        "wizard widget {widget_name:?} bound to option {key:?} expects \
+                         OptionKind::{expected:?}, but it was registered as \
+                         OptionKind::{registered:?}. Re-register with the matching kind \
+                         or change the widget."
+                    );
+                }
+            }
+        }
     }
 }

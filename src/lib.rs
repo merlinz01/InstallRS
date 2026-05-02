@@ -255,6 +255,16 @@ impl Installer {
         self.options.iter().any(|o| o.name == name)
     }
 
+    /// Look up the registered kind of an option by name. Returns `None`
+    /// when the option has not been registered via `add_option`.
+    pub(crate) fn option_kind(&self, name: &str) -> Option<OptionKind> {
+        let name = name.trim_start_matches('-');
+        self.options
+            .iter()
+            .find(|o| o.name == name)
+            .map(|o| o.kind)
+    }
+
     /// Set an option value only if it isn't already set. Useful for
     /// seeding a sensible first-run default that CLI flags or prior
     /// wizard state can override.

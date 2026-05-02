@@ -18,6 +18,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
   `dropdown`, `radio`, `file_picker`, `dir_picker`, `multiline`) no
   longer take a `default` argument. Seed defaults via
   `i.set_option_if_unset(key, value)` before `w.run(i)`.
+- `w.run(i)` now panics if a widget's expected option kind doesn't
+  match the kind the option was registered with (e.g. `p.number(...)`
+  bound to a `String` option).
 
 ### Removed
 

@@ -113,6 +113,9 @@ impl<'i> ShortcutOp<'i> {
     }
 }
 
+// SHChangeNotify lives in shell32.dll. The MSVC linker doesn't pull
+// it in automatically; mingw does. Explicit #[link] keeps both happy.
+#[link(name = "shell32")]
 extern "system" {
     fn SHChangeNotify(
         w_event_id: std::os::raw::c_long,

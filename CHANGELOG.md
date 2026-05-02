@@ -12,6 +12,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+## [0.1.0-rc14] — 2026-05-01
+
 ### Changed
 
 - **Breaking:** `InstallerGui::wizard(title)` renamed to `InstallerGui::new(title)`.
@@ -174,7 +176,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 - Generated `build.rs` no longer warns `unused_mut` on `res` when no
   resource keys are set.
 
-[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc13...HEAD
+[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc14...HEAD
+[0.1.0-rc14]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc13...v0.1.0-rc14
 [0.1.0-rc13]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc12...v0.1.0-rc13
 [0.1.0-rc12]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc11...v0.1.0-rc12
 [0.1.0-rc11]: https://github.com/merlinz01/InstallRS/compare/v0.1.0-rc10...v0.1.0-rc11

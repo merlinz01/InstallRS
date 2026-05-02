@@ -1,6 +1,6 @@
 [package]
 name = "installrs"
-version = "0.1.0-rc13"
+version = "0.1.0-rc14"
 edition = "2021"
 rust-version = "1.95"
 description = "Build self-contained software installers in plain Rust, with an optional native wizard GUI (Win32 / GTK3), component selection, progress, cancellation, and compression."

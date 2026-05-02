@@ -813,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "installrs"
-version = "0.1.0-rc13"
+version = "0.1.0-rc14"
 dependencies = [
  "anyhow",
  "bzip2",

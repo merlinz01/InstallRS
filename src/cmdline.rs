@@ -47,8 +47,7 @@ impl Installer {
         self.process_commandline_from(&args)
     }
 
-    #[doc(hidden)]
-    pub fn process_commandline_from(&mut self, args: &[String]) -> Result<()> {
+    pub(crate) fn process_commandline_from(&mut self, args: &[String]) -> Result<()> {
         let mut exact: Option<Vec<String>> = None;
         let mut with: Vec<String> = Vec::new();
         let mut without: Vec<String> = Vec::new();

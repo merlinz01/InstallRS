@@ -11,6 +11,10 @@ permissions: {}
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+  INSTALLRS_LOCAL_PATH: "1"
+  CARGO_PROFILE_RELEASE_LTO: "false"
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+  CARGO_PROFILE_RELEASE_OPT_LEVEL: "1"
 
 jobs:
   format:
@@ -56,9 +60,9 @@ jobs:
           packages: libgtk-3-dev
           version: 1.0-lint
       - name: Lint (gui-gtk)
-        run: cargo clippy --all-targets --features gui-gtk -- -D warnings
+        run: cargo clippy --all-targets --features gui-gtk
       - name: Lint (gui-win32)
-        run: cargo clippy --all-targets --features gui-win32 --target x86_64-pc-windows-gnu -- -D warnings
+        run: cargo clippy --all-targets --features gui-win32 --target x86_64-pc-windows-gnu
 
   test:
     name: Test (${{ matrix.os }})
@@ -87,10 +91,8 @@ jobs:
           version: 1.0-test
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - name: Build
-        run: cargo build --release
       - name: Run tests
-        run: cargo test --release --lib --bins
+        run: cargo test --lib --bins
 
   example-installer:
     name: Build example installer
@@ -127,10 +129,4 @@ jobs:
       - name: Build CLI
         run: cargo build --release
       - name: Build example installer
-        env:
-          INSTALLRS_LOCAL_PATH: "1"
-          CARGO_PROFILE_RELEASE_LTO: "false"
-          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
-          CARGO_PROFILE_RELEASE_OPT_LEVEL: "1"
-        shell: bash
         run: ./target/release/installrs --target example --output installer-ci

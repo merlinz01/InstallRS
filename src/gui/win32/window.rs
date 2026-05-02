@@ -15,7 +15,7 @@ use crate::gui::types::{
     ChannelSink, ConfiguredPage, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
     OnEnterCallback, WizardConfig, WizardPage,
 };
-use crate::Installer;
+use crate::{CancellationToken, Installer};
 
 const WINDOW_WIDTH: i32 = 500;
 const WINDOW_HEIGHT: i32 = 360;
@@ -79,7 +79,7 @@ struct Page {
 pub(crate) fn run(
     config: WizardConfig,
     installer: Arc<Mutex<Installer>>,
-    cancelled: Arc<AtomicBool>,
+    cancelled: CancellationToken,
     tx: mpsc::Sender<GuiMessage>,
     rx: mpsc::Receiver<GuiMessage>,
     install_callback: Option<InstallCallback>,
@@ -550,7 +550,7 @@ pub(crate) fn run(
             let wnd_c = wnd.clone();
             let install_running_c = install_running.clone();
             btn_cancel.on().bn_clicked(move || {
-                cancelled_c.store(true, std::sync::atomic::Ordering::Relaxed);
+                cancelled_c.cancel();
                 // If the install is still running, leave the window open so
                 // the Finished handler can route to the error page once the
                 // bg thread bails out. Otherwise close immediately.

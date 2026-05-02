@@ -53,7 +53,7 @@ pub(crate) fn run_wizard(config: WizardConfig, installer: &mut Installer) -> Res
     // Grab the real installer's cancellation flag BEFORE we swap it out, so
     // the Cancel button, the Ctrl+C handler, and `check_cancelled()` inside
     // the install callback all see the same flag.
-    let cancelled = installer.cancellation_flag();
+    let cancelled = installer.cancellation_token();
 
     let installer_taken = std::mem::replace(installer, Installer::new(&[], &[], "none"));
     let installer_arc = Arc::new(Mutex::new(installer_taken));

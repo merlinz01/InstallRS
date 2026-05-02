@@ -14,6 +14,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ### Changed
 
+- **Breaking:** `Installer::cancellation_flag()` replaced by
+  `Installer::cancellation_token()` returning a new `CancellationToken` newtype with
+  `.cancel()` / `.is_cancelled()` methods.
 - **Breaking:** Registry methods renamed for symmetry: `Registry::set` → `set_value`,
   `get` → `get_value`, `remove` → `delete_key`, `delete` → `delete_value`.
 - **Breaking:** Path-taking methods now accept `impl AsRef<Path>`

@@ -15,7 +15,7 @@ use crate::gui::types::{
     ChannelSink, ConfiguredPage, GuiMessage, InstallCallback, OnBeforeLeaveCallback,
     OnEnterCallback, WizardConfig, WizardPage,
 };
-use crate::Installer;
+use crate::{CancellationToken, Installer};
 
 const WINDOW_WIDTH: i32 = 560;
 const WINDOW_HEIGHT: i32 = 400;
@@ -76,7 +76,7 @@ fn prev_visible_page(pages: &[Page], from: usize, installer: &Installer) -> Opti
 pub(crate) fn run(
     config: WizardConfig,
     installer: Arc<Mutex<Installer>>,
-    cancelled: Arc<AtomicBool>,
+    cancelled: CancellationToken,
     tx: mpsc::Sender<GuiMessage>,
     rx: mpsc::Receiver<GuiMessage>,
     install_callback: Option<InstallCallback>,
@@ -463,7 +463,7 @@ pub(crate) fn run(
         let window_c = window.clone();
         let install_running_c = install_running.clone();
         btn_cancel.connect_clicked(move |_| {
-            cancelled_c.store(true, Ordering::Relaxed);
+            cancelled_c.cancel();
             // If the install is still running, leave the window open so the
             // Finished handler can route to the error page once the bg
             // thread bails out. Otherwise close immediately.

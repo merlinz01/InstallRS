@@ -1,5 +1,37 @@
-//! Small shared types: overwrite policy, dir-install error action, and the
-//! closure type aliases used by directory installs.
+//! Small shared types: overwrite policy, dir-install error action, the
+//! closure type aliases used by directory installs, and the
+//! cancellation token shared between the installer, the wizard's
+//! Cancel button, and the Ctrl+C handler.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+/// Shared cancellation flag. Cloning yields another handle to the
+/// same flag — flipping any clone trips every `check_cancelled()`
+/// call across the wizard, the install thread, and the Ctrl+C
+/// handler.
+///
+/// Obtain one from [`Installer::cancellation_token`](crate::Installer::cancellation_token).
+#[derive(Clone, Debug)]
+pub struct CancellationToken(Arc<AtomicBool>);
+
+impl CancellationToken {
+    pub(crate) fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
+    /// Request cancellation. Subsequent
+    /// [`check_cancelled`](crate::Installer::check_cancelled) calls
+    /// return an error before doing any work.
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether cancellation has been requested.
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
 
 /// What to do when a destination file already exists.
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]

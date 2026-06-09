@@ -12,6 +12,8 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-09
+
 - The `installrs` CLI now ships an embedded `asInvoker` Windows manifest, so
   Windows no longer auto-elevates it via UAC installer detection.
 
@@ -19,5 +21,6 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 - Initial stable release.
 
-[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/merlinz01/InstallRS/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/merlinz01/InstallRS/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/merlinz01/InstallRS/releases/tag/v0.1.0

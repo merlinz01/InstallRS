@@ -12,6 +12,9 @@ breaking changes; patch bumps (`0.x.y`) will not.
 
 ## [Unreleased]
 
+- The `installrs` CLI now ships an embedded `asInvoker` Windows manifest, so
+  Windows no longer auto-elevates it via UAC installer detection.
+
 ## [0.1.0] — 2026-05-02
 
 - Initial stable release.
